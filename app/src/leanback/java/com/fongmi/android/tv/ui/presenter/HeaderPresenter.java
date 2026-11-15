@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.leanback.widget.Presenter;
 
+import com.fongmi.android.tv.bean.RowHeader;
 import com.fongmi.android.tv.databinding.AdapterHeaderBinding;
 import com.fongmi.android.tv.utils.ResUtil;
 
@@ -49,9 +50,16 @@ public class HeaderPresenter extends Presenter {
     @Override
     public void onBindViewHolder(@NonNull Presenter.ViewHolder viewHolder, Object object) {
         HeaderPresenter.ViewHolder holder = (HeaderPresenter.ViewHolder) viewHolder;
-        holder.binding.text.setText(object instanceof String ? object.toString() : ResUtil.getString((int) object));
+        holder.binding.text.setText(textOf(object));
         // 复用（含列表重建）后 LayoutParams 可能被换掉，每次绑定都补一次
         applyTitleSpacing(holder.view);
+    }
+
+    /** 三种标题来源：动态标题模型 / 已拼好的文字 / 字符串资源 id。 */
+    private static CharSequence textOf(Object object) {
+        if (object instanceof RowHeader) return ((RowHeader) object).getText();
+        if (object instanceof CharSequence) return (CharSequence) object;
+        return ResUtil.getString((int) object);
     }
 
     @Override

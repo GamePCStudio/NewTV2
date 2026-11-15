@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 一条黑名单记录：片名 + 加入时间。点击无动作，移除统一走「设置 → 清除缓存」 -->
+<!-- 一条黑名单记录：片名 + 加入时间 + 移除提示。选中整行按确认键即可单条移除 -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -35,5 +35,14 @@
         android:textColor="@color/white"
         android:textSize="13sp"
         tools:text="11-15 03:21:08" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/itemDelete"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:text="@string/blacklist_delete"
+        android:textColor="@color/tmdb_log_blacklist"
+        android:textSize="14sp" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

@@ -1011,7 +1011,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         if (TextUtils.equals(key, mTmdbFetchedKey)) return;
         mTmdbFetchedKey = key;
         // 两个名字都登记成别名：换集后即使先用站源片名查，也能命中同一条素材。
-        // 统一入口内部按 TMDB → 豆瓣桥 → 失败分级处置的顺序处理，两个数据源任一成功都会通知本页刷新。
+        // 统一入口内部按 TMDB → Douban Bridge → 失败分级处置的顺序处理，两个数据源任一成功都会通知本页刷新。
         ArtSource.fetch(keyword, mTmdbPosterName, tmdbAliases(keyword), ArtSource.CAT_AUTO, false, null);
     }
 

@@ -34,6 +34,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.BrowserWebView;
 import com.fongmi.android.tv.utils.FileChooser;
+import com.fongmi.android.tv.utils.NoticePolicy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.crawler.SpiderDebug;
@@ -84,7 +85,7 @@ public final class WebActivity extends BaseActivity implements BrowserWebView.Br
             Notify.show(R.string.error_file_open);
             return;
         }
-        Notify.show(result.getMsg());
+        if (!NoticePolicy.shouldBlockStationMessage(result.getMsg())) Notify.show(result.getMsg());
     }
 
     public static String getUserAgent() {

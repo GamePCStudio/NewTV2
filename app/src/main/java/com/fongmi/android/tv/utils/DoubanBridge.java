@@ -38,10 +38,10 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * 豆瓣桥（Douban Bridge）数据源：豆瓣海报 / 评分 / 简介的唯一获取入口。
+ * Douban Bridge（Douban Bridge）数据源：豆瓣海报 / 评分 / 简介的唯一获取入口。
  *
  * <p>此前直连豆瓣网页的联想与榜单接口，反爬越来越重、命中率不稳定，
- * 现在全部改走自建或公共的豆瓣桥服务。桥提供的能力有限但稳定：</p>
+ * 现在全部改走自建或公共的Douban Bridge服务。桥提供的能力有限但稳定：</p>
  * <pre>
  *   GET /v1/catalog/{collectionId}  —— 豆瓣榜单（热门电影 / 热门剧集 / 综艺 / Top250 …）
  *   GET /v1/meta/{doubanId}         —— 单个条目详情（完整简介、海报、剧照、logo）
@@ -99,7 +99,7 @@ public final class DoubanBridge {
     /** 加入串行队列；同一片名反复入队只保留一个任务，回调会全部收到结果。 */
     public static void enqueue(String title, int category, Callback callback) {
         if (TextUtils.isEmpty(title) || callback == null) return;
-        // 总开关或豆瓣桥二级开关关闭时直接回失败，不产生任何网络请求。
+        // 总开关或Douban Bridge二级开关关闭时直接回失败，不产生任何网络请求。
         if (!TmdbSetting.isBridgeEnabled()) {
             App.post(() -> callback.onResult(title, ArtFailure.UNAVAILABLE));
             return;
@@ -188,7 +188,7 @@ public final class DoubanBridge {
         return save(job.title, hit, meta);
     }
 
-    /** 类目 → 依次尝试的豆瓣桥榜单；首页混合内容同时覆盖电影、剧集与综艺。 */
+    /** 类目 → 依次尝试的Douban Bridge榜单；首页混合内容同时覆盖电影、剧集与综艺。 */
     private static String[] catalogs(int category) {
         if (category == HotRank.MOVIE) {
             return new String[]{"movie_hot_gaia", "movie_real_time_hotest", "movie_showing", "movie_weekly_best", "movie_top250"};
@@ -243,7 +243,7 @@ public final class DoubanBridge {
         }
         TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_BRIDGE_LIST, id,
                 TmdbLog.mask(base() + "/v1/catalog/" + id),
-                "HTTP " + code + " · " + items.size() + " 条", "豆瓣桥榜单", !reachable);
+                "HTTP " + code + " · " + items.size() + " 条", "Douban Bridge榜单", !reachable);
         return pool;
     }
 
@@ -555,11 +555,16 @@ public final class DoubanBridge {
         if (!TmdbSetting.isEnabled()) return null;
         int index = url.indexOf("/t/p/");
         if (index < 0) return null;
-        String rest = url.substring(index + 4);
+        // /t/p/ 本身占 5 位；此前按 4 位截取会把 original/ 当成文件名的一部分，
+        // 最终拼出 /t/p/w500/original/xxx.jpg 这种非法路径并被镜像站以 HTTP 400 拒绝。
+        String rest = url.substring(index + "/t/p/".length());
         int slash = rest.indexOf('/');
-        if (slash < 0) return null;
+        String file = slash >= 0 ? rest.substring(slash + 1) : rest;
+        int query = file.indexOf('?');
+        if (query >= 0) file = file.substring(0, query);
+        if (TextUtils.isEmpty(file)) return null;
         try {
-            return TmdbApi.downloadImage("/t/p/" + size + "/" + rest.substring(slash + 1), title, stage);
+            return TmdbApi.downloadImage("/t/p/" + size + "/" + file, title, stage);
         } catch (Exception e) {
             return null;
         }

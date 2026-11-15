@@ -22,7 +22,7 @@ import com.fongmi.android.tv.utils.ArtBlacklist;
 
 import java.util.List;
 
-/** 设置 → 影片刮削设置：总开关与两个二级开关、多站点、豆瓣桥、黑名单与日志。 */
+/** 设置 → 影片刮削设置：开关区 + TMDB / Douban Bridge / 通用三个分组，含官方署名声明。 */
 public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
 
     private ActivitySettingTmdbBinding mBinding;
@@ -132,7 +132,7 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
         updateVisibility();
     }
 
-    /** 三个开关的文字：总开关 / TMDB 二级 / 豆瓣桥二级。 */
+    /** 三个开关的文字：总开关 / TMDB 二级 / Douban Bridge二级。 */
     private void updateSwitches() {
         mBinding.tmdbEnableText.setText(Setting.getSwitch(TmdbSetting.isMasterEnabled()));
         mBinding.tmdbScrapeText.setText(Setting.getSwitch(TmdbSetting.isTmdbScrapeEnabled()));
@@ -140,9 +140,9 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     }
 
     /**
-     * 总开关关闭时，两个二级开关与全部子项收起；总开关打开但 TMDB 二级关闭时，
-     * 与 TMDB 强相关的子项（提示、站点、缓存）收起。豆瓣桥配置与刮削日志常驻，
-     * 前者是配置入口，后者在只开豆瓣桥时仍然会产生记录。
+     * 总开关关闭时，三个二级子项（两个数据源开关与失败提示）一起收起；
+     * TMDB 二级关闭时再收起站点相关行。分组标题、署名、Douban Bridge 配置、
+     * 日志与黑名单都是常驻入口，不随开关隐藏。
      */
     private void updateVisibility() {
         boolean master = TmdbSetting.isMasterEnabled();
@@ -151,16 +151,16 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
         int visibility = tmdb ? View.VISIBLE : View.GONE;
         mBinding.tmdbScrape.setVisibility(sub);
         mBinding.bridgeScrape.setVisibility(sub);
-        mBinding.tmdbToast.setVisibility(visibility);
+        mBinding.tmdbToast.setVisibility(sub);
         mBinding.tmdbSites.setVisibility(visibility);
         mBinding.tmdbAddSite.setVisibility(tmdb && TmdbSetting.getSites().size() < TmdbSetting.MAX_SITES ? View.VISIBLE : View.GONE);
-        // 豆瓣桥、日志与黑名单与 TMDB 相互独立：只用豆瓣桥时同样会产出记录与黑名单，入口常驻。
+        // Douban Bridge、日志与黑名单与 TMDB 相互独立：只用Douban Bridge时同样会产出记录与黑名单，入口常驻。
         mBinding.tmdbBridge.setVisibility(View.VISIBLE);
         mBinding.tmdbLog.setVisibility(View.VISIBLE);
         mBinding.tmdbBlacklist.setVisibility(View.VISIBLE);
     }
 
-    /** 豆瓣桥行摘要：主机名 + 配置状态；密钥未填时明确显示「未配置」。 */
+    /** Douban Bridge行摘要：主机名 + 配置状态；密钥未填时明确显示「未配置」。 */
     private void updateBridgeText() {
         String host = TmdbSetting.getBridgeHost();
         String status;

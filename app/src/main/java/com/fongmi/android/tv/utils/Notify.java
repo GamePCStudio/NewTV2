@@ -69,7 +69,11 @@ public class Notify {
     }
 
     public static void show(String text) {
-        if (!TextUtils.isEmpty(text)) get().makeText(text);
+        if (TextUtils.isEmpty(text)) return;
+        // 全局兜底：除三个站源挂点外，还有 Node/JS toast、本地代理消息、配置公告等出口，
+        // 统一在这里按同一组词表判定；总开关关闭时判定恒为 false。
+        if (NoticePolicy.shouldBlockNotice(text)) return;
+        get().makeText(text);
     }
 
     public static void progress(Context context) {

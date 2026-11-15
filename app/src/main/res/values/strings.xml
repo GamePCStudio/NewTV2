@@ -613,6 +613,7 @@
     <!-- Media scraping (Settings → Media scraping settings) -->
     <string name="setting_tmdb">Media scraping settings</string>
     <string name="tmdb_enable">Enable scraping</string>
+    <string name="tmdb_enable_hint">Scraping unlocks richer media info and artwork</string>
     <string name="tmdb_scrape_tmdb">Enable TMDB scraping</string>
     <string name="douban_bridge_scrape">Enable Douban Bridge scraping</string>
     <string name="tmdb_site_index">Site %1$d</string>
@@ -632,7 +633,6 @@
     <string name="tmdb_site_key_required">API key cannot be empty</string>
     <string name="tmdb_site_min">Keep at least one site</string>
     <string name="tmdb_site_max">At most %1$d sites</string>
-    <string name="tmdb_site_summary">%1$d sites (rotating)</string>
     <string name="tmdb_error_toast">Scrape failure toast</string>
     <string name="tmdb_fetch_failed">TMDB scrape failed: %1$s</string>
     <string name="tmdb_retry">TMDB scrape</string>
@@ -642,7 +642,7 @@
     <string name="tmdb_no_keyword">No title available for scraping</string>
     <string name="tmdb_log_entry">Scrape log</string>
     <string name="tmdb_log_title">Scrape log</string>
-    <string name="tmdb_log_hint">Logs every TMDB and Douban Bridge scrape with stage, request and response; up to 600 entries. Filter by source and status.</string>
+    <string name="tmdb_log_hint">Logs every TMDB and Douban Bridge scrape with stage, request and response; up to 600 entries. Filter by source, status and title keyword.</string>
     <string name="tmdb_log_summary">%1$d entries · %2$d failed</string>
     <string name="tmdb_log_clear">Clear log</string>
     <string name="tmdb_log_clear_confirm">Delete all scrape logs?</string>
@@ -653,16 +653,38 @@
     <string name="tmdb_filter_status">Status</string>
     <string name="tmdb_filter_all">All</string>
     <string name="tmdb_filter_tmdb">TMDB</string>
-    <string name="tmdb_filter_douban">Douban</string>
+    <string name="tmdb_filter_douban">Douban Bridge</string>
     <string name="tmdb_filter_done">Done</string>
     <string name="tmdb_filter_fail">Failed</string>
     <string name="tmdb_filter_skip">Skipped</string>
     <string name="tmdb_filter_other">Other</string>
     <string name="tmdb_filter_blacklist">Blacklist</string>
+    <string name="tmdb_filter_keyword_label">Title</string>
+    <string name="tmdb_filter_keyword_none">Type keyword</string>
+    <string name="tmdb_filter_keyword_value">Keyword: %1$s</string>
+    <string name="tmdb_log_keyword_hint">Type a title keyword; leave empty to clear</string>
     <string name="blacklist_entry">Blacklist</string>
     <string name="blacklist_summary">%1$d titles</string>
-    <string name="blacklist_hint">Blacklisted titles are no longer scraped and are hidden from the hero and most poster grids; remove them via Settings → Clear Cache</string>
+    <string name="blacklist_hint">Select an entry and press OK to remove it; the title will be scraped again. Clearing the cache removes all entries.</string>
     <string name="blacklist_empty">No blacklisted titles. A title is added only when both TMDB and Douban Bridge confirm it does not exist.</string>
     <string name="tmdb_log_filtered_empty">No logs match the current filters</string>
     <string name="tmdb_log_summary_filtered">Filtered %1$d / %2$d entries · %3$d failed</string>
+    <string name="scrape_state_tmdb_only">On (TMDB only)</string>
+    <string name="scrape_state_bridge_only">On (Douban Bridge only)</string>
+    <string name="setting_group_tmdb">TMDB</string>
+    <string name="setting_group_bridge">Douban Bridge</string>
+    <string name="setting_group_common">General</string>
+    <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>
+    <string name="tmdb_attribution_title">Data provided by TMDB</string>
+    <string name="blacklist_removed">Removed: %1$s</string>
+    <string name="blacklist_delete">Remove</string>
+    <string name="setting_notice">Toast filter settings</string>
+    <string name="notice_master">Enable toast filtering</string>
+    <string name="notice_keywords">Filter keywords</string>
+    <string name="notice_keywords_reset">Restore default keywords</string>
+    <string name="notice_keywords_hint">Separate keywords with a new line, |, comma or 、. Leave empty to disable filtering.</string>
+    <string name="notice_keywords_count">%1$d keywords</string>
+    <string name="notice_reset_done">Default keywords restored</string>
+    <string name="danmaku_search_failed">Danmaku search failed</string>
+    <string name="notice_hint">Notifications matching any keyword below are suppressed. Source announcements, danmaku broadcasts and danmaku search messages all use this rule; playback and danmaku loading are unaffected.</string>
 </resources>

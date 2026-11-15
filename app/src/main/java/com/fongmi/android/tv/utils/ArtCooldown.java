@@ -23,7 +23,7 @@ import java.util.Map;
  *
  * <p>只有 {@link ArtFailure#TEMPORARY} 才需要冷却；「确认没有这部片」由
  * {@link ArtBlacklist} 承担，两者不重复判定。冷却优先级高于重新请求，
- * 命中时 TMDB 与豆瓣桥两条链路都不再发请求。</p>
+ * 命中时 TMDB 与Douban Bridge两条链路都不再发请求。</p>
  */
 public final class ArtCooldown {
 

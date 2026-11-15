@@ -18,8 +18,10 @@ import androidx.core.os.HandlerCompat;
 
 import com.fongmi.android.tv.receiver.RuntimeReceiver;
 import com.fongmi.android.tv.ui.dialog.SpiderDialog;
+import com.fongmi.android.tv.utils.NoticePolicy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.RuntimeInstaller;
+import com.fongmi.android.tv.utils.ToastGuard;
 import com.github.catvod.Runtime;
 import com.github.catvod.utils.RuntimeModule;
 import com.google.gson.Gson;
@@ -81,7 +83,9 @@ public class App extends Application implements Application.ActivityLifecycleCal
         super.attachBaseContext(base);
         Runtime.set(base);
         Runtime.setActivity(App::activity);
-        Runtime.setToast(text -> App.post(() -> Notify.show(text)));
+        Runtime.setToast(text -> App.post(() -> {
+            if (!NoticePolicy.shouldBlockStationMessage(text)) Notify.show(text);
+        }));
         Runtime.setDialog(SpiderDialog::show);
     }
 
@@ -89,6 +93,8 @@ public class App extends Application implements Application.ActivityLifecycleCal
     public void onCreate() {
         super.onCreate();
         initRuntime();
+        // 站源本地代理会直连系统 Toast，应用内提示出口拦不到；在框架层入队前补一层判定
+        ToastGuard.install();
         Notify.createChannel();
         registerActivityLifecycleCallbacks(this);
     }

@@ -16,9 +16,9 @@ import com.fongmi.android.tv.utils.DoubanBridge;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
- * 编辑豆瓣桥：地址 + 密钥。
+ * 编辑Douban Bridge：地址 + 密钥。
  *
- * <p>豆瓣桥是海报 / 评分 / 简介的豆瓣数据来源，地址留空表示停用；
+ * <p>Douban Bridge是海报 / 评分 / 简介的豆瓣数据来源，地址留空表示停用；
  * 密钥由桥服务方签发，可在设置页随时替换。</p>
  */
 public class BridgeDialog extends BaseAlertDialog {
@@ -43,7 +43,7 @@ public class BridgeDialog extends BaseAlertDialog {
     protected void initView() {
         binding.url.setHint(R.string.tmdb_bridge_url_hint);
         binding.key.setHint(R.string.tmdb_bridge_key_hint);
-        // 豆瓣桥没有「多条记录」与「远程输入」，这两个按钮不出现。
+        // Douban Bridge没有「多条记录」与「远程输入」，这两个按钮不出现。
         binding.delete.setVisibility(View.GONE);
         binding.phone.setVisibility(View.GONE);
         binding.url.setText(TmdbSetting.getBridgeUrl());

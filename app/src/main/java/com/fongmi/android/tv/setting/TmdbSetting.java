@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 刮削配置：TMDB 站点轮换、总开关与两个二级开关、豆瓣桥地址与密钥。
+ * 刮削配置：TMDB 站点轮换、总开关与两个二级开关、Douban Bridge地址与密钥。
  *
  * <p>配置结构：{@code tmdb_sites} 存一个 JSON 数组，每项是 {@code {"url":"...","key":"..."}}，
  * 一条记录就是一个站点及其专属密钥。数组长度不写死在代码里（{@link #MAX_SITES} 只是 UI 防呆），
@@ -41,7 +41,7 @@ public final class TmdbSetting {
     public static final int MAX_SITES = 8;
 
     /**
-     * 豆瓣桥：豆瓣数据的唯一来源，替代此前直连豆瓣网页接口的抓取方式。
+     * Douban Bridge：豆瓣数据的唯一来源，替代此前直连豆瓣网页接口的抓取方式。
      * 内置公共实例地址，但<b>不内置任何密钥</b>，必须由用户自行填写。
      */
     public static final String DEFAULT_BRIDGE_URL = "https://douban-bridge.baran.wang";
@@ -103,7 +103,7 @@ public final class TmdbSetting {
     }
 
     /**
-     * 刮削总开关：默认关闭。关闭后 TMDB 与豆瓣桥都不再抓取，已缓存的图片仍可显示。
+     * 刮削总开关：默认关闭。关闭后 TMDB 与Douban Bridge都不再抓取，已缓存的图片仍可显示。
      */
     public static boolean isMasterEnabled() {
         return Prefers.getBoolean(KEY_ENABLE, false);
@@ -128,7 +128,7 @@ public final class TmdbSetting {
         TmdbApi.onConfigChanged();
     }
 
-    /** 豆瓣桥二级开关：默认开启，只有总开关同时打开时才真正生效。 */
+    /** Douban Bridge二级开关：默认开启，只有总开关同时打开时才真正生效。 */
     public static boolean isBridgeScrapeEnabled() {
         return Prefers.getBoolean(KEY_BRIDGE_SCRAPE, true);
     }
@@ -136,7 +136,7 @@ public final class TmdbSetting {
     public static void putBridgeScrape(boolean value) {
         boolean old = isBridgeScrapeEnabled();
         Prefers.put(KEY_BRIDGE_SCRAPE, value);
-        if (old != value) logConfig(TmdbLog.SOURCE_BRIDGE, "豆瓣桥刮削", value ? "已开启" : "已关闭");
+        if (old != value) logConfig(TmdbLog.SOURCE_BRIDGE, "Douban Bridge刮削", value ? "已开启" : "已关闭");
         TmdbApi.onConfigChanged();
     }
 
@@ -171,30 +171,43 @@ public final class TmdbSetting {
         Prefers.put(KEY_ERROR_TOAST, value);
     }
 
-    /** 豆瓣桥地址；默认使用内置公共实例，可改为自建地址。 */
+    /** Douban Bridge地址；默认使用内置公共实例，可改为自建地址。 */
     public static String getBridgeUrl() {
         String url = Prefers.getString(KEY_BRIDGE_URL, DEFAULT_BRIDGE_URL);
         return url == null ? "" : url.trim();
     }
 
-    /** 豆瓣桥密钥；不内置默认值，未配置时返回空串。 */
+    /** Douban Bridge密钥；不内置默认值，未配置时返回空串。 */
     public static String getBridgeKey() {
         String key = Prefers.getString(KEY_BRIDGE_KEY, DEFAULT_BRIDGE_KEY);
         return key == null ? "" : key.trim();
     }
 
-    /** 豆瓣桥是否已配置好地址与密钥（不代表已启用）。 */
+    /** Douban Bridge是否已配置好地址与密钥（不代表已启用）。 */
     public static boolean isBridgeConfigured() {
         String url = getBridgeUrl();
         return (url.startsWith("http://") || url.startsWith("https://")) && !getBridgeKey().isEmpty();
     }
 
-    /** 豆瓣桥是否可抓取：总开关、豆瓣桥二级开关、地址与密钥三者同时满足。 */
+    /** Douban Bridge是否可抓取：总开关、Douban Bridge二级开关、地址与密钥三者同时满足。 */
     public static boolean isBridgeEnabled() {
         return isMasterEnabled() && isBridgeScrapeEnabled() && isBridgeConfigured();
     }
 
-    /** 保存豆瓣桥配置；传入空地址表示停用。只在值真正变化时写一条配置日志。 */
+    /**
+     * 电影 / 剧集 / 综艺三个频道入口是否可用。
+     *
+     * <p>三个频道页的内容全部依赖刮削素材，判定口径与抓取一致：
+     * 总开关关闭 → 不可用；TMDB 二级开着但<b>一个站点都没配</b>，且 Douban Bridge 也不可用 → 不可用。
+     * 满足任一数据源可用即返回 true，入口保留。</p>
+     */
+    public static boolean isChannelAvailable() {
+        if (!isMasterEnabled()) return false;
+        if (isTmdbScrapeEnabled() && !getSites().isEmpty()) return true;
+        return isBridgeScrapeEnabled() && isBridgeConfigured();
+    }
+
+    /** 保存Douban Bridge配置；传入空地址表示停用。只在值真正变化时写一条配置日志。 */
     public static void putBridge(String url, String key) {
         String base = url == null ? "" : url.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
@@ -208,14 +221,14 @@ public final class TmdbSetting {
         if (!urlChanged && !keyChanged) return;
         String reason;
         if (base.isEmpty()) {
-            reason = "地址已清空，豆瓣桥停用";
+            reason = "地址已清空，Douban Bridge停用";
         } else {
             List<String> parts = new ArrayList<>();
             if (urlChanged) parts.add("地址已更新为 " + hostOf(base));
             if (keyChanged) parts.add(secret.isEmpty() ? "密钥已清空" : "密钥已更新");
             reason = TextUtils.join("；", parts);
         }
-        logConfig(TmdbLog.SOURCE_BRIDGE, "豆瓣桥", reason);
+        logConfig(TmdbLog.SOURCE_BRIDGE, "Douban Bridge", reason);
     }
 
     /** 设置页摘要只显示主机名，避免把长地址与密钥铺满一行。 */
@@ -231,7 +244,7 @@ public final class TmdbSetting {
         return slash >= 0 ? host.substring(0, slash) : host;
     }
 
-    /** 配置变更只写结论，不写密钥；日志页的来源 / 状态筛选仍按 TMDB 与豆瓣桥归类。 */
+    /** 配置变更只写结论，不写密钥；日志页的来源 / 状态筛选仍按 TMDB 与Douban Bridge归类。 */
     private static void logConfig(String source, String keyword, String reason) {
         TmdbLog.add(source, TmdbLog.STAGE_CONFIG, keyword, "", "", reason, false);
     }

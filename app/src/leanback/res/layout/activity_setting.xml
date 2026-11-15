@@ -128,7 +128,7 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 影片刮削设置：总开关与两个二级开关、多站点、豆瓣桥、缓存与刮削日志 -->
+        <!-- 影片刮削设置：右侧摘要按两个数据源的实际启用状态动态显示 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdb"
             android:layout_width="match_parent"
@@ -156,7 +156,39 @@
                 android:singleLine="true"
                 android:textColor="@color/white"
                 android:textSize="18sp"
-                tools:text="2 个站点轮换" />
+                tools:text="开（仅TMDB）" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 提示精简设置：右侧摘要按总开关与两个子开关的启用状态动态显示 -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/notice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/setting_notice"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/noticeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="middle"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="开" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

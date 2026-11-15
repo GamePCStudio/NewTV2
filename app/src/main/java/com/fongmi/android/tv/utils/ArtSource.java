@@ -16,26 +16,26 @@ import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 海报 / 评分 / 简介的<b>唯一</b>抓取门面：TMDB 优先 → 豆瓣桥兜底 → 失败分级处置。
+ * 海报 / 评分 / 简介的<b>唯一</b>抓取门面：TMDB 优先 → Douban Bridge兜底 → 失败分级处置。
  *
  * <pre>
  *   ① 统一入口：{@link #fetch} 处理单条（详情页、最近观看、主视觉），
  *      {@link #enqueue} 处理网格批量（首页与三个频道页），两者走同一套判定与落库
- *   ② 按页分桶：每个页面一个待抓队列，{@link #setActiveScope} 标记当前页；
- *      当前页的任务排最前，当前页刮完（或剩余项都在冷却期）才轮到其他页，做到「所见即所得」
+ *   ② 单一全局队列：所有页面共用一个按进入顺序处理的队列，不区分页面优先级
  *   ③ 匀速排队：相邻两次抓取至少间隔 {@link #INTERVAL_MS}，避免一次进页面打满接口
- *   ④ 优先 TMDB：已完整缓存直接跳过；未启用 / 失败 / 超时 / 数据不全都转豆瓣桥
- *   ⑤ 豆瓣桥：按类目榜单做「片名完全匹配优先，否则模糊匹配」，海报 / 评分 / 简介写回同一索引
+ *   ④ 优先 TMDB：已完整缓存直接跳过；只有「无匹配」「素材不全」「TMDB 未启用」才转Douban Bridge，
+ *      网络故障等临时问题只做冷却、不降级，也不据此拉黑；TMDB 完整成功即排他，Douban 不再介入
+ *   ⑤ Douban Bridge：按类目榜单做「片名完全匹配优先，否则模糊匹配」，海报 / 评分 / 简介写回同一索引
  *   ⑥ 失败分级：只有「两个数据源都正常返回、但确实没有这部片」才进 {@link ArtBlacklist}，
  *      网络错误 / 限流 / 素材缺失等临时问题只做 {@link ArtCooldown} 的短时冷却
  *   ⑦ 统一出口：{@link #card(String)} 与 {@link #apply(Vod)} 走同一份索引、同一套评分格式，
@@ -44,26 +44,21 @@ import java.util.Set;
  */
 public final class ArtSource {
 
-    /** 首页是电影 / 剧集 / 综艺混合，豆瓣桥需要同时查多类榜单。 */
+    /** 首页是电影 / 剧集 / 综艺混合，Douban Bridge需要同时查多类榜单。 */
     public static final int CAT_AUTO = 0;
     /** 卡片评分备注前缀：兼容旧缓存，新数据统一走 Vod.artScore。 */
     public static final String SCORE_PREFIX = "评分：";
 
     /** 相邻两次抓取提交的最小间隔（毫秒）。 */
     private static final long INTERVAL_MS = 500L;
-    /** 失败重试的间隔：必须大于 TmdbApi 的 60 秒失败冷却。 */
+    /** 临时失败后的重试间隔：TMDB 侧已无冷静期，这里给 Douban Bridge 冷却留足 10 分钟余量。 */
     private static final long RETRY_GAP_MS = 65_000L;
-    /**
-     * TMDB 的兜底判定时间。TmdbApi 有若干「静默早退」分支（缓存命中 / 失败冷却 / 请求进行中）
-     * 不会回调，超时或异常也只走日志；超过这个时间仍没落库就视为失败并转豆瓣桥。
-     */
-    private static final long TMDB_DEADLINE_MS = 12_000L;
     /** 每个片名在整个进程内最多提交几次（含首次）。 */
     private static final int MAX_ATTEMPTS = 3;
-    /** 单个页面最多排队的片名数，防止异常数据把队列撑爆。 */
-    private static final int MAX_QUEUE_PER_SCOPE = 120;
+    /** 全局队列最多排队的片名数，防止异常数据把队列撑爆。 */
+    private static final int MAX_QUEUE = 120;
 
-    /** TMDB 未参与本次判定（二级开关关闭）：豆瓣桥的结论可以直接作为最终结论。 */
+    /** TMDB 未参与本次判定（二级开关关闭）：Douban Bridge的结论可以直接作为最终结论。 */
     private static final int TMDB_SKIPPED = 0;
     /** TMDB 匹配到了条目，只是素材不全（缺海报 / 缺评分）：说明这部片存在，不能拉黑。 */
     private static final int TMDB_MATCHED = 1;
@@ -73,24 +68,15 @@ public final class ArtSource {
     private static final int TMDB_TEMPORARY = 3;
 
     private static final Object LOCK = new Object();
-    /**
-     * 按页面分桶的待抓队列。当前页优先，其他页按「服务过就排后」轮转，
-     * 保证多个后台页之间不会出现某一页永远轮不上。
-     */
-    private static final Map<String, LinkedHashSet<String>> SCOPES = new LinkedHashMap<>();
-    /** 片名 → 所属页：同一片名只排一次，切到新页时迁移过去，避免等旧页跑完。 */
-    private static final Map<String, String> LOCATION = new HashMap<>();
-    /** 失败重试：片名 → 所属页，重试时放回原来的桶。 */
+    /** 全局待抓队列：归一化片名 → 原始片名，按进入顺序处理，天然去重。 */
+    private static final Map<String, String> QUEUE = new LinkedHashMap<>();
+    /** 失败 / 冷却后待重试：归一化片名 → 原始片名。 */
     private static final Map<String, String> RETRY = new LinkedHashMap<>();
-    /** 当前可见页面。空串表示没有页面声明（按默认桶处理）。 */
-    private static String activeScope = "";
 
     private static final Map<String, Integer> ATTEMPTS = new HashMap<>();
-    /** 归一化片名 → 热榜类目，供豆瓣桥选择对应榜单。 */
+    /** 归一化片名 → 热榜类目，供Douban Bridge选择对应榜单。 */
     private static final Map<String, Integer> CATEGORIES = new HashMap<>();
-    /** 归一化片名 → TMDB 兜底定时器，收到结果或转豆瓣桥时取消。 */
-    private static final Map<String, Runnable> PENDING = new HashMap<>();
-    /** 进程内已发起过豆瓣桥降级的片名，避免失败回调与兜底定时器重复写触发日志。 */
+    /** 进程内已发起过Douban Bridge降级的片名，避免重复写触发日志。 */
     private static final Set<String> FALLBACK = new HashSet<>();
     private static final List<WeakReference<Listener>> LISTENERS = new ArrayList<>();
     private static boolean scheduled;
@@ -110,23 +96,11 @@ public final class ArtSource {
 
     public interface Callback {
 
-        /** 抓取完成；art 为索引里的最终记录，可能来自 TMDB，也可能来自豆瓣桥。 */
+        /** 抓取完成；art 为索引里的最终记录，可能来自 TMDB，也可能来自Douban Bridge。 */
         void onSuccess(TmdbArt art);
 
         /** 两个数据源都没有取到可用素材。 */
         void onFailure(String reason);
-    }
-
-    /** 一个待抓任务及其所属页面。 */
-    private static final class Task {
-
-        private final String title;
-        private final String scope;
-
-        private Task(String title, String scope) {
-            this.title = title;
-            this.scope = scope;
-        }
     }
 
     /**
@@ -246,13 +220,13 @@ public final class ArtSource {
                 return;
             }
         }
-        // TMDB 二级开关关闭：跳过主数据源，直接交给豆瓣桥；此时豆瓣桥的结论就是最终结论。
+        // TMDB 二级开关关闭：跳过主数据源，直接交给Douban Bridge；此时Douban Bridge的结论就是最终结论。
         if (!TmdbSetting.isTmdbScrapeEnabled()) {
             bridge(title, category, force, TMDB_SKIPPED, callback);
             return;
         }
-        // 已有背景图但缺评分 / miss 冷却中：TmdbApi 会静默早退，直接交给豆瓣桥补齐。
-        // 已有剧照说明这部片 TMDB 认识（素材不全）；miss 冷却则来源不明，按临时状态处理。
+        // 已有卡片图（海报或剧照）但缺评分 / miss 冷却中：TmdbApi 会静默早退，直接交给Douban Bridge补齐。
+        // 已有卡片图说明这部片 TMDB 认识（素材不全）；miss 冷却则来源不明，按临时状态处理。
         if (!force) {
             boolean cached = TmdbStore.cached(title);
             if (cached || TmdbStore.missed(title)) {
@@ -260,14 +234,14 @@ public final class ArtSource {
                 return;
             }
         }
-        String key = TmdbStore.normalize(title);
-        armDeadline(title, key, category, force, callback);
+        // 结果驱动：不再挂固定定时器。TmdbApi 的任务即使在多站点队列里排队，也只在真正
+        // 返回终态时才回调，杜绝「排队超时被误判为不可用、Douban 抢跑」的竞态。
         TmdbApi.FetchCallback tmdb = new TmdbApi.FetchCallback() {
             @Override
             public void onSuccess(String name, TmdbArt art) {
-                settle(key);
                 TmdbArt fresh = art != null ? art : TmdbStore.find(title);
                 if (complete(fresh)) {
+                    // TMDB 已完成全部刮削：直接收尾，Douban Bridge 不启动（互斥）。
                     ArtCooldown.clear(title);
                     broadcast();
                     success(callback, fresh);
@@ -284,8 +258,19 @@ public final class ArtSource {
 
             @Override
             public void onFailure(String name, String reason, int type) {
-                bridge(title, category, force,
-                        type == ArtFailure.NO_MATCH ? TMDB_NO_MATCH : TMDB_TEMPORARY, callback);
+                if (type == ArtFailure.NO_MATCH) {
+                    // TMDB 正常返回但确实没有匹配：这是「结果为空」，降级 Douban Bridge。
+                    bridge(title, category, force, TMDB_NO_MATCH, callback);
+                } else if (type == ArtFailure.INCOMPLETE) {
+                    // 条目存在但关键素材缺失：片子是有的，降级补素材，但不参与拉黑判定。
+                    bridge(title, category, force, TMDB_MATCHED, callback);
+                } else {
+                    // 网络故障 / 限流 / 解析异常：不降级，只做短时冷却，避免用不可信结论拉黑。
+                    TmdbLog.add(TmdbLog.SOURCE_TMDB, TmdbLog.STAGE_FAIL, title, "", reason,
+                            "TMDB 网络或临时故障，不降级 Douban Bridge，10 分钟内不再重试", true);
+                    ArtCooldown.mark(title);
+                    fail(callback, "TMDB 网络或临时故障：" + reason);
+                }
             }
         };
         if (force) TmdbApi.retry(keyword, fallback, aliases, tmdb);
@@ -307,27 +292,19 @@ public final class ArtSource {
         TmdbApi.ensureMeta(title);
     }
 
-    /** 首页等混合内容页面：不指定类目，豆瓣桥同时查电影、剧集与综艺榜。 */
+    /** 首页等混合内容页面：不指定类目，Douban Bridge同时查电影、剧集与综艺榜。 */
     public static void enqueue(Collection<String> titles) {
         enqueue(titles, CAT_AUTO);
     }
 
-    /** 入队到当前页（页面未声明作用域时进默认桶）。 */
-    public static void enqueue(Collection<String> titles, int category) {
-        enqueue(titles, category, activeScope);
-    }
-
     /**
-     * 把一批片名放进指定页面的队列。
-     *
-     * <p>当前页的任务永远排在最前；同一片名若已在别的页面排队，会被迁移到本页，
-     * 因此切页后不用等旧页跑完就能先看到本页的海报。</p>
+     * 把一批片名放进全局队列，按进入顺序处理；同一片名归一化后只排一次。
+     * 不再区分页面优先级，各页面先入队的先刮。
      */
-    public static void enqueue(Collection<String> titles, int category, String scope) {
+    public static void enqueue(Collection<String> titles, int category) {
         if (titles == null || titles.isEmpty()) return;
         if (!TmdbSetting.isMasterEnabled()) return;
         if (!TmdbSetting.isTmdbScrapeEnabled() && !TmdbSetting.isBridgeEnabled()) return;
-        String target = scope == null ? "" : scope;
         synchronized (LOCK) {
             for (String title : titles) {
                 if (TextUtils.isEmpty(title)) continue;
@@ -341,51 +318,19 @@ public final class ArtSource {
                     if (complete(art)) continue;
                 }
                 if (ATTEMPTS.getOrDefault(key, 0) >= MAX_ATTEMPTS) continue;
-                if (size(target) >= MAX_QUEUE_PER_SCOPE) break;
+                if (QUEUE.size() >= MAX_QUEUE) break;
                 CATEGORIES.put(key, category);
-                put(target, title);
+                QUEUE.putIfAbsent(key, title);
             }
             schedule(INTERVAL_MS);
         }
     }
 
-    /**
-     * 声明当前可见页面。页面 {@code onResume} 调用；不需要在销毁时清理自己的桶 ——
-     * 未刮完的部分会继续在后台跑，直到整批任务结束（这也是「本页完成后接着刮其他页」的前提）。
-     */
-    public static void setActiveScope(String scope) {
-        synchronized (LOCK) {
-            activeScope = scope == null ? "" : scope;
-            // 取消可能在排的旧 tick，立刻按新页面的优先级重新取任务：
-            // 否则切页瞬间还会先抓一条上一页的，观感上是「本页要等一下才轮到」。
-            App.removeCallbacks(STEP);
-            scheduled = false;
-            schedule(0);
-        }
-    }
-
-    /**
-     * 离开某个页面：若当前优先级正是它，就退回「不分页」的普通轮转。
-     *
-     * <p>四页之外的界面（详情页、播放页、设置页等）不声明作用域，
-     * 此时所有待抓任务按进入顺序轮转处理，与加入优先级之前的方案一致。</p>
-     */
-    public static void clearActiveScope(String scope) {
-        synchronized (LOCK) {
-            if (!activeScope.equals(scope == null ? "" : scope)) return;
-            activeScope = "";
-            schedule(0);
-        }
-    }
-
-    /** 丢弃全部待抓队列（退出应用 / 清缓存时用，普通切页不要调用）。 */
+    /** 丢弃全部待抓队列（退出应用 / 清缓存时用）。 */
     public static void cancel() {
         synchronized (LOCK) {
-            SCOPES.clear();
-            LOCATION.clear();
+            QUEUE.clear();
             RETRY.clear();
-            for (Runnable runnable : PENDING.values()) App.removeCallbacks(runnable);
-            PENDING.clear();
             scheduled = false;
             retryScheduled = false;
             App.removeCallbacks(STEP);
@@ -394,14 +339,13 @@ public final class ArtSource {
         DoubanBridge.cancel();
     }
 
-    /** 备份恢复 / 清除缓存 / 更换豆瓣桥配置后重置全部进程内状态。 */
+    /** 备份恢复 / 清除缓存 / 更换Douban Bridge配置后重置全部进程内状态。 */
     public static void reset() {
         cancel();
         synchronized (LOCK) {
             ATTEMPTS.clear();
             CATEGORIES.clear();
             FALLBACK.clear();
-            activeScope = "";
         }
         DoubanBridge.reset();
         ArtCooldown.reset();
@@ -409,79 +353,58 @@ public final class ArtSource {
         ArtBlacklist.reset();
     }
 
+    /**
+     * 黑名单页单条移除后调用：清掉该片在进程内的所有拦截状态（尝试次数、冷却、
+     * 队列、待回调），丢掉索引里的旧记录，并重新排队抓一次，避免「移出黑名单却永远不会再刮」。
+     */
+    public static void unban(String title) {
+        if (TextUtils.isEmpty(title)) return;
+        String key = TmdbStore.normalize(title);
+        synchronized (LOCK) {
+            ATTEMPTS.remove(key);
+            CATEGORIES.remove(key);
+            FALLBACK.remove(key);
+            RETRY.remove(key);
+            QUEUE.remove(key);
+        }
+        TmdbStore.forget(title);
+        ArtCooldown.clear(title);
+        TmdbApi.notifyFetched();
+        broadcast();
+        enqueue(Collections.singletonList(title), CAT_AUTO);
+    }
+
     // ---------------------------------------------------------------- 队列调度
 
-    private static int size(String scope) {
-        LinkedHashSet<String> bucket = SCOPES.get(scope);
-        return bucket == null ? 0 : bucket.size();
-    }
-
-    /** 入桶；同一片名已在别的页排队时迁移过来，避免同一条被重复抓两次。 */
-    private static void put(String scope, String title) {
-        String previous = LOCATION.get(title);
-        if (previous != null) {
-            if (previous.equals(scope)) return;
-            LinkedHashSet<String> bucket = SCOPES.get(previous);
-            if (bucket != null) bucket.remove(title);
-        }
-        LOCATION.put(title, scope);
-        SCOPES.computeIfAbsent(scope, key -> new LinkedHashSet<>()).add(title);
-    }
-
     /**
-     * 从某个桶里取一个「现在真的能抓」的任务。
+     * 从全局队列头部依次取一个「现在真的能抓」的任务。
      * 永久不可抓的（黑名单 / 已完整 / 达重试上限）顺手丢掉；只在冷却期的保留，
-     * 等冷却结束后还能再试 —— 它不阻塞调度，当前页因此可以立刻让位给其他页。
+     * 等冷却结束后还能再试 —— 它不阻塞后面的片名。
      */
-    private static String take(String scope) {
-        LinkedHashSet<String> bucket = SCOPES.get(scope);
-        if (bucket == null || bucket.isEmpty()) return null;
-        Iterator<String> iterator = bucket.iterator();
+    private static String take() {
+        Iterator<Map.Entry<String, String>> iterator = QUEUE.entrySet().iterator();
         while (iterator.hasNext()) {
-            String title = iterator.next();
+            String title = iterator.next().getValue();
             if (!eligible(title)) {
-                if (ArtBlacklist.contains(title) || !ArtCooldown.blocked(title)) {
-                    iterator.remove();
-                    LOCATION.remove(title);
-                }
+                if (ArtBlacklist.contains(title) || !ArtCooldown.blocked(title)) iterator.remove();
                 continue;
             }
             iterator.remove();
-            LOCATION.remove(title);
             return title;
         }
         return null;
     }
 
-    /** 当前页优先；当前页没有可抓的了，才依次看其他页，并把服务过的页挪到末尾实现轮转。 */
-    private static Task next() {
-        String title = take(activeScope);
-        if (title != null) return new Task(title, activeScope);
-        for (String scope : new ArrayList<>(SCOPES.keySet())) {
-            if (scope.equals(activeScope)) continue;
-            title = take(scope);
-            if (title == null) continue;
-            LinkedHashSet<String> bucket = SCOPES.remove(scope);
-            if (bucket != null) SCOPES.put(scope, bucket);
-            return new Task(title, scope);
-        }
-        return null;
-    }
-
-    /** 是否还有现在就能抓的任务（跨所有页面）。 */
+    /** 是否还有现在就能抓的任务。 */
     private static boolean hasWork() {
-        for (LinkedHashSet<String> bucket : SCOPES.values()) {
-            for (String title : bucket) if (eligible(title)) return true;
-        }
+        for (String title : QUEUE.values()) if (eligible(title)) return true;
         return false;
     }
 
     /** 是否还有「只是因为冷却暂时抓不了」的任务：有的话过一会儿要回来再看一眼。 */
     private static boolean hasCooling() {
-        for (LinkedHashSet<String> bucket : SCOPES.values()) {
-            for (String title : bucket) {
-                if (!ArtBlacklist.contains(title) && ArtCooldown.blocked(title)) return true;
-            }
+        for (String title : QUEUE.values()) {
+            if (!ArtBlacklist.contains(title) && ArtCooldown.blocked(title)) return true;
         }
         return false;
     }
@@ -494,23 +417,23 @@ public final class ArtSource {
     }
 
     private static final Runnable STEP = () -> {
-        Task task;
+        String title;
         synchronized (LOCK) {
             scheduled = false;
-            task = next();
-            if (task == null) {
+            title = take();
+            if (title == null) {
                 scheduleRetry();
                 return;
             }
         }
-        process(task.title, task.scope);
+        process(title);
         synchronized (LOCK) {
             if (hasWork()) schedule(INTERVAL_MS);
             else scheduleRetry();
         }
     };
 
-    private static void process(String title, String scope) {
+    private static void process(String title) {
         if (!eligible(title)) return;
         String key = TmdbStore.normalize(title);
         int attempt;
@@ -529,63 +452,34 @@ public final class ArtSource {
             @Override
             public void onFailure(String reason) {
                 synchronized (LOCK) {
-                    RETRY.put(title, scope);
+                    RETRY.put(key, title);
                 }
             }
         });
         synchronized (LOCK) {
             // 异步结果还没回来时先登记，下一轮重试会再次确认是否已完整。
-            RETRY.put(title, scope);
+            RETRY.put(key, title);
         }
     }
 
-    /** 静默早退 / 超时兜底：到期仍没落库就转豆瓣桥；超时属于临时问题，不能据此拉黑。 */
-    private static void armDeadline(String title, String key, int category, boolean force, Callback callback) {
-        Runnable timer = () -> {
-            synchronized (LOCK) {
-                PENDING.remove(key);
-            }
-            if (complete(TmdbStore.find(title))) {
-                ArtCooldown.clear(title);
-                broadcast();
-                success(callback, TmdbStore.find(title));
-            } else {
-                bridge(title, category, force, TMDB_TEMPORARY, callback);
-            }
-        };
-        synchronized (LOCK) {
-            PENDING.put(key, timer);
-        }
-        App.post(timer, TMDB_DEADLINE_MS);
-    }
-
-    private static void settle(String key) {
-        Runnable timer;
-        synchronized (LOCK) {
-            timer = PENDING.remove(key);
-        }
-        if (timer != null) App.removeCallbacks(timer);
-    }
-
-    // ---------------------------------------------------------------- 豆瓣桥降级
+    // ---------------------------------------------------------------- Douban Bridge降级
 
     /**
-     * TMDB 不可用 → 豆瓣桥。
+     * TMDB 不可用 → Douban Bridge。
      *
-     * @param tmdb TMDB 在本次判定中的状态，决定豆瓣桥说「无匹配」时能不能直接拉黑
+     * @param tmdb TMDB 在本次判定中的状态，决定Douban Bridge说「无匹配」时能不能直接拉黑
      */
     private static void bridge(String title, int category, boolean force, int tmdb, Callback callback) {
-        // 豆瓣桥二级开关关闭（或未配置）：不算一次失败，也不写冷却，等用户重新开启。
+        // Douban Bridge二级开关关闭（或未配置）：不算一次失败，也不写冷却，等用户重新开启。
         if (!TmdbSetting.isBridgeEnabled()) {
             String reason = TmdbSetting.isBridgeConfigured()
-                    ? "豆瓣桥刮削已关闭，本次不降级"
-                    : "豆瓣桥未配置密钥，本次不降级";
+                    ? "Douban Bridge刮削已关闭，本次不降级"
+                    : "Douban Bridge未配置密钥，本次不降级";
             TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_SKIP, title, "", "", reason, false);
             fail(callback, reason);
             return;
         }
         String key = TmdbStore.normalize(title);
-        settle(key);
         if (!force && ArtCooldown.blocked(title)) {
             fail(callback, "该影片 10 分钟内不再重试");
             return;
@@ -596,8 +490,8 @@ public final class ArtSource {
         }
         if (first) {
             String reason = !TmdbSetting.isTmdbScrapeEnabled()
-                    ? "TMDB 刮削已关闭，直接走豆瓣桥"
-                    : "TMDB 不可用或数据不全，转豆瓣桥";
+                    ? "TMDB 刮削已关闭，直接走Douban Bridge"
+                    : "TMDB 不可用或数据不全，转Douban Bridge";
             TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_BRIDGE_TRIGGER, title, "", "", reason, false);
         }
         DoubanBridge.enqueue(title, category, (name, result) -> {
@@ -609,16 +503,16 @@ public final class ArtSource {
     }
 
     /**
-     * 豆瓣桥的最终结论。
+     * Douban Bridge的最终结论。
      *
-     * <p>成功即结束；<b>只有在「豆瓣桥确认无匹配」且「TMDB 也是无匹配或根本没参与」时</b>
+     * <p>成功即结束；<b>只有在「Douban Bridge确认无匹配」且「TMDB 也是无匹配或根本没参与」时</b>
      * 才写入黑名单；其余（网络错误、限流、素材缺失、桥被关闭）一律只做短时冷却，
      * 避免把一时抓不到的片子永久误杀。</p>
      */
     private static void finish(String name, int tmdb, int result, Callback callback) {
         if (result == ArtFailure.NONE) {
             TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_DONE, name, "", "",
-                    "豆瓣桥降级成功", false);
+                    "Douban Bridge降级成功", false);
             ArtCooldown.clear(name);
             // 让监听 TMDB 抓取完成的页面（详情页、主视觉）也能收到这次更新。
             TmdbApi.notifyFetched();
@@ -630,25 +524,25 @@ public final class ArtSource {
             // 同一片名可能被多路回调同时命中，只有真正新增时才记日志与广播。
             if (ArtBlacklist.add(name)) {
                 TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_BLACKLIST, name, "", "",
-                        (tmdb == TMDB_NO_MATCH ? "TMDB 与豆瓣桥均无匹配" : "豆瓣桥确认无匹配")
+                        (tmdb == TMDB_NO_MATCH ? "TMDB 与Douban Bridge均无匹配" : "Douban Bridge确认无匹配")
                                 + "，已加入黑名单，不再刮削", false);
                 // 广播一次，页面据此把这张卡从主视觉与海报网格里移除。
                 TmdbApi.notifyFetched();
                 broadcast();
             }
-            fail(callback, "TMDB 与豆瓣桥均无匹配，已加入黑名单");
+            fail(callback, "TMDB 与Douban Bridge均无匹配，已加入黑名单");
             return;
         }
         if (result == ArtFailure.UNAVAILABLE) {
             TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_SKIP, name, "", "",
-                    "豆瓣桥不可用，本次不降级", false);
-            fail(callback, "豆瓣桥不可用，本次不降级");
+                    "Douban Bridge不可用，本次不降级", false);
+            fail(callback, "Douban Bridge不可用，本次不降级");
             return;
         }
         TmdbLog.add(TmdbLog.SOURCE_BRIDGE, TmdbLog.STAGE_FAIL, name, "", "",
-                "豆瓣桥降级失败（临时性问题），10 分钟内不再重试", true);
+                "Douban Bridge降级失败（临时性问题），10 分钟内不再重试", true);
         ArtCooldown.mark(name);
-        fail(callback, "TMDB 与豆瓣桥均未取到素材，10 分钟内不再重试");
+        fail(callback, "TMDB 与Douban Bridge均未取到素材，10 分钟内不再重试");
     }
 
     private static void success(Callback callback, TmdbArt art) {
@@ -663,7 +557,7 @@ public final class ArtSource {
 
     /**
      * 安排下一次重试：既包括抓取失败的片名，也包括「还在冷却期」的排队项
-     * —— 后者不阻塞当前页让位，但冷却结束后要自动回来再试一次。
+     * —— 冷却结束后要自动回来再试一次。
      */
     private static void scheduleRetry() {
         if (retryScheduled) return;
@@ -676,10 +570,10 @@ public final class ArtSource {
         synchronized (LOCK) {
             retryScheduled = false;
             for (Map.Entry<String, String> entry : RETRY.entrySet()) {
-                String title = entry.getKey();
+                String title = entry.getValue();
                 if (!eligible(title)) continue;
-                if (size(entry.getValue()) >= MAX_QUEUE_PER_SCOPE) continue;
-                put(entry.getValue(), title);
+                if (QUEUE.size() >= MAX_QUEUE) continue;
+                QUEUE.putIfAbsent(entry.getKey(), title);
             }
             RETRY.clear();
             if (hasWork()) schedule(INTERVAL_MS);

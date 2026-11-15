@@ -44,6 +44,7 @@ import com.fongmi.android.tv.ui.adapter.ConfigMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.SiteMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.ui.custom.ToolbarEntries;
 import com.fongmi.android.tv.ui.fragment.FolderFragment;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -211,6 +212,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) mLastNav = view;
         });
+        // 影片刮削关闭 / 未配置时，三个频道入口一并隐藏（与首页、频道页同一套判定）。
+        ToolbarEntries.apply(mToolbar);
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(focusGuard);
     }
 
@@ -646,6 +649,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     @Override
     protected void onResume() {
         super.onResume();
+        // 从设置页返回时刮削配置可能已变，频道入口的显隐要重新收敛。
+        ToolbarEntries.apply(mToolbar);
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();
@@ -753,9 +758,17 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
             hideSiteSheet();
         } else if (isFilterVisible()) {
             updateFilter();
+        } else if (mToolbar.navVod.hasFocus()) {
+            // 「片库」是返回链路的最后一站：再按一次才回首页。
+            exitToHome();
         } else if (isToolbarFocused()) {
-            // 顶栏：先回分类胶囊，再按一次才退出本页。
+            // 顶栏其它项：先回分类导航。
             focusCapsule(mBinding.pager.getCurrentItem());
+        } else if (isCapsuleFocused()) {
+            // 分类导航：焦点回到「片库」；只有真的进了子分类时才逐级退回。
+            FolderFragment folder = getFragment();
+            if (folder != null && folder.canBack()) folder.goBack();
+            else mToolbar.navVod.requestFocus();
         } else if (isContentFocused()) {
             // 兜底：dispatchKeyEvent 没拦住时（例如从弹窗回到页面）同样先回胶囊。
             View poster = getCurrentFocus();
@@ -768,6 +781,11 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
             else if (folder.canBack()) folder.goBack();
             else super.onBackInvoked();
         }
+    }
+
+    /** 焦点是否在片库下方的分类导航（分类胶囊行）。 */
+    private boolean isCapsuleFocused() {
+        return isInside(getCurrentFocus(), mBinding.recycler);
     }
 
     /** 焦点是否在海报区（pager 的后代）。 */

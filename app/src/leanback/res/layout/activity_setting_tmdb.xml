@@ -19,12 +19,18 @@
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="6dp"
             android:text="@string/setting_tmdb"
             android:textColor="@color/white"
             android:textSize="20sp" />
 
-        <!-- 总开关：关闭后播放页与海报聚焦都不再抓取 -->
+        <!-- 标题下方的功能说明：与下方 TMDB 声明共用 SettingHint 样式 -->
+        <com.google.android.material.textview.MaterialTextView
+            style="@style/SettingHint"
+            android:layout_marginBottom="16dp"
+            android:text="@string/tmdb_enable_hint" />
+
+        <!-- 刮削开关：总开关 + 两个数据源二级开关 + 失败提示，后三项统一缩进一级 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbEnable"
             android:layout_width="match_parent"
@@ -51,37 +57,6 @@
                 android:textColor="@color/white"
                 android:textSize="18sp"
                 tools:text="关" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <!-- 二级开关：总开关打开后才出现，分别控制豆瓣桥与 TMDB -->
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/bridgeScrape"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/douban_bridge_scrape"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/bridgeScrapeText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="开" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -115,11 +90,42 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 失败提示开关：默认关闭，紧跟总开关，位置固定；总开关关闭时整行隐藏 -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/bridgeScrape"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/douban_bridge_scrape"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/bridgeScrapeText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="开" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 失败提示：属于「启用刮削」的二级子项，缩进与两个数据源开关一致 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbToast"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -145,14 +151,23 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 站点列表：运行时按配置条数填充，一条站点一行，点击可改地址 / 密钥 -->
+        <!-- TMDB 分组：站点配置 + 官方署名声明 -->
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp"
+            android:alpha="0.55"
+            android:text="@string/setting_group_tmdb"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbSites"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <!-- 添加站点：达到上限时隐藏 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbAddSite"
             android:layout_width="match_parent"
@@ -172,12 +187,42 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 豆瓣桥：豆瓣数据的唯一来源，地址与密钥可改；未配置时自动降级为仅用 TMDB -->
+        <!-- API 条款要求：展示 TMDB 标识 + 固定的非背书声明，与开关状态无关，常驻可见 -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tmdbAttribution"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="72dp"
+                android:layout_height="24dp"
+                android:contentDescription="@string/tmdb_attribution_title"
+                android:src="@drawable/ic_tmdb" />
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/SettingHint"
+                android:layout_marginTop="8dp"
+                android:text="@string/tmdb_attribution" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- Douban Bridge 分组：地址与密钥配置 -->
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp"
+            android:alpha="0.55"
+            android:text="@string/setting_group_bridge"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbBridge"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -203,12 +248,21 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 刮削日志：统一查看 TMDB 与豆瓣记录，排查失败原因时进这个页面 -->
+        <!-- 通用分组：刮削日志与黑名单，两个数据源共用 -->
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp"
+            android:alpha="0.55"
+            android:text="@string/setting_group_common"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbLog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -234,12 +288,10 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 黑名单：TMDB 与豆瓣桥都确认「没有这部片」的影片；只做展示，移除走「设置 → 清除缓存」 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbBlacklist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"

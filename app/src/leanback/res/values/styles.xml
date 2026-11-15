@@ -278,4 +278,16 @@
         <item name="android:textSize">14sp</item>
     </style>
 
+    <!--
+      设置页说明文案：白色 13sp、整体 70% 不透明度。
+      刮削设置页的启用提示与 TMDB 署名声明共用这一份定义，改样式只需要动这里。
+    -->
+    <style name="SettingHint">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:alpha">0.7</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
 </resources>

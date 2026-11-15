@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 刮削黑名单：确认「TMDB 与豆瓣桥都没有这部片」之后才写入，此后再不为它发任何请求，
+ * 刮削黑名单：确认「TMDB 与Douban Bridge都没有这部片」之后才写入，此后再不为它发任何请求，
  * 首页与三个频道页也不再显示它。
  *
  * <p>与 {@link ArtCooldown} 的分工：冷却只挡一小段时间，用于临时性失败；黑名单是长期结论，
@@ -25,8 +25,8 @@ import java.util.Map;
  * 鉴权失败、图片下载失败等临时性问题绝不写入，避免把本来能刮到的片子永久误杀。</p>
  *
  * <p>按归一化片名存 {@code files/tmdb/blacklist.json}：这个目录本来就在备份白名单里，
- * 恢复备份会一并还原；<b>移除只有一条路</b> ——「设置 → 清除缓存」会删掉整个目录，
- * 因此这里不提供逐条删除的操作。</p>
+ * 恢复备份会一并还原。移除有两条路：黑名单页逐条删除（纠正误封），
+ * 以及「设置 → 清除缓存」清空整个目录。</p>
  */
 public final class ArtBlacklist {
 
@@ -132,6 +132,24 @@ public final class ArtBlacklist {
             entry.time = System.currentTimeMillis();
             ENTRIES.put(key, entry);
             prune();
+            persist();
+            return true;
+        }
+    }
+
+    /**
+     * 单条移出黑名单（误封时纠正）。调用方需同步清理刮削侧的进程内状态，
+     * 否则已累计的尝试次数与冷却仍会挡住重新抓取。
+     *
+     * @return true 表示确实删掉了一条
+     */
+    public static boolean remove(String title) {
+        if (title == null) return false;
+        String key = TmdbStore.normalize(title);
+        if (key.isEmpty()) return false;
+        synchronized (LOCK) {
+            load();
+            if (ENTRIES.remove(key) == null) return false;
             persist();
             return true;
         }

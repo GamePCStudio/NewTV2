@@ -4,6 +4,7 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaMetadata;
 
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.utils.NoticePolicy;
 import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Episode;
@@ -87,7 +88,8 @@ public class VodPlaybackController {
         Result result = detail.result();
         if (result.getList().isEmpty()) detailEmpty(result.hasMsg());
         else detailLoaded(result.getVod());
-        host.showDetailMessage(result.getMsg());
+        // 只静默站源播报，Result.hasMsg() 的错误判定与其它链路不变
+        if (!NoticePolicy.shouldBlockStationMessage(result.getMsg())) host.showDetailMessage(result.getMsg());
     }
 
     private void updateVod(Vod item) {

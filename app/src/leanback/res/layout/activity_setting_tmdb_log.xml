@@ -112,32 +112,67 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusAll"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_all" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusDone"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_done" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusFail"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_fail" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusSkip"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_skip" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusOther"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_other" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusBlacklist"
             style="@style/LogFilterChip"
+            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_blacklist" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <!-- 片名过滤：点开输入框，留空即取消该条件；与来源、状态三个条件组合生效 -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="52dp"
+            android:layout_height="wrap_content"
+            android:alpha="0.55"
+            android:text="@string/tmdb_filter_keyword_label"
+            android:textColor="@color/white"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/filterKeyword"
+            style="@style/LogFilterChip"
+            android:ellipsize="end"
+            android:maxWidth="380dp"
+            android:nextFocusDown="@id/tmdbLogList"
+            android:nextFocusUp="@id/filterStatusAll"
+            android:singleLine="true"
+            android:text="@string/tmdb_filter_keyword_none"
+            tools:text="关键字：敦煌英雄" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 

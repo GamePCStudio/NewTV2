@@ -67,6 +67,24 @@ public class PermissionUtil {
         return resolves(activity, app) || resolves(activity, all);
     }
 
+    /**
+     * 是否还缺「所有文件访问权限」：Android 11 起写外置存储的任意目录都要它。
+     * 已经授权、系统版本更低、或者这个 ROM 根本没有该设置页时都返回 false——
+     * 最后一种情况没有可请求的入口，调用方应自行准备不需要权限的退路。
+     */
+    public static boolean needsAllFiles(FragmentActivity activity) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager() && canRequestAllFiles(activity);
+    }
+
+    /** 系统设置里的「所有文件访问权限」入口；ROM 没有这个页面时返回 null。 */
+    public static Intent allFilesIntent(FragmentActivity activity) {
+        Uri uri = Uri.parse("package:" + activity.getPackageName());
+        Intent app = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
+        if (resolves(activity, app)) return app;
+        Intent all = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+        return resolves(activity, all) ? all : null;
+    }
+
     private static boolean hasAllFiles() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager();
     }

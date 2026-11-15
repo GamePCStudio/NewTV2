@@ -67,3 +67,7 @@
 -keep class com.google.zxing.qrcode.QRCodeReader { *; }
 -keep class com.google.zxing.qrcode.QRCodeWriter { *; }
 -keep class com.google.zxing.qrcode.decoder.ErrorCorrectionLevel { *; }
+
+# 站源直连系统 Toast 的框架层拦截（纯 Java 隐藏接口豁免）
+-keep class org.lsposed.hiddenapibypass.** { *; }
+-dontwarn dalvik.system.VMRuntime

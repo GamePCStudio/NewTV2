@@ -4,6 +4,7 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 
@@ -244,7 +245,8 @@ public final class DanmakuSearchSheet {
         sourceKey = KEY_ALL;
         buildFilters();
         progress(false);
-        if (items.isEmpty()) Notify.show(R.string.error_empty);
+        // 提示统一交给 Notify → NoticePolicy 按关键词判定；浮层自身的空态已经承担了反馈。
+        if (items.isEmpty()) Notify.show(R.string.danmaku_search_empty);
         applyFilter(true);
     }
 
@@ -254,7 +256,9 @@ public final class DanmakuSearchSheet {
         buildFilters();
         progress(false);
         applyFilter(false);
-        Notify.show(TextUtils.isEmpty(e.getMessage()) ? ResUtil.getString(R.string.error_empty) : e.getMessage());
+        // 原始异常只进日志：弹幕搜索失败对普通用户没有可操作信息，文案固定才便于关键词过滤。
+        Log.w("DanmakuSearch", "search failed: " + e.getMessage());
+        Notify.show(R.string.danmaku_search_failed);
     }
 
     private void progress(boolean running) {

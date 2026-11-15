@@ -33,6 +33,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.Updater;
+import com.fongmi.android.tv.api.TmdbStore;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.api.node.NodeRuntime;
 import com.fongmi.android.tv.bean.Cache;
@@ -40,7 +41,9 @@ import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.bean.DoubanHotItem;
 import com.fongmi.android.tv.bean.DoubanHotRow;
 import com.fongmi.android.tv.bean.History;
+import com.fongmi.android.tv.bean.TmdbArt;
 import com.fongmi.android.tv.bean.Result;
+import com.fongmi.android.tv.bean.RowHeader;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Style;
 import com.fongmi.android.tv.bean.Vod;
@@ -58,6 +61,7 @@ import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.player.extractor.Source;
 import com.fongmi.android.tv.playback.ExternalPlayback;
 import com.fongmi.android.tv.server.Server;
+import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.service.DLNARendererService;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.ui.adapter.BaseDiffCallback;
@@ -66,6 +70,9 @@ import com.fongmi.android.tv.ui.adapter.SiteMenuAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
+import com.fongmi.android.tv.ui.custom.HeroInset;
+import com.fongmi.android.tv.ui.custom.HeroTransition;
+import com.fongmi.android.tv.ui.custom.ToolbarEntries;
 import com.fongmi.android.tv.ui.presenter.DoubanHotPresenter;
 import com.fongmi.android.tv.ui.presenter.HeaderPresenter;
 import com.fongmi.android.tv.ui.presenter.HistoryPresenter;
@@ -146,10 +153,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 用户是否进入过内容区（列表）：主视觉异步插入后是否需要把视口钉回顶部，
      * 用「是否已经浏览过」区分冷启动与浏览中途刷新，避免把用户从下面拽回首页。
      */
-    /** 刮削作用域：当前页任务优先，切走后未刮完的部分继续在后台排队。 */
-    private static final String SCOPE = "home";
-
     private boolean mContentVisited;
+    /** 主视觉当前内容签名：数据没变就不重建行，避免「缓存回填 + 后台刷新」两次回调各插一次而闪烁。 */
+    private String mHeroSignature = "";
+    /** 最近一次热榜结果（已去黑名单）：剧照晚到时用它重新核算主视觉，不必重打榜单接口。 */
+    private List<DoubanHotItem> mHeroItems = new ArrayList<>();
     /** 海报网格素材落库后就地刷新，与三个频道页共用同一套解析与展示逻辑。 */
     private final ArtSource.Listener mArtListener = this::refreshArt;
 
@@ -279,7 +287,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @SuppressLint("RestrictedApi")
     private void setRecyclerView() {
         CustomSelector selector = new CustomSelector();
-        selector.addPresenter(Integer.class, new HeaderPresenter());
+        HeaderPresenter header = new HeaderPresenter();
+        selector.addPresenter(Integer.class, header);
+        // 「来自 · 站源名」这类运行时拼接的标题走 RowHeader，其它标题仍是字符串资源 id。
+        selector.addPresenter(RowHeader.class, header);
         selector.addPresenter(String.class, new ProgressPresenter());
         selector.addPresenter(Vod.class, new VodPresenter(this, Style.list()));
         // 卡片自带 1.04 倍聚焦缩放，必须关掉 Leanback 的 ZOOM_FACTOR_*，否则两套缩放
@@ -353,6 +364,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) mLastNav = view;
         });
+        // 影片刮削关闭或两个数据源都不可用时，电影 / 剧集 / 综艺没有内容可看，入口一并隐藏。
+        ToolbarEntries.apply(mToolbar);
     }
 
     /**
@@ -726,7 +739,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         // 右侧再是 4 个功能图标 → 站源下拉 → 时间。
         // 主视觉由 loadDoubanHot() 插到列表最前面（index 0）。
         mAdapter.add(R.string.home_history);
-        mAdapter.add(R.string.home_recommend);
+        // 「来自 · 站源名」标题不再预置：它和网格是同一个容器，网格为空时整块都要收起来，
+        // 由 addVideo() 在拿到内容后一起插入，避免只剩一个空标题。
     }
 
     private void checkPermission() {
@@ -744,6 +758,9 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         List<String> items = Arrays.asList(getHome().getName(), getConfig().getName(), getString(R.string.app_name));
         Optional<String> optional = items.stream().filter(s -> !TextUtils.isEmpty(s)).findFirst();
         optional.ifPresent(s -> mToolbar.siteName.setText(clampSiteName(s)));
+        // 换站源后「来自 · 站源名」跟着变；刮削配置变化时三个频道入口的可见性也在这里重算。
+        updateRecommendHeader();
+        ToolbarEntries.apply(mToolbar);
     }
 
     /**
@@ -813,11 +830,21 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     private void getVideo() {
         mResult = Result.empty();
-        int index = getRecommendIndex();
-        boolean gone = mAdapter.indexOf("progress") == -1;
-        boolean hasItem = gone && mAdapter.size() > index;
-        if (hasItem) mAdapter.removeItems(index, mAdapter.size() - index);
-        if (gone) mAdapter.add("progress");
+        int start = getRecommendStart();
+        int progress = mAdapter.indexOf("progress");
+        if (progress >= 0) {
+            // 占位行已经在：只清掉它前面可能残留的旧标题 / 旧网格、以及它后面的旧内容，
+            // 占位行本身保留（不重建就不会闪）。
+            if (progress > start) {
+                mAdapter.removeItems(start, progress - start);
+                progress = start;
+            }
+            if (mAdapter.size() > progress + 1) mAdapter.removeItems(progress + 1, mAdapter.size() - progress - 1);
+        } else {
+            // 「来自 · 站源名」这一整块（标题 + 网格）从起始位置整体清掉，等新结果回来再重建。
+            if (mAdapter.size() > start) mAdapter.removeItems(start, mAdapter.size() - start);
+            mAdapter.add(start, "progress");
+        }
         mViewModel.homeContent();
     }
 
@@ -834,8 +861,15 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 if (!vod.getName().isEmpty()) names.add(vod.getName());
             }
             // 首页混合电影 / 剧集 / 综艺，让豆瓣同时查两类榜单；与频道页共用同一套解析。
-            ArtSource.enqueue(names, ArtSource.CAT_AUTO, SCOPE);
+            ArtSource.enqueue(names, ArtSource.CAT_AUTO);
         }
+        if (items.isEmpty()) {
+            // 网格为空：整个容器一起收起（标题 + 网格），不留下一个孤立的空标题。
+            removeRecommendBlock();
+            return;
+        }
+        // 标题与网格同进同出：先补标题（站源名可能刚变过），再挂内容。
+        ensureRecommendHeader();
         if (style.isList()) mAdapter.addAll(mAdapter.size(), items);
         else addGrid(items, style);
     }
@@ -910,26 +944,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                     if (ArtSource.apply(vod)) changed = true;
                 }
                 if (changed) row.notifyArrayItemRangeChanged(0, row.size());
-            } else if (item instanceof DoubanHotRow) {
-                rebuildHero((DoubanHotRow) item, i);
             }
         }
-    }
-
-    /**
-     * 主视觉里出现刚被拉黑的片名时重建这一行。
-     * 焦点正停在这行时跳过：重建会让焦点丢失，用户下次进页面时会被自然过滤掉。
-     */
-    private void rebuildHero(DoubanHotRow row, int index) {
-        List<DoubanHotItem> shown = new ArrayList<>();
-        for (DoubanHotItem item : row.getItems()) {
-            if (ArtBlacklist.contains(item.getTitle())) continue;
-            shown.add(item);
-        }
-        if (shown.size() == row.size()) return;
-        if (mBinding.recycler.getSelectedPosition() == index) return;
-        if (shown.isEmpty()) mAdapter.removeItems(index, 1);
-        else mAdapter.replace(index, DoubanHotRow.create(shown));
+        // 主视觉跟着一起重算：没剧照时它是收起的，图落库后要能自动挂回去；
+        // 已挂出的行也会在这里按最新剧照 / 黑名单重新过滤，不用另设重建分支。
+        if (!mHeroItems.isEmpty()) applyHero(mHeroItems);
     }
 
     private void getHistory() {
@@ -939,12 +958,20 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private void getHistory(boolean renew) {
         List<History> items = History.get();
         int historyIndex = getHistoryIndex();
-        int recommendIndex = getRecommendIndex();
-        boolean exist = recommendIndex - historyIndex == 2;
+        // 直接看「历史标题后面那一行」是不是历史行本身：不再依赖「更新推荐」标题的位置，
+        // 因为后者会随网格为空 / 有内容动态增删。
+        boolean exist = isHistoryRow(historyIndex);
         if (renew) mHistoryAdapter = new ArrayObjectAdapter(mPresenter = new HistoryPresenter(this));
         if ((items.isEmpty() && exist) || (renew && exist)) mAdapter.removeItems(historyIndex, 1);
         if ((!items.isEmpty() && !exist) || (renew && exist)) mAdapter.add(historyIndex, new ListRow(mHistoryAdapter));
         mHistoryAdapter.setItems(items, new BaseDiffCallback<History>());
+    }
+
+    /** 某个位置是不是「最近观看」那行（用适配器身份判断，避免和站源行 / 网格行混淆）。 */
+    private boolean isHistoryRow(int index) {
+        if (index < 0 || index >= mAdapter.size()) return false;
+        Object item = mAdapter.get(index);
+        return item instanceof ListRow && ((ListRow) item).getAdapter() == mHistoryAdapter;
     }
 
     private void setHistoryDelete(boolean delete) {
@@ -960,52 +987,220 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     private int getHistoryIndex() {
-        return mAdapter.indexOf(R.string.home_history) + 1;
+        int index = mAdapter.indexOf(R.string.home_history);
+        return index < 0 ? 0 : index + 1;
     }
 
-    private int getRecommendIndex() {
-        return mAdapter.indexOf(R.string.home_recommend) + 1;
+    /**
+     * 「来自 · 站源名」区块的起始位置：标题在就用标题的位置；标题被收起时退回
+     * 「最近观看」区块之后——两者都不会因为另一块的增删而算错。
+     */
+    private int getRecommendStart() {
+        int header = indexOfHeader(R.string.home_recommend);
+        if (header >= 0) return header;
+        int start = getHistoryIndex();
+        if (isHistoryRow(start)) start++;
+        return Math.min(start, mAdapter.size());
     }
 
-    /** 加载主视觉（HotRank 聚合热榜 + TMDB 刮削）：命中 30 分钟缓存立即渲染，过期后台刷新；结果插到列表首位。 */
+    /** 按资源 id 找栏目标题；标题可能是动态文字，所以只能按 key 比对，不能用 indexOf(Integer)。 */
+    private int indexOfHeader(int key) {
+        for (int i = 0; i < mAdapter.size(); i++) {
+            Object item = mAdapter.get(i);
+            if (item instanceof RowHeader && ((RowHeader) item).getKey() == key) return i;
+        }
+        return -1;
+    }
+
+    /** 当前站源名：与顶栏、站源下拉的「当前行」取同一份数据。 */
+    private String currentSiteName() {
+        String name = getHome().getName();
+        if (!TextUtils.isEmpty(name)) return name;
+        name = getConfig().getName();
+        return TextUtils.isEmpty(name) ? "" : name;
+    }
+
+    /** 「来自 · 站源名」标题：站源名取不到时退回原来的「更新推荐」，不至于出现一个空的「来自 ·」。 */
+    private RowHeader recommendHeader() {
+        String site = currentSiteName();
+        CharSequence text = TextUtils.isEmpty(site)
+                ? getString(R.string.home_recommend)
+                : getString(R.string.home_recommend_source, site);
+        return new RowHeader(R.string.home_recommend, text);
+    }
+
+    /** 标题不存在就插到正确位置；已存在则只刷新文字（换站源后站源名会变）。 */
+    private void ensureRecommendHeader() {
+        int index = indexOfHeader(R.string.home_recommend);
+        if (index >= 0) {
+            mAdapter.replace(index, recommendHeader());
+            return;
+        }
+        mAdapter.add(getRecommendStart(), recommendHeader());
+    }
+
+    /** 换站源 / 配置变化后只更新标题文字，不动网格与焦点。 */
+    private void updateRecommendHeader() {
+        if (mAdapter == null) return;
+        int index = indexOfHeader(R.string.home_recommend);
+        if (index >= 0) mAdapter.replace(index, recommendHeader());
+    }
+
+    /** 网格为空时整块收起：标题 + 后方全部网格行。 */
+    private void removeRecommendBlock() {
+        if (indexOfHeader(R.string.home_recommend) < 0) return;
+        int start = getRecommendStart();
+        if (start < 0 || start >= mAdapter.size()) return;
+        mAdapter.removeItems(start, mAdapter.size() - start);
+    }
+
+    /** 加载主视觉（HotRank 聚合热榜 + TMDB 刮削）：命中 30 分钟缓存立即渲染，过期后台刷新。 */
     private void loadDoubanHot() {
-        DoubanHot.load(items -> {
-            if (items == null || items.isEmpty()) return;
-            List<DoubanHotItem> shown = new ArrayList<>();
-            for (DoubanHotItem item : items) {
-                if (ArtBlacklist.contains(item.getTitle())) continue;
-                shown.add(item);
+        DoubanHot.load(this::applyHero);
+    }
+
+    /**
+     * 主视觉的唯一出口（幂等 + 自适配）。
+     *
+     * <p><b>「有内容」的判据是「有可渲染的横版剧照」</b>，不是「榜单有片名」：
+     * 轮播 Presenter 只接受已落盘的剧照，只有片名没有图时它会把整块文字层隐藏，
+     * 留下一块 440dp 的同色底——那正是首页顶部的空档。所以这里先按
+     * {@link TmdbArt#hasBackdrop()} 过滤，一张图都没有就整行收起。</p>
+     *
+     * <pre>
+     *   无可渲染条目 → 收掉整行，下方栏目上移；候选片名交给统一刮削队列补图，
+     *                  图落库后 ArtSource 广播会回到这里重新挂上
+     *   行已存在     → 内容变了就地 replace；内容没变直接返回，重复回调不闪
+     *   从无到有     → 先记可视锚点再插入，已进入内容区时保持原行不动
+     * </pre>
+     */
+    private void applyHero(List<DoubanHotItem> items) {
+        if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
+        List<DoubanHotItem> shown = new ArrayList<>();
+        if (items != null) for (DoubanHotItem item : items) {
+            if (item == null || ArtBlacklist.contains(item.getTitle())) continue;
+            shown.add(item);
+        }
+        mHeroItems = shown;
+        List<DoubanHotItem> renderable = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        for (DoubanHotItem item : shown) {
+            TmdbArt art = TmdbStore.find(item.getTitle());
+            if (art != null && art.hasBackdrop()) renderable.add(item);
+            else missing.add(item.getTitle());
+        }
+        int index = indexOfHero();
+        if (renderable.isEmpty()) {
+            collapseHero(index);
+            // 没有一张剧照：交给统一刮削队列补图，图到了广播会重新走这里。
+            if (!missing.isEmpty()) ArtSource.enqueue(missing, ArtSource.CAT_AUTO);
+            return;
+        }
+        String signature = heroSignature(renderable);
+        if (index >= 0) {
+            if (signature.equals(mHeroSignature)) return;
+            mHeroSignature = signature;
+            mAdapter.replace(index, DoubanHotRow.create(renderable));
+            return;
+        }
+        int anchorPosition = firstVisiblePosition();
+        int anchorTop = firstVisibleTop();
+        mAdapter.add(getDoubanHotIndex(), DoubanHotRow.create(renderable));
+        mHeroSignature = signature;
+        applyContentInset(true);
+        restoreAnchor(anchorPosition, anchorTop, 1);
+        // 从无到有：行整体下移一个主视觉的高度，用一次短淡入盖住重排的瞬间。
+        HeroTransition.fade(mBinding.recycler);
+    }
+
+    private int indexOfHero() {
+        for (int i = 0; i < mAdapter.size(); i++) if (mAdapter.get(i) instanceof DoubanHotRow) return i;
+        return -1;
+    }
+
+    /** 内容签名：片名序列一致就认为主视觉没变，避免同一批数据重复重建行。 */
+    private static String heroSignature(List<DoubanHotItem> items) {
+        StringBuilder sb = new StringBuilder();
+        for (DoubanHotItem item : items) sb.append(item.getTitle()).append('\u0001');
+        return sb.toString();
+    }
+
+    /** 收起主视觉：焦点原本停在它上面时先把焦点交给下方，避免移除后焦点丢失。 */
+    private void collapseHero(int index) {
+        mHeroSignature = "";
+        if (index < 0) {
+            applyContentInset(false);
+            return;
+        }
+        boolean focused = mBinding.recycler.getSelectedPosition() == index;
+        int anchorPosition = firstVisiblePosition();
+        int anchorTop = firstVisibleTop();
+        mAdapter.removeItems(index, 1);
+        applyContentInset(false);
+        restoreAnchor(anchorPosition, anchorTop, -1);
+        // 行整体上移填补空出的高度，同样用短淡入过渡，不留白也不跳。
+        HeroTransition.fade(mBinding.recycler);
+        if (focused) mBinding.recycler.post(this::focusFirstContent);
+    }
+
+    /** 主视觉被收起且焦点原本停在它上面：交给下方第一行（列表已空则回到顶栏）。 */
+    private void focusFirstContent() {
+        if (mBinding == null || isFinishing() || isDestroyed()) return;
+        if (mAdapter.size() == 0) {
+            focusNav();
+            return;
+        }
+        mBinding.recycler.scrollToPosition(0);
+        mBinding.recycler.requestFocus();
+    }
+
+    private int firstVisiblePosition() {
+        RecyclerView recycler = mBinding.recycler;
+        if (recycler.getChildCount() == 0) return RecyclerView.NO_POSITION;
+        return recycler.getChildAdapterPosition(recycler.getChildAt(0));
+    }
+
+    private int firstVisibleTop() {
+        RecyclerView recycler = mBinding.recycler;
+        return recycler.getChildCount() == 0 ? 0 : recycler.getChildAt(0).getTop();
+    }
+
+    /**
+     * 行增删后的可视锚点复位：{@code delta} 是目标行相对原锚点的位移（前面插入 +1、删除 -1）。
+     * 用户已在浏览内容时保持原行的屏幕位置不变；还没进入内容区则钉回顶部。
+     */
+    private void restoreAnchor(int position, int top, int delta) {
+        mBinding.recycler.post(() -> {
+            if (mBinding == null || isFinishing() || isDestroyed()) return;
+            if (!mContentVisited && !isContentFocused()) {
+                mBinding.recycler.scrollToPosition(getDoubanHotIndex());
+                return;
             }
-            if (shown.isEmpty()) return;
-            removeDoubanHot();
-            mAdapter.add(getDoubanHotIndex(), DoubanHotRow.create(shown));
-            pinToHeroIfContentUntouched();
+            if (position == RecyclerView.NO_POSITION) return;
+            if (position + delta < 0) {
+                // 被删掉的就是锚点行本身（主视觉正好在最上方）：把新的第一行对齐到
+                // 补过内边距之后的顶部，既不留白，也不会钻到顶栏下面。
+                mBinding.recycler.scrollToPosition(0);
+                return;
+            }
+            int target = position + delta;
+            RecyclerView recycler = mBinding.recycler;
+            for (int i = 0; i < recycler.getChildCount(); i++) {
+                View child = recycler.getChildAt(i);
+                if (recycler.getChildAdapterPosition(child) != target) continue;
+                recycler.scrollBy(0, child.getTop() - top);
+                return;
+            }
         });
     }
 
     /**
-     * 主视觉是<b>异步</b>插到列表第 0 行的：插入前列表顶部是「最近观看 / 更新推荐」，
-     * 插入后 RecyclerView 会保持原来的可视锚点，观感上就像页面自动滚到了这两行
-     * （冷启动无缓存、主视觉晚到时最明显；命中缓存则几乎在首帧前完成，所以表现为「偶发」）。
-     *
-     * <p>只要用户还没进入内容区（焦点仍在顶栏），就把视口钉回第 0 行，让主视觉始终在最上方；
-     * 若焦点已经在列表内，说明用户正在浏览，不能打扰，保持原位置即可。</p>
+     * 列表顶部内边距：主视觉存在时保持原有 8dp（画框通栏铺到顶部）；
+     * 主视觉收起后内容直接顶到工具栏下方，用实测的工具栏底边补足，避免首行被顶栏压住。
      */
-    private void pinToHeroIfContentUntouched() {
+    private void applyContentInset(boolean hero) {
         if (mBinding == null) return;
-        mBinding.recycler.post(() -> {
-            if (mBinding == null || isFinishing() || isDestroyed()) return;
-            if (mContentVisited || isContentFocused()) return;
-            mBinding.recycler.scrollToPosition(getDoubanHotIndex());
-        });
-    }
-
-    private void removeDoubanHot() {
-        for (int i = 0; i < mAdapter.size(); i++) {
-            if (!(mAdapter.get(i) instanceof DoubanHotRow)) continue;
-            mAdapter.removeItems(i, 1);
-            return;
-        }
+        HeroInset.apply(mBinding.recycler, mToolbar.getRoot(), hero);
     }
 
     /** 主视觉固定占列表第 0 行：站源/时间栏移除后，它前面不再有任何行。 */
@@ -1163,8 +1358,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     protected void onResume() {
         super.onResume();
-        // 回到首页即把刮削优先级切回本页，其他页剩余任务自动排到后面。
-        ArtSource.setActiveScope(SCOPE);
+        // 从设置页返回时刮削配置可能已变，频道入口的显隐要重新收敛。
+        ToolbarEntries.apply(mToolbar);
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();
@@ -1176,8 +1371,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     protected void onPause() {
         super.onPause();
-        // 离开四页（去详情页 / 设置页等）后不再保留页面优先级，恢复普通轮转。
-        ArtSource.clearActiveScope(SCOPE);
         if (mClock != null) mClock.stop();
     }
 

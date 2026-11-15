@@ -17,6 +17,11 @@ public final class ArtFailure {
     public static final int TEMPORARY = 2;
     /** 刮削被关闭 / 未配置，本次没有真正请求。 */
     public static final int UNAVAILABLE = 3;
+    /**
+     * 数据源正常返回、条目也存在，但关键素材缺失（如候选均无可用图片）。
+     * 这类要回退另一个数据源补素材，但<b>不能</b>据此认定「没有这部片」，因此不参与拉黑。
+     */
+    public static final int INCOMPLETE = 4;
 
     private ArtFailure() {
     }
@@ -24,5 +29,10 @@ public final class ArtFailure {
     /** 是否属于「确认没有这部片」的永久性失败。 */
     public static boolean permanent(int type) {
         return type == NO_MATCH;
+    }
+
+    /** 是否值得换另一个数据源补一次：无匹配与素材不全都属于。 */
+    public static boolean fallback(int type) {
+        return type == NO_MATCH || type == INCOMPLETE;
     }
 }

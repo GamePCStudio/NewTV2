@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,7 +37,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Response;
 
 /**
- * TMDB 素材抓取：按剧名搜索 → 取背景图（w1280）与 logo（original）→ 落到本地缓存并和影片别名关联。
+ * TMDB 素材抓取：按剧名搜索 → 取卡片图（竖版海报 w500，缺失时用横版剧照 w1280）与 logo（original，有则取）
+ * → 落到本地缓存并和影片别名关联。
  *
  * <p>接口形态（已在默认地址实测）：
  * <pre>
@@ -43,13 +46,16 @@ import okhttp3.Response;
  * GET {base}/3/{movie|tv}/{id}/images?api_key={key}&amp;include_image_language=zh,en,null
  * GET {base}/t/p/w1280/{file_path}   /   GET {base}/t/p/w500/{file_path}
  * </pre>
- * 所有网络与解码都在单线程后台执行，主线程只负责发起和读取缓存。
+ * 网络与解码都在后台执行，主线程只负责发起和读取缓存。
  * </p>
  *
- * <p>多站点轮换：每次 HTTP 请求都由 {@link TmdbSetting#nextSiteIndex(int)} 取下一个站点
- * （地址 + 该站点专属密钥），因此「搜索 → 图集 → 下载图」会自然分摊到不同站点。
- * 站点失败时顺延到下一个站点重试：网络层异常、401 / 403 / 408 / 429 / 5xx 视为可重试，
- * 404 等与站点无关的错误直接失败。解析结构与缓存结构保持不变。</p>
+ * <p><b>并发与限速</b>：并发池线程数等于配置的站点数量，多站点可真正并行；所有请求
+ * （接口与图片）统一经过 {@link #throttle()} 的全局闸门，相邻请求间隔 ≥200ms
+ * （约 5 请求/秒，低于官方现行约 40 请求/秒的上限）。</p>
+ *
+ * <p><b>失败与限流</b>：不再维护站点级或片名级的固定冷静期。任何非 429 错误都立即顺延到
+ * 下一个站点重试；只有返回 429 的站点被单独冷却 60 秒并写一条「限流」日志，其余站点
+ * 不受影响，也不会因某个站点失败而整体停摆。解析结构与缓存结构保持不变。</p>
  *
  * <p>分季处理：TMDB 没有季级 backdrop，季条目往往 backdrops/logos 全为 0。
  * 因此先由 {@link TmdbKey} 展开「原名 → 母剧名 → 紧凑名」候选依次重试，
@@ -69,11 +75,16 @@ public final class TmdbApi {
     private static final String LEGACY_LOGO_PREFIX = "w500_";
 
     private static final String TAG = "TmdbApi";
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "TmdbFetch");
-        thread.setDaemon(true);
-        return thread;
-    });
+    /**
+     * 并发抓取池：线程数跟随配置的 TMDB 站点数量（至少 1），站点增减时由
+     * {@link #onConfigChanged()} 重建。这样多站点可真正并行，而不是排队等一个线程。
+     */
+    private static volatile ExecutorService executor;
+    /** 全局节流闸门：所有发往 TMDB 的请求（接口与图片）都过这里，保证相邻请求间隔 ≥ {@link #REQUEST_INTERVAL_MS}。 */
+    private static final Object THROTTLE_LOCK = new Object();
+    private static long lastRequestAt;
+    /** 官方现行上限约 40 请求/秒；取 200ms 间隔（5 请求/秒）留足余量，429 由单站点冷却兜底。 */
+    private static final long REQUEST_INTERVAL_MS = 200L;
     private static final Set<String> IN_FLIGHT = Collections.synchronizedSet(new HashSet<>());
     /**
      * 文本元数据补抓标记：进程内每个片名只尝试一次，<b>不 remove</b>。
@@ -83,12 +94,10 @@ public final class TmdbApi {
     private static final Set<String> META_ATTEMPTED = Collections.synchronizedSet(new HashSet<>());
     /** 高清 logo 升级进行中标记：同样与图片主抓取分开。 */
     private static final Set<String> LOGO_IN_FLIGHT = Collections.synchronizedSet(new HashSet<>());
-    /** 网络异常后的短暂冷却（ms）：避免换集时反复重试，又不像「搜不到」那样压很久。 */
-    private static final Map<String, Long> RECENT_FAILURES = Collections.synchronizedMap(new HashMap<>());
-    private static final long FAILURE_COOLDOWN = 60_000L;
-    /** 站点级冷却：某站点报错后短暂跳过它，避免每次请求都先去撞一次被限流 / Key 失效的站点。 */
-    private static final Map<String, Long> SITE_COOLDOWN = new ConcurrentHashMap<>();
-    private static final long SITE_COOLDOWN_MS = 60_000L;
+    /** 仅 429 触发的单站点冷却（站点 base → 解封时间戳）。其它错误 / 其它站点一律不受影响。 */
+    private static final Map<String, Long> RATE_LIMITED = new ConcurrentHashMap<>();
+    /** 429 冷却时长：官方建议收到 429 后暂停请求，1 分钟后单独解封该站点。 */
+    private static final long RATE_LIMIT_COOLDOWN_MS = 60_000L;
     /**
      * 接口请求超时：默认客户端是 30 秒，站点卡住时会把轮换拖成「每个请求等 30 秒再换下一个」，
      * 反而比单站点更慢；JSON 响应很小，8 秒足够。图片下载仍用默认客户端（体积大）。
@@ -142,6 +151,45 @@ public final class TmdbApi {
     private TmdbApi() {
     }
 
+    /** 懒加载并发池：按站点数建线程，首次使用时才创建，避免类初始化阶段就读取偏好。 */
+    private static ExecutorService executor() {
+        ExecutorService cached = executor;
+        if (cached != null) return cached;
+        synchronized (TmdbApi.class) {
+            if (executor == null) executor = newExecutor(TmdbSetting.getSites().size());
+            return executor;
+        }
+    }
+
+    /** 按站点数量建并发池；至少 1 个线程。站点配置变更时整体替换，旧池不再接收新任务。 */
+    private static ExecutorService newExecutor(int sites) {
+        int threads = Math.max(1, sites);
+        return Executors.newFixedThreadPool(threads, task -> {
+            Thread thread = new Thread(task, "TmdbFetch");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * 节流闸门：拿到锁后检查与上一次请求的间隔，不足则睡到间隔满足。
+     * 全局唯一锁保证并发线程发出的请求也严格串行进入网络层，且只控制节奏、不算失败、不碰冷却。
+     */
+    private static void throttle() {
+        synchronized (THROTTLE_LOCK) {
+            long now = System.currentTimeMillis();
+            long wait = REQUEST_INTERVAL_MS - (now - lastRequestAt);
+            if (wait > 0) {
+                try {
+                    Thread.sleep(wait);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            lastRequestAt = System.currentTimeMillis();
+        }
+    }
+
     /**
      * 注册「抓取完成」回调，可同时注册多个页面。
      *
@@ -163,7 +211,7 @@ public final class TmdbApi {
         });
     }
 
-    /** 抓取完成广播：供页面就地刷新；豆瓣桥降级成功后也复用同一个通知。 */
+    /** 抓取完成广播：供页面就地刷新；Douban Bridge降级成功后也复用同一个通知。 */
     public static void notifyFetched() {
         App.post(() -> {
             for (WeakReference<Runnable> ref : ON_FETCHED) {
@@ -193,7 +241,7 @@ public final class TmdbApi {
         if (art == null || (art.hasMeta() && !TextUtils.isEmpty(art.getOverview()))) return;
         String token = "meta:" + TmdbStore.normalize(keyword);
         if (!META_ATTEMPTED.add(token)) return;
-        EXECUTOR.execute(() -> {
+        executor().execute(() -> {
             try {
                 String path = "/3/search/multi?language=zh-CN&page=1&query=" + Uri.encode(keyword);
                 ApiResponse response = getApi(path, TmdbLog.STAGE_SEARCH, keyword);
@@ -232,7 +280,7 @@ public final class TmdbApi {
         if (art == null || !art.getLogo().startsWith(LEGACY_LOGO_PREFIX)) return;
         String token = "lg:" + TmdbStore.normalize(keyword);
         if (!LOGO_IN_FLIGHT.add(token)) return;
-        EXECUTOR.execute(() -> {
+        executor().execute(() -> {
             try {
                 String path = "/3/search/multi?language=zh-CN&page=1&query=" + Uri.encode(keyword);
                 ApiResponse response = getApi(path, TmdbLog.STAGE_SEARCH, keyword);
@@ -270,11 +318,10 @@ public final class TmdbApi {
      * 恢复后站点、密钥、素材索引都可能全变了，这些「已尝试 / 冷却中」标记必须失效。
      */
     public static void resetState() {
-        RECENT_FAILURES.clear();
         IN_FLIGHT.clear();
         META_ATTEMPTED.clear();
         LOGO_IN_FLIGHT.clear();
-        SITE_COOLDOWN.clear();
+        RATE_LIMITED.clear();
     }
 
     /** 抓取结果回调：用于播放页的失败提示与手动重试反馈，回调已切到主线程。 */
@@ -328,6 +375,7 @@ public final class TmdbApi {
 
         if (!TmdbSetting.isEnabled()) {
             TmdbLog.add(TmdbLog.STAGE_SKIP, primary, "未启用 TMDB 刮削，本次不抓取");
+            notifyFailure(callback, primary, "未启用 TMDB 刮削", ArtFailure.UNAVAILABLE);
             return;
         }
         if (primary.isEmpty() && names.isEmpty()) {
@@ -342,14 +390,19 @@ public final class TmdbApi {
             return;
         }
 
-        // 任一候选已有可用背景图 → 只补别名，不打接口。
-        // 不同季共用母剧 backdrop 是 TMDB 的既有行为，也是这里刻意复用的结果。
+        // 任一候选已有可用卡片图（竖版海报或横版剧照）→ 只补别名，不打接口。
+        // 不同季共用母剧 backdrop 是 TMDB 的既有行为，也是这里刻意复用的结果；
+        // 只有竖版海报的条目同样算抓过，不再自动重刮。
         if (!force) {
             for (String query : queries) {
                 if (TmdbStore.cached(query)) {
                     // 命中缓存属于正常复用，不写日志：否则每次进详情页都会刷一条「跳过」，
                     // 把真正有信息的触发 / 请求 / 失败记录顶掉。
                     bindAliases(query, names);
+                    // 去定时器后必须给出终态，否则调用方会一直等：把缓存记录直接交回去，
+                    // 由 ArtSource 判定是否完整，不完整再决定要不要降级。
+                    TmdbArt cached = TmdbStore.find(query);
+                    if (callback != null && cached != null) App.post(() -> callback.onSuccess(query, cached));
                     return;
                 }
             }
@@ -358,24 +411,17 @@ public final class TmdbApi {
         List<String> pending = new ArrayList<>();
         for (String query : queries) if (force || !TmdbStore.missed(query)) pending.add(query);
         if (pending.isEmpty()) {
-            // 不是这一次真的抓失败了，只是上次失败还在冷却：只记日志，不打扰用户。
+            // 不是这一次真的抓失败了，只是上次失败还在冷却：记日志并给调用方一个明确终态。
             TmdbLog.add(TmdbLog.STAGE_SKIP, primary, "该片名在「未命中」冷却期内，稍后会自动重试");
+            notifyFailure(callback, primary, "该片名在「未命中」冷却期内", ArtFailure.INCOMPLETE);
             return;
         }
 
         String token = TmdbStore.normalize(pending.get(0));
         if (token.isEmpty() || !IN_FLIGHT.add(token)) {
-            // 自动抓取的重复触发静默忽略；手动重试要给回执，否则用户以为按钮没反应。
-            if (force) notifyFailure(callback, primary, "上一次刮削仍在进行中");
+            // 上一次同一关键字仍在抓：本次直接给终态，避免调用方在无定时器后一直等。
+            notifyFailure(callback, primary, "上一次刮削仍在进行中", ArtFailure.TEMPORARY);
             return;
-        }
-        if (!force) {
-            Long lastFailure = RECENT_FAILURES.get(token);
-            if (lastFailure != null && System.currentTimeMillis() - lastFailure < FAILURE_COOLDOWN) {
-                IN_FLIGHT.remove(token);
-                TmdbLog.add(TmdbLog.STAGE_SKIP, primary, "失败冷却中（60 秒内不重复请求）");
-                return;
-            }
         }
         final long generation = TmdbStore.generation();
         final List<String> tasks = pending;
@@ -383,13 +429,17 @@ public final class TmdbApi {
         final String primaryKeyword = primary;
         TmdbLog.add(TmdbLog.STAGE_TRIGGER, primary, "", "",
                 (force ? "手动重试" : "自动触发") + "，候选关键字 " + tasks.size() + " 个：" + TextUtils.join(" / ", tasks), false);
-        EXECUTOR.execute(() -> {
+        executor().execute(() -> {
             try {
                 String reason = "TMDB 未找到可用素材";
                 int type = ArtFailure.TEMPORARY;
                 for (String query : tasks) {
                     Attempt attempt = search(query, generation);
-                    if (TmdbStore.generation() != generation) return; // 期间被清理，丢弃结果
+                    if (TmdbStore.generation() != generation) {
+                        // 期间缓存被整体清空：旧结果已无意义，但仍要给调用方一个终态。
+                        notifyFailure(callback, primaryKeyword, "抓取期间缓存被清空", ArtFailure.TEMPORARY);
+                        return;
+                    }
                     if (attempt.art == null) {
                         reason = attempt.reason;
                         type = attempt.type;
@@ -403,13 +453,14 @@ public final class TmdbApi {
                     }
                     TmdbArt art = attempt.art;
                     art.setKeyword(query);
-                    art.setTime(System.currentTimeMillis());
+                    // 只有竖版海报、没有横版剧照的记录把时间归零：否则 isMissFresh() 会把它
+                    // 当成「30 分钟内未命中」的 miss，反过来挡住后续补抓。
+                    art.setTime(TextUtils.isEmpty(art.getBackdrop()) ? 0L : System.currentTimeMillis());
                     art.addAliases(names);
                     TmdbStore.save(art);
                     // 背景图与 logo 在同一个后台任务里预解码，两者淡入时不会一先一后。
                     TmdbStore.precache(art.getBackdrop());
                     TmdbStore.precacheLogo(art.getLogo());
-                    RECENT_FAILURES.remove(token);
                     TmdbLog.add(TmdbLog.STAGE_DONE, query, "", "",
                             "刮削成功：" + art.getTitle() + "（" + art.getType() + " #" + art.getId() + "）", false);
                     notifyFetched();
@@ -420,7 +471,6 @@ public final class TmdbApi {
                 reportFailure(callback, primaryKeyword, reason, type);
             } catch (Exception e) {
                 Log.w(TAG, "fetch failed: " + e.getMessage());
-                RECENT_FAILURES.put(token, System.currentTimeMillis());
                 reportFailure(callback, primaryKeyword, describe(e), ArtFailure.TEMPORARY);
             } finally {
                 IN_FLIGHT.remove(token);
@@ -446,12 +496,14 @@ public final class TmdbApi {
         App.post(() -> callback.onFailure(keyword, reason, type));
     }
 
-    /** 配置变更后清掉失败冷却与「未命中」记录，让新地址 / 新密钥立刻生效。 */
+    /** 配置变更后重建并发池以匹配新站点数、清掉 429 冷却与「未命中」记录，让新配置立刻生效。 */
     public static void onConfigChanged() {
-        RECENT_FAILURES.clear();
-        SITE_COOLDOWN.clear();
+        ExecutorService old = executor;
+        executor = newExecutor(TmdbSetting.getSites().size());
+        if (old != null) old.shutdown();
+        RATE_LIMITED.clear();
         TmdbStore.clearMisses();
-        // 换了地址 / 密钥就解除双失败冷却，让新配置立刻有机会重新抓取。
+        // 换了地址 / 密钥就解除失败冷却，让新配置立刻有机会重新抓取。
         ArtCooldown.clear();
     }
 
@@ -490,8 +542,8 @@ public final class TmdbApi {
         if (items.isEmpty()) return Attempt.miss("搜索无匹配结果", ArtFailure.NO_MATCH);
         // ---- 多结果优先判定插入点（仅 items.size() > 1 时生效）----
         // 若前 3 条里存在 title==original_title 的条目，直接以它作为首个候选：
-        // 走 attemptItem 跑完整取图流程，拿到可用背景图就直接返回；
-        // 若该条目无背景图或下载失败，则不强行使用，退回下方原有的 score 排序 + 候选循环。
+        // 走 attemptItem 跑完整取图流程，拿到可用卡片图（剧照或海报）就直接返回；
+        // 若该条目一张图都没有、或两张图都下载失败，则不强行使用，退回下方原有的 score 排序 + 候选循环。
         if (priority != null && items.size() > 1) {
             TmdbLog.add(TmdbLog.STAGE_SEARCH, keyword, "", "", "优先匹配 title==original_title 条目：" + label(priority), false);
             Attempt hit = attemptItem(priority, keyword, generation);
@@ -506,65 +558,92 @@ public final class TmdbApi {
             if (a.art != null) return a;
             if (!TextUtils.isEmpty(a.reason)) lastError = a.reason;
         }
-        return Attempt.miss(lastError == null ? "候选结果均无可用背景图" : "背景图下载失败：" + lastError);
+        // 候选存在但一张图都取不到 = 素材不全（可回退、不可拉黑）；下载失败才算网络临时故障。
+        if (lastError == null) return Attempt.miss("候选结果均无可用图片", ArtFailure.INCOMPLETE);
+        return Attempt.miss("图片下载失败：" + lastError, ArtFailure.TEMPORARY);
     }
 
-    /** 单条结果尝试取图：下载背景图与 logo，成功返回 hit，否则返回 miss（reason 非空表示下载失败）。 */
+    /**
+     * 单条结果尝试取图。
+     *
+     * <p>命中判据只有一条：<b>拿到一张可用的卡片图</b>（横版剧照优先，没有就用竖版海报）。
+     * 横版剧照与 logo 都属于「有更好、没有也算完成」的加分项：Douban Bridge 同样拿不到
+     * 这两类素材，为了缺剧照 / 缺 logo 把整部片推给降级源，只会白跑一趟并拉长完成时间。</p>
+     *
+     * <p>只有两张图都下载失败才算临时故障（reason 非空，上层记 lastError）；
+     * 条目本身一张图都没有时返回空 reason 的 miss，跳过该候选、不计入故障统计。</p>
+     */
     private static Attempt attemptItem(Result item, String keyword, long generation) {
         ImagesResponse images = loadImages(item, keyword);
         String backdrop = TextUtils.isEmpty(item.backdropPath) ? firstBackdrop(images) : item.backdropPath;
-        if (TextUtils.isEmpty(backdrop)) {
-            TmdbLog.add(TmdbLog.STAGE_SKIP, keyword, "", "候选 " + label(item), "该条目无可用背景图，试下一条");
+        String poster = TextUtils.isEmpty(item.posterPath) ? firstPoster(images) : item.posterPath;
+        if (TextUtils.isEmpty(backdrop) && TextUtils.isEmpty(poster)) {
+            TmdbLog.add(TmdbLog.STAGE_SKIP, keyword, "", "候选 " + label(item), "该条目既无横版剧照也无竖版海报，试下一条");
             return Attempt.miss(""); // 空原因：跳过本条，不计入 lastError
         }
-        try {
-            byte[] bytes = downloadRotating("/t/p/" + BACKDROP_SIZE + backdrop, keyword, TmdbLog.STAGE_BACKDROP);
-            if (TmdbStore.generation() != generation) return Attempt.miss("抓取期间缓存被清空");
-            File file = TmdbStore.imageFile(BACKDROP_SIZE, backdrop);
-            TmdbStore.write(file, bytes);
-            TmdbArt art = new TmdbArt();
-            art.setKeyword(keyword);
-            art.setTitle(TextUtils.isEmpty(item.title) ? nullToEmpty(item.name) : item.title);
-            art.setType(item.mediaType);
-            art.setId(item.id);
-            art.setRootId(item.id);
-            art.setSeason(TmdbKey.season(keyword));
-            art.setBackdrop(file.getName());
-            art.setOverview(nullToEmpty(item.overview));
-            // 文本元数据与图片同一次搜索即可拿到，顺手写进索引供首页 meta 行使用。
-            art.setRating(ratingOf(item.voteAverage));
-            art.setYear(yearOf(item.releaseDate, item.firstAirDate));
-            art.setGenre(genreOf(item.genreIds));
-            // search/multi 自带 poster_path：顺手取一张竖版海报给频道页热榜卡片用。
-            // 下载失败不影响背景图 / 文本元数据，卡片会回退到背景图。
-            if (!TextUtils.isEmpty(item.posterPath)) {
-                try {
-                    byte[] posterBytes = downloadRotating("/t/p/" + POSTER_SIZE + item.posterPath, keyword, TmdbLog.STAGE_POSTER);
-                    File posterFile = TmdbStore.imageFile(POSTER_SIZE, item.posterPath);
-                    TmdbStore.write(posterFile, posterBytes);
-                    art.setPoster(posterFile.getName());
-                } catch (Exception e) {
-                    TmdbLog.add(TmdbLog.STAGE_POSTER, keyword, "", "", "海报下载失败，回退背景图：" + describe(e), false);
-                }
+        TmdbArt art = new TmdbArt();
+        art.setKeyword(keyword);
+        art.setTitle(TextUtils.isEmpty(item.title) ? nullToEmpty(item.name) : item.title);
+        art.setType(item.mediaType);
+        art.setId(item.id);
+        art.setRootId(item.id);
+        art.setSeason(TmdbKey.season(keyword));
+        art.setOverview(nullToEmpty(item.overview));
+        // 文本元数据与图片同一次搜索即可拿到，顺手写进索引供首页 meta 行使用。
+        art.setRating(ratingOf(item.voteAverage));
+        art.setYear(yearOf(item.releaseDate, item.firstAirDate));
+        art.setGenre(genreOf(item.genreIds));
+        String error = null;
+        // 横版剧照：首页主视觉用；缺失或下载失败都不再阻断，交给竖版海报兜底。
+        if (!TextUtils.isEmpty(backdrop)) {
+            try {
+                byte[] bytes = downloadRotating("/t/p/" + BACKDROP_SIZE + backdrop, keyword, TmdbLog.STAGE_BACKDROP);
+                File file = TmdbStore.imageFile(BACKDROP_SIZE, backdrop);
+                TmdbStore.write(file, bytes);
+                art.setBackdrop(file.getName());
+            } catch (Exception e) {
+                error = describe(e);
+                TmdbLog.add(TmdbLog.STAGE_BACKDROP, keyword, "", "",
+                        "横版剧照下载失败，尝试竖版海报：" + error, false);
             }
-            String logo = pickLogo(images);
-            if (!TextUtils.isEmpty(logo)) {
-                try {
-                    byte[] logoBytes = downloadRotating("/t/p/" + LOGO_SIZE + logo, keyword, TmdbLog.STAGE_LOGO);
-                    File logoFile = TmdbStore.imageFile(LOGO_SIZE, logo);
-                    TmdbStore.write(logoFile, logoBytes);
-                    art.setLogo(logoFile.getName());
-                } catch (Exception e) {
-                    // logo 缺失时背景图仍然可用，但要留下原因。
-                    TmdbLog.add(TmdbLog.STAGE_LOGO, keyword, "", "", "logo 下载失败，仅保留背景图：" + describe(e), false);
-                }
-            }
-            return Attempt.hit(art);
-        } catch (Exception e) {
-            Log.w(TAG, "backdrop failed #" + item.id + ": " + e.getMessage());
-            // 图片下载失败不该终止整次抓取，把原因带回去供上层记 lastError，继续试下一条结果。
-            return Attempt.miss("背景图下载失败：" + describe(e));
         }
+        // 竖版海报：频道页卡片用；只有剧照时允许缺失，卡片会回退剧照。
+        if (!TextUtils.isEmpty(poster)) {
+            try {
+                byte[] bytes = downloadRotating("/t/p/" + POSTER_SIZE + poster, keyword, TmdbLog.STAGE_POSTER);
+                File file = TmdbStore.imageFile(POSTER_SIZE, poster);
+                TmdbStore.write(file, bytes);
+                art.setPoster(file.getName());
+            } catch (Exception e) {
+                if (error == null) error = describe(e);
+                TmdbLog.add(TmdbLog.STAGE_POSTER, keyword, "", "",
+                        "竖版海报下载失败：" + describe(e), false);
+            }
+        }
+        if (TmdbStore.generation() != generation) return Attempt.miss("抓取期间缓存被清空");
+        if (art.getCardFile() == null) {
+            // 两张图都拿到了地址但都没写成功 = 网络层面的临时问题。
+            return Attempt.miss("图片下载失败：" + (error == null ? "无可用素材" : error));
+        }
+        String logo = pickLogo(images);
+        if (!TextUtils.isEmpty(logo)) {
+            try {
+                byte[] logoBytes = downloadRotating("/t/p/" + LOGO_SIZE + logo, keyword, TmdbLog.STAGE_LOGO);
+                File logoFile = TmdbStore.imageFile(LOGO_SIZE, logo);
+                TmdbStore.write(logoFile, logoBytes);
+                art.setLogo(logoFile.getName());
+            } catch (Exception e) {
+                // logo 缺失不影响卡片与主视觉，只留下原因。
+                TmdbLog.add(TmdbLog.STAGE_LOGO, keyword, "", "", "logo 下载失败，仅保留图片素材：" + describe(e), false);
+            }
+        }
+        if (TextUtils.isEmpty(art.getBackdrop())) {
+            // 这类记录只有竖版海报：Douban Bridge 也没有横版剧照可补，直接按完成收尾，不再降级。
+            TmdbLog.add(TmdbLog.STAGE_DONE, keyword, "", "", "TMDB 无横版剧照"
+                    + (TextUtils.isEmpty(art.getLogo()) ? "、无 logo" : "")
+                    + "，已用竖版海报作为卡片图，不再降级", false);
+        }
+        return Attempt.hit(art);
     }
 
     /**
@@ -641,6 +720,7 @@ public final class TmdbApi {
             ImagesResponse images = App.gson().fromJson(response.body, ImagesResponse.class);
             TmdbLog.add(TmdbLog.STAGE_IMAGES, keyword, TmdbLog.mask(response.url),
                     "HTTP " + response.code + " · backdrops=" + size(images == null ? null : images.backdrops)
+                            + " · posters=" + size(images == null ? null : images.posters)
                             + " · logos=" + size(images == null ? null : images.logos), "");
             return images;
         } catch (Exception e) {
@@ -673,6 +753,13 @@ public final class TmdbApi {
         return "";
     }
 
+    /** 搜索结果没带 poster_path 时，从图集里补一张竖版海报。 */
+    private static String firstPoster(ImagesResponse images) {
+        if (images == null || images.posters == null) return "";
+        for (Image item : images.posters) if (item != null && !TextUtils.isEmpty(item.filePath)) return item.filePath;
+        return "";
+    }
+
     /* ------------------------------------------------------- 多站点轮换与请求 */
 
     /** 拼一个带 api_key 的接口地址；key 由站点自带的那个提供。 */
@@ -688,7 +775,7 @@ public final class TmdbApi {
     }
 
     /**
-     * 供豆瓣桥复用：桥给出的剧照 / logo 是 TMDB 图片直链，国内可能不可达，
+     * 供Douban Bridge复用：桥给出的剧照 / logo 是 TMDB 图片直链，国内可能不可达，
      * 优先用用户已配置的 TMDB 站点按同一路径下载，失败再回落到直连。
      */
     public static byte[] downloadImage(String path, String keyword, String stage) throws IOException {
@@ -704,50 +791,63 @@ public final class TmdbApi {
     }
 
     /**
-     * 轮换执行一次请求：从游标处取起点站点，失败就顺延到下一个站点，最多试「站点数」次。
-     * 冷却中的站点会被跳过（怕被限流的站点反而每次都被撞一次），全部都在冷却时才退化为逐个试。
-     * 全部失败时抛出最后一次的异常，交给上层按原有逻辑记失败冷却。
+     * 轮换执行一次请求。三套机制各管一件事、互不干扰：
+     * <ul>
+     *   <li><b>节流</b>：每个站点发请求前都过 {@link #throttle()}，全局相邻请求间隔 ≥200ms；</li>
+     *   <li><b>429 冷却</b>：只有返回 429 的站点被单独封 60 秒并写日志，其余站点照常参与；</li>
+     *   <li><b>失败顺延</b>：其它任何错误都直接换下一个站点，不再做站点级冷静期。</li>
+     * </ul>
+     * 429 冷却中的站点会被跳过；所有站点都在冷却时不再硬撞，直接把最后一次异常抛给上层。
      */
     private static <T> T withRotation(UrlBuilder builder, Fetcher<T> fetcher) throws IOException {
         List<TmdbSite> sites = TmdbSetting.getSites();
         int size = sites.size();
+        if (size == 0) throw new IOException("no tmdb site");
         int start = TmdbSetting.nextSiteIndex(size);
         IOException last = null;
-        for (int pass = 0; pass < 2; pass++) {
-            boolean tried = false;
-            for (int i = 0; i < size; i++) {
-                TmdbSite site = sites.get((start + i) % size);
-                if (pass == 0 && cooling(site)) continue;
-                tried = true;
-                try {
-                    return fetcher.fetch(builder.build(site));
-                } catch (IOException e) {
-                    if (!retryable(e)) throw e;
-                    cool(site);
-                    last = e;
-                    Log.w(TAG, "site failed " + site.base() + ": " + e.getMessage());
-                }
+        int cooled = 0;
+        for (int i = 0; i < size; i++) {
+            TmdbSite site = sites.get((start + i) % size);
+            if (rateLimited(site)) {
+                cooled++;
+                continue;
             }
-            if (tried) break; // 第一轮已经试过可用站点，不再重复
+            throttle();
+            try {
+                return fetcher.fetch(builder.build(site));
+            } catch (IOException e) {
+                last = e;
+                if (isRateLimit(e)) markRateLimited(site); // 内部写日志，只封这一个站点
+                else Log.w(TAG, "site failed " + site.base() + ": " + e.getMessage());
+                // 其它错误立即顺延下一站点，不做任何站点冷却
+            }
         }
-        throw last == null ? new IOException("no tmdb site") : last;
+        if (last != null) throw last;
+        throw new IOException(cooled == size ? "all tmdb sites rate limited" : "no tmdb site available");
     }
 
-    /** 失败站点短暂避让：既不给限流站点继续加压，也不会因为一次抖动就永久弃用。 */
-    private static boolean cooling(TmdbSite site) {
-        Long until = SITE_COOLDOWN.get(site.base());
-        return until != null && until > System.currentTimeMillis();
+    /** 该站点是否仍在 429 冷却期内；到期条目惰性清除。 */
+    private static boolean rateLimited(TmdbSite site) {
+        Long until = RATE_LIMITED.get(site.base());
+        if (until == null) return false;
+        if (System.currentTimeMillis() < until) return true;
+        RATE_LIMITED.remove(site.base());
+        return false;
     }
 
-    private static void cool(TmdbSite site) {
-        SITE_COOLDOWN.put(site.base(), System.currentTimeMillis() + SITE_COOLDOWN_MS);
+    /** 判定是否为 429：只有它触发单站点冷却，其余 HTTP 码都当普通失败顺延。 */
+    private static boolean isRateLimit(IOException e) {
+        return e instanceof HttpException && ((HttpException) e).code == 429;
     }
 
-    /** 换站点有意义才重试：key 失效、限流、服务端故障；404 这类换哪个站点都一样，直接失败。 */
-    private static boolean retryable(IOException error) {
-        if (!(error instanceof HttpException)) return true; // 连接失败 / 超时 / DNS 等网络层问题
-        int code = ((HttpException) error).code;
-        return code == 401 || code == 403 || code == 408 || code == 429 || code >= 500;
+    /** 把触发 429 的站点单独冷却 60 秒，并写一条带站点与解封时间的日志。 */
+    private static void markRateLimited(TmdbSite site) {
+        long until = System.currentTimeMillis() + RATE_LIMIT_COOLDOWN_MS;
+        RATE_LIMITED.put(site.base(), until);
+        String untilTime = new SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(new Date(until));
+        TmdbLog.add(TmdbLog.SOURCE_TMDB, TmdbLog.STAGE_RATE_LIMIT, site.base(), "HTTP 429",
+                "站点 " + site.base() + " 触发限流，单独冷却 " + (RATE_LIMIT_COOLDOWN_MS / 1000)
+                        + " 秒（至 " + untilTime + "），其余站点不受影响", true);
     }
 
     /**
@@ -929,6 +1029,8 @@ public final class TmdbApi {
         List<Image> backdrops;
         @SerializedName("logos")
         List<Image> logos;
+        @SerializedName("posters")
+        List<Image> posters;
     }
 
     private static class Image {

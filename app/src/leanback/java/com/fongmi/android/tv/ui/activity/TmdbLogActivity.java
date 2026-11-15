@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.TextView;
 
@@ -17,22 +18,24 @@ import com.fongmi.android.tv.databinding.ActivitySettingTmdbLogBinding;
 import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.ui.adapter.TmdbLogAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.ui.dialog.LogKeywordDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 设置 → 影片刮削设置 → 刮削日志。
  *
- * <p>TMDB 与豆瓣桥两条链路的阶段流水统一展示：配置变更 / 门控跳过 → 触发 → 搜索 / 桥榜单
+ * <p>TMDB 与Douban Bridge两条链路的阶段流水统一展示：配置变更 / 门控跳过 → 触发 → 搜索 / 桥榜单
  * → 桥匹配 → 桥详情 / 桥图片 → 桥素材 → 完成或失败。
- * 顶部提供来源（全部 / TMDB / 豆瓣）与状态（全部 / 完成 / 失败 / 跳过 / 其它 / 黑名单）
- * 两组单选条件，两个条件组合生效；选中态与焦点态沿用设置项的背景，按确认键切换，
- * 不干扰列表浏览。</p>
+ * 顶部提供来源（全部 / TMDB / 豆瓣）、状态（全部 / 完成 / 失败 / 跳过 / 其它 / 黑名单）
+ * 与片名关键字三组条件，组合生效；前两组单选，按确认键切换，第三组点开输入框，
+ * 留空即取消。选中态与焦点态沿用设置项的背景，不干扰列表浏览。</p>
  */
-public class TmdbLogActivity extends BaseActivity {
+public class TmdbLogActivity extends BaseActivity implements LogKeywordDialog.Listener {
 
     private static final int ALL = 0;
     private static final int SRC_TMDB = 1;
@@ -52,6 +55,7 @@ public class TmdbLogActivity extends BaseActivity {
     private final List<View> mStatusViews = new ArrayList<>();
     private int mSource = ALL;
     private int mStatus = ALL;
+    private String mKeyword = "";
 
     public static void start(Activity activity) {
         activity.startActivity(new Intent(activity, TmdbLogActivity.class));
@@ -81,6 +85,7 @@ public class TmdbLogActivity extends BaseActivity {
     @Override
     protected void initEvent() {
         mBinding.tmdbLogClear.setOnClickListener(this::onClear);
+        mBinding.filterKeyword.setOnClickListener(view -> LogKeywordDialog.show(this, mKeyword));
     }
 
     @Override
@@ -114,6 +119,26 @@ public class TmdbLogActivity extends BaseActivity {
     private void updateFilterViews() {
         paint(mSourceViews, SOURCE_VALUES, mSource);
         paint(mStatusViews, STATUS_VALUES, mStatus);
+        boolean on = !TextUtils.isEmpty(mKeyword);
+        mBinding.filterKeyword.setSelected(on);
+        mBinding.filterKeyword.setText(on
+                ? getString(R.string.tmdb_filter_keyword_value, mKeyword)
+                : getString(R.string.tmdb_filter_keyword_none));
+        mBinding.filterKeyword.setTextColor(ContextCompat.getColor(this, on ? R.color.white : R.color.white_50));
+    }
+
+    /** 片名关键字输入完成：空串表示取消该条件。 */
+    @Override
+    public void onLogKeyword(String keyword) {
+        String value = keyword == null ? "" : keyword.trim();
+        if (value.equals(mKeyword)) {
+            updateFilterViews();
+            return;
+        }
+        mKeyword = value;
+        updateFilterViews();
+        refresh();
+        mBinding.filterKeyword.requestFocus();
     }
 
     private void paint(List<View> views, int[] values, int current) {
@@ -142,7 +167,7 @@ public class TmdbLogActivity extends BaseActivity {
         mAdapter.submit(shown);
         int failed = 0;
         for (TmdbLog.Entry entry : shown) if (entry.failed) failed++;
-        boolean filtered = mSource != ALL || mStatus != ALL;
+        boolean filtered = mSource != ALL || mStatus != ALL || !TextUtils.isEmpty(mKeyword);
         mBinding.tmdbLogSummary.setText(filtered
                 ? getString(R.string.tmdb_log_summary_filtered, shown.size(), all.size(), failed)
                 : getString(R.string.tmdb_log_summary, shown.size(), TmdbLog.failedCount()));
@@ -159,13 +184,17 @@ public class TmdbLogActivity extends BaseActivity {
         return R.string.tmdb_log_empty;
     }
 
-    /** 来源与状态两个条件同时满足才显示；失败状态以 failed 标记优先。 */
+    /** 来源、状态与片名关键字三个条件同时满足才显示；失败状态以 failed 标记优先。 */
     private boolean matches(TmdbLog.Entry entry) {
+        // 片名关键字按「包含」匹配，忽略大小写：输入「敦煌」能命中「敦煌英雄」，
+        // 输入英文片名时大小写也不影响结果。关键字为空表示不过滤。
+        if (!TextUtils.isEmpty(mKeyword) && !contains(entry.keyword, mKeyword)) return false;
         if (mSource == SRC_TMDB && !TmdbLog.SOURCE_TMDB.equals(TmdbLog.source(entry))) return false;
         if (mSource == SRC_DOUBAN) {
-            // 「豆瓣」筛选同时覆盖豆瓣桥记录与升级前直连豆瓣留下的历史记录。
+            // 「豆瓣」筛选同时覆盖Douban Bridge记录与升级前直连豆瓣留下的历史记录。
             String source = TmdbLog.source(entry);
-            if (!TmdbLog.SOURCE_DOUBAN.equals(source) && !TmdbLog.SOURCE_BRIDGE.equals(source)) return false;
+            if (!TmdbLog.SOURCE_DOUBAN.equals(source) && !TmdbLog.SOURCE_BRIDGE.equals(source)
+                    && !TmdbLog.LEGACY_SOURCE_BRIDGE.equals(source)) return false;
         }
         if (mStatus == ALL) return true;
         String status = TmdbLog.status(entry);
@@ -175,6 +204,11 @@ public class TmdbLogActivity extends BaseActivity {
         if (mStatus == ST_OTHER) return TmdbLog.STATUS_OTHER.equals(status);
         if (mStatus == ST_BLACKLIST) return TmdbLog.STATUS_BLACKLIST.equals(status);
         return true;
+    }
+
+    private static boolean contains(String text, String keyword) {
+        if (TextUtils.isEmpty(text)) return false;
+        return text.toLowerCase(Locale.getDefault()).contains(keyword.toLowerCase(Locale.getDefault()));
     }
 
     private void onClear(View view) {

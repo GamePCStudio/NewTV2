@@ -130,10 +130,16 @@ public final class TmdbStore {
         return key.isEmpty() ? null : map.get(key);
     }
 
-    /** 是否已有可用背景图。未命中记录（miss）不算缓存，不再挡住重试。 */
+    /**
+     * 是否已有可用卡片图（竖版海报优先，缺失回退横版剧照）。
+     *
+     * <p>只要有一张图就算「抓过」，不再自动重抓：TMDB 里确实存在既无 logo、又无横版剧照的条目，
+     * 这类片用竖版海报就能正常展示，反复请求既补不到素材，也会把队列占满。
+     * 未命中记录（miss）没有任何图片，仍然是 false。</p>
+     */
     public static boolean cached(String name) {
         TmdbArt art = find(name);
-        return art != null && art.hasBackdrop();
+        return art != null && art.getCardFile() != null;
     }
 
     /** 这个精确关键字是否在「确认无结果」的冷却期内。只看精确 key，不扩散到母剧名。 */
@@ -160,6 +166,20 @@ public final class TmdbStore {
             }
             if (!primary.isEmpty()) map.put(primary, art);
             trim(map, art);
+            persist(map);
+        }
+    }
+
+    /**
+     * 单条移出黑名单时调用：丢掉该片在索引里的记录（含所有别名），让它下次抓取
+     * 重新走完整链路，不再被「未命中冷却」或旧别名短路。磁盘图片留着复用，不额外清理。
+     */
+    public static void forget(String name) {
+        synchronized (LOCK) {
+            Map<String, TmdbArt> map = load();
+            TmdbArt art = findExact(map, name);
+            if (art == null) return;
+            map.values().removeIf(value -> value == art);
             persist(map);
         }
     }
@@ -256,7 +276,7 @@ public final class TmdbStore {
 
     /**
      * 配置变更后清掉「确认无结果」的 miss 记录，让新地址 / 新密钥立刻生效。
-     * 豆瓣桥可能只取到竖版海报（没有背景图），这类记录的时间戳刻意保持 0，
+     * Douban Bridge可能只取到竖版海报（没有背景图），这类记录的时间戳刻意保持 0，
      * 不属于 miss，必须保留，否则换一次开关就会把已经拿到的海报一起删掉。
      */
     public static void clearMisses() {
