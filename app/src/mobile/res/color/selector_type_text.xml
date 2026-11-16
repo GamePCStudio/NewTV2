@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  分类导航条专用文字色（mobile adapter_type.xml 独用）：
+  分类导航条专用文字色（mobile，仅 adapter_type.xml 使用）：
+    当前页（聚焦 / 未聚焦）→ 纯黑（分别落在纯白底与 60% 透明白底上）；
+    其余（含非当前页焦点）  → 纯白（#1D1F23 底上保持可读）。
 
-  当前页   → 纯黑（半透明白底上保持可读）；
-  非当前页 → 纯白（#1D1F23 底上保持可读）。
-
-  原 @color/selector_text 走主题属性 colorOnSecondaryContainer，
-  被其它选中态控件共用，故另立专用选择器，避免语义串味。
+  顺序不可调换：两条 state_selected 必须排在 state_focused 之前。
+  原 @color/selector_text 走主题属性，被其它选中态控件共用，故保持独立。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <item android:color="@color/black" android:state_focused="true" android:state_selected="true" />
     <item android:color="@color/black" android:state_selected="true" />
+    <item android:color="@color/white" android:state_focused="true" />
     <item android:color="@color/white" />
 
 </selector>

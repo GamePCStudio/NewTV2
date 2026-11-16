@@ -4,7 +4,7 @@
 
   几何统一（三态一致）：高 36dp（顶栏 48dp 口径的 75%）、圆角 18dp（= 半高，两端正半圆）。
     聚焦（选中）   → 纯白底 + 黑字；
-    当前页未聚焦   → 50% 透明白胶囊（@color/white_50）+ 黑字；
+    当前页未聚焦   → 60% 透明白胶囊（@color/white_60）+ 黑字；
     其余           → 全透明 + 白字。
 
   当前页改用半透明白而非半透明黑，与分类导航条的「当前页」口径一致；
@@ -25,7 +25,7 @@
     <item android:state_selected="true">
         <shape android:shape="rectangle">
             <corners android:radius="18dp" />
-            <solid android:color="@color/white_50" />
+            <solid android:color="@color/white_60" />
         </shape>
     </item>
 
