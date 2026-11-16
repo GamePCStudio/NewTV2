@@ -85,11 +85,6 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     /** 最后一次聚焦的导航文字按钮：顶栏按返回时焦点回到它。 */
     private View mLastNav;
     /**
-     * 返回前聚焦的那张海报。焦点收回分类胶囊后，再按 ↓ 优先回到它，
-     * 而不是回到海报区当前选中位置（对称于首页的 mPendingPoster）。
-     */
-    private View mPendingPoster;
-    /**
      * 首帧焦点是否已投放。进入本页时焦点应落在「片库」（当前激活的导航项）上，
      * 之后从搜索 / 设置等页面返回则保留用户原来的落点，不再重投。
      */
@@ -629,6 +624,15 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         if (isFilterVisible()) updateFilter();
     }
 
+    /**
+     * 筛选条内部按返回：收起筛选条，并把焦点交回顶部分类胶囊。
+     * 仅由筛选条在「非从海报返回」状态下调用，筛选关闭时的返回链路不受影响。
+     */
+    public void hideFilterAndFocusCapsule() {
+        if (isFilterVisible()) updateFilter();
+        focusCapsule(mBinding.pager.getCurrentItem());
+    }
+
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onRefreshEvent(RefreshEvent event) {
         if (event.getType() == RefreshEvent.Type.CATEGORY) getFragment().onRefresh();
@@ -721,66 +725,95 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     }
 
     /**
-     * 返回键与下行键的焦点接力。
+     * 下行键的焦点接力（返回键统一走 {@link #onBackInvoked()}，不在这里处理）。
      *
-     * <p>必须在 Activity 层拦：海报墙 {@link com.fongmi.android.tv.ui.custom.CustomVerticalGridView}
-     * 自己的 dispatchKeyEvent 会先把返回键吞成 {@code moveToTop()}，那样焦点只会滚到顶部，
-     * 不会回到分类胶囊，也记不住刚才那张海报。</p>
-     *
-     * <p>顶栏是流式布局的普通子项，物理位置在分类导航上方，所以「分类胶囊按 ↑」由系统
-     * 几何搜索自然落到顶栏；这里只补「顶栏按 ↓ 优先回上次那张海报」。</p>
+     * <p>顶栏是流式布局的普通子项，物理位置在分类导航上方，所以「分类导航按 ↑」由系统
+     * 几何搜索自然落到顶栏；这里补两件事：顶栏 / 分类导航按 ↓ 时回到离开前那张海报。</p>
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionDown(event) && !isVisible(mSheet.getRoot())) {
-            // 顶栏按 ↓：优先回到返回前记住的那张海报。
-            if (KeyUtil.isDownKey(event) && isToolbarFocused() && restorePendingPoster()) return true;
-            // 海报区按返回：先回当前分类胶囊，并记住这张海报。
-            if (KeyUtil.isBackKey(event) && isContentFocused()) {
-                View poster = getCurrentFocus();
-                focusCapsule(mBinding.pager.getCurrentItem());
-                mPendingPoster = poster;
+            if (KeyUtil.isDownKey(event) && isToolbarFocused()) {
+                // 顶栏按 ↓：优先回到返回前记住的那张海报，失败再交给系统默认落焦。
+                FolderFragment folder = getFragment();
+                if (folder != null && folder.restorePoster()) return true;
+            }
+            if (KeyUtil.isDownKey(event) && isCapsuleFocused()) {
+                // 分类导航按 ↓：先回记住的海报，没有记录再进内容区当前项。
+                FolderFragment folder = getFragment();
+                if (folder != null && folder.restorePoster()) return true;
+                if (folder != null && folder.focusContent()) return true;
+                // 海报为空：吞掉按键，焦点留在分类导航，不悬空。
                 return true;
             }
-            // 分类胶囊按 ↓：优先回到返回前记住的那张海报。
-            if (KeyUtil.isDownKey(event) && mBinding.recycler.hasFocus() && restorePendingPoster()) return true;
         }
         if (!isVisible(mSheet.getRoot()) && KeyUtil.isMenuKey(event)) updateFilter();
         return super.dispatchKeyEvent(event);
     }
 
+    /**
+     * 返回键的唯一处理入口（分类页的焦点链路）。
+     *
+     * <p>按返回层级自外向内判断，命中即返回，避免同一次按键被两条链路各处理一次：</p>
+     * <ol>
+     *   <li>站源面板 / 二级面板；</li>
+     *   <li>顶栏「片库」→ 回首页；顶栏其它项 → 回分类导航；</li>
+     *   <li>分类导航 → 「片库」；</li>
+     *   <li>筛选条打开且焦点在内容区：海报 → 最后操作的筛选控件；筛选控件 → 收起 + 回分类导航；</li>
+     *   <li>海报（筛选关闭）→ 当前分类的导航胶囊，并记住这张海报。</li>
+     * </ol>
+     */
     @Override
     protected void onBackInvoked() {
         if (isVisible(mSheet.configPanel)) {
             // 二级面板先于站源面板收回（分层返回）
             hideConfigSheet();
-        } else if (isVisible(mSheet.getRoot())) {
+            return;
+        }
+        if (isVisible(mSheet.getRoot())) {
             hideSiteSheet();
-        } else if (isFilterVisible()) {
-            updateFilter();
-        } else if (mToolbar.navVod.hasFocus()) {
+            return;
+        }
+        if (mToolbar.navVod.hasFocus()) {
             // 「片库」是返回链路的最后一站：再按一次才回首页。
             exitToHome();
-        } else if (isToolbarFocused()) {
+            return;
+        }
+        if (isToolbarFocused()) {
             // 顶栏其它项：先回分类导航。
             focusCapsule(mBinding.pager.getCurrentItem());
-        } else if (isCapsuleFocused()) {
-            // 分类导航：焦点回到「片库」；只有真的进了子分类时才逐级退回。
+            return;
+        }
+        if (isCapsuleFocused()) {
+            // 分类导航：先收起还开着的筛选条，再把焦点交给「片库」。
+            if (isFilterVisible()) updateFilter();
             FolderFragment folder = getFragment();
+            // 进了子分类时逐级退回，退干净后焦点才落到「片库」。
             if (folder != null && folder.canBack()) folder.goBack();
             else mToolbar.navVod.requestFocus();
-        } else if (isContentFocused()) {
-            // 兜底：dispatchKeyEvent 没拦住时（例如从弹窗回到页面）同样先回胶囊。
-            View poster = getCurrentFocus();
-            focusCapsule(mBinding.pager.getCurrentItem());
-            mPendingPoster = poster;
-        } else {
-            FolderFragment folder = getFragment();
-            if (folder == null) super.onBackInvoked();
-            else if (folder.moveToTop()) return;
-            else if (folder.canBack()) folder.goBack();
-            else super.onBackInvoked();
+            return;
         }
+        if (isFilterVisible() && isContentFocused()) {
+            FolderFragment folder = getFragment();
+            if (folder != null && folder.onFilterBack()) return;
+        }
+        if (isFilterVisible()) {
+            // 兜底：焦点不在内容区（例如刚用菜单键打开筛选条）时，收起并回分类导航。
+            hideFilterAndFocusCapsule();
+            return;
+        }
+        if (isContentFocused()) {
+            // 海报 → 当前分类胶囊；记住这张海报，胶囊按 ↓ 时可原路返回。
+            FolderFragment folder = getFragment();
+            if (folder != null) folder.capturePoster();
+            focusCapsule(mBinding.pager.getCurrentItem());
+            return;
+        }
+        FolderFragment folder = getFragment();
+        if (folder == null) super.onBackInvoked();
+        else if (folder.moveToTop()) return;
+        else if (folder.canBack()) folder.goBack();
+        else super.onBackInvoked();
     }
 
     /** 焦点是否在片库下方的分类导航（分类胶囊行）。 */
@@ -802,7 +835,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
 
     /** 焦点是否在顶部工具栏内（含任意后代）。 */
     private boolean isToolbarFocused() {
-        return mToolbar.getRoot().hasFocus();
+        // 焦点实际落在导航项 / 搜索钮等子控件上，父容器不一定 hasFocus。
+        return isInside(getCurrentFocus(), mToolbar.getRoot());
     }
 
     /** 焦点是否在左侧导航文字按钮组。 */
@@ -818,16 +852,9 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         return true;
     }
 
-    /** ↓ 补位：返回前记住的海报仍然挂载就回到它，失败则退回系统默认落焦。 */
-    private boolean restorePendingPoster() {
-        View target = mPendingPoster;
-        if (target == null) return false;
-        mPendingPoster = null;
-        return target.isAttachedToWindow() && target.isShown() && target.requestFocus();
-    }
-
+    /** 清空当前分类页记住的海报位置：切页 / 换站源 / 尺寸重建后不再回到旧位置。 */
     private void clearPendingPoster() {
-        mPendingPoster = null;
+        Optional.ofNullable(getFragment()).ifPresent(FolderFragment::clearPoster);
     }
 
     class PageAdapter extends FragmentStatePagerAdapter {

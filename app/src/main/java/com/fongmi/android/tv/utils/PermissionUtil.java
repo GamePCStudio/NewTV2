@@ -85,12 +85,13 @@ public class PermissionUtil {
         return resolves(activity, all) ? all : null;
     }
 
-    private static boolean hasAllFiles() {
+    /** 是否已经拿到「所有文件访问权限」（Android 11 起写公共目录的必要条件）。 */
+    public static boolean hasAllFilesAccess() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager();
     }
 
     private static boolean hasFilePermission(FragmentActivity activity, boolean requestAllFiles) {
-        return hasAllFiles() || (!requestAllFiles && hasStoragePermission(activity));
+        return hasAllFilesAccess() || (!requestAllFiles && hasStoragePermission(activity));
     }
 
     private static boolean hasStoragePermission(FragmentActivity activity) {

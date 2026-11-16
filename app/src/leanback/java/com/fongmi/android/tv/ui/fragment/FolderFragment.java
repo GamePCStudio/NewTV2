@@ -6,6 +6,7 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.viewbinding.ViewBinding;
 
@@ -42,7 +43,11 @@ public class FolderFragment extends BaseFragment {
         return getArguments().getParcelable("type");
     }
 
+    /** 当前真正可见的分类页（进入子分类后新页叠在旧页上，取最后一个未隐藏的）。 */
     private TypeFragment getChild() {
+        for (Fragment fragment : getChildFragmentManager().getFragments()) {
+            if (fragment instanceof TypeFragment && !fragment.isHidden()) return (TypeFragment) fragment;
+        }
         return (TypeFragment) getChildFragmentManager().findFragmentById(R.id.container);
     }
 
@@ -79,6 +84,29 @@ public class FolderFragment extends BaseFragment {
 
     public void toggleFilter(boolean visible) {
         Optional.ofNullable(getChild()).ifPresent(f -> f.toggleFilter(visible));
+    }
+
+    /** 筛选条打开时的返回：海报 → 最后操作的筛选控件；筛选条内 → 收起。关闭时返回 false。 */
+    public boolean onFilterBack() {
+        return Optional.ofNullable(getChild()).map(TypeFragment::onFilterBack).orElse(false);
+    }
+
+    /** 记住当前海报位置（相对海报区），供「返回分类导航后再按 ↓」回到原位。 */
+    public boolean capturePoster() {
+        return Optional.ofNullable(getChild()).map(TypeFragment::capturePoster).orElse(false);
+    }
+
+    public boolean restorePoster() {
+        return Optional.ofNullable(getChild()).map(TypeFragment::restorePoster).orElse(false);
+    }
+
+    public void clearPoster() {
+        Optional.ofNullable(getChild()).ifPresent(TypeFragment::clearPoster);
+    }
+
+    /** 顶部分类胶囊按 ↓：把焦点交给内容网格（筛选条或海报）。 */
+    public boolean focusContent() {
+        return Optional.ofNullable(getChild()).map(TypeFragment::focusContent).orElse(false);
     }
 
     public void onRefresh() {

@@ -21,7 +21,13 @@ import java.util.Objects;
 
 public class CustomVerticalGridView extends VerticalGridView {
 
+    /** 方向键预判：返回 true 表示已消费，网格不再做默认移动。筛选关闭时不注册。 */
+    public interface OnKeyInterceptor {
+        boolean onKeyDown(KeyEvent event);
+    }
+
     private List<View> views;
+    private OnKeyInterceptor keyInterceptor;
     private boolean pressDown;
     private boolean pressUp;
     private boolean moveTop;
@@ -55,6 +61,10 @@ public class CustomVerticalGridView extends VerticalGridView {
         if (activity != null) views = Arrays.stream(layoutIds).mapToObj(id -> (View) activity.findViewById(id)).filter(Objects::nonNull).toList();
     }
 
+    public void setOnKeyInterceptor(OnKeyInterceptor interceptor) {
+        this.keyInterceptor = interceptor;
+    }
+
     public void setMoveTop(boolean moveTop) {
         this.moveTop = moveTop;
     }
@@ -76,6 +86,7 @@ public class CustomVerticalGridView extends VerticalGridView {
     public boolean dispatchKeyEvent(@NonNull KeyEvent event) {
         if (!KeyUtil.isActionDown(event)) return super.dispatchKeyEvent(event);
         if (KeyUtil.isBackKey(event)) return moveTop && moveToTop();
+        if (keyInterceptor != null && keyInterceptor.onKeyDown(event)) return true;
         pressUp = KeyUtil.isUpKey(event);
         pressDown = KeyUtil.isDownKey(event);
         return super.dispatchKeyEvent(event);

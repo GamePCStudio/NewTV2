@@ -248,33 +248,46 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     }
 
     private void onBackup(View view) {
-        PermissionUtil.requestFile(this, allGranted -> BackupManager.backup(new Callback() {
-            @Override
-            public void success() {
-                Notify.show(R.string.backup_success);
+        PermissionUtil.requestFile(this, allGranted -> {
+            // 没拿到存储权限就中止：此前的做法会继续写应用内部目录，卸载即随数据一起消失。
+            if (!allGranted) {
+                Notify.show(R.string.backup_access_denied);
+                return;
             }
+            BackupManager.backup(new Callback() {
+                @Override
+                public void success() {
+                    Notify.show(R.string.backup_success);
+                }
 
-            @Override
-            public void error() {
-                Notify.show(R.string.backup_fail);
-            }
-        }));
+                @Override
+                public void error() {
+                    Notify.show(R.string.backup_fail);
+                }
+            });
+        });
     }
 
     private void onRestore(View view) {
-        PermissionUtil.requestFile(this, allGranted -> RestoreDialog.create().show(requireActivity(), new Callback() {
-            @Override
-            public void success() {
-                Notify.show(R.string.restore_success);
-                setOtherText();
-                initConfig();
+        PermissionUtil.requestFile(this, allGranted -> {
+            if (!allGranted) {
+                Notify.show(R.string.backup_access_denied);
+                return;
             }
+            RestoreDialog.create().show(requireActivity(), new Callback() {
+                @Override
+                public void success() {
+                    Notify.show(R.string.restore_success);
+                    setOtherText();
+                    initConfig();
+                }
 
-            @Override
-            public void error() {
-                Notify.show(R.string.restore_fail);
-            }
-        }));
+                @Override
+                public void error() {
+                    Notify.show(R.string.restore_fail);
+                }
+            });
+        });
     }
 
     private void initConfig() {

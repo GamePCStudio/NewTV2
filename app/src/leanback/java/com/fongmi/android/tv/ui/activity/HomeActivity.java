@@ -738,7 +738,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         // 列表里不再保留它们的独立容器。工具栏现为 首页 / 四个站点 / 芒果TV / 片库，
         // 右侧再是 4 个功能图标 → 站源下拉 → 时间。
         // 主视觉由 loadDoubanHot() 插到列表最前面（index 0）。
-        mAdapter.add(R.string.home_history);
+        // 「最近观看」不再预置标题：标题与网格是同一个容器，列表为空时整块都要收起来，
+        // 由 getHistory() 在有记录时一起插入，避免空列表还留一行标题占位。
         // 「来自 · 站源名」标题不再预置：它和网格是同一个容器，网格为空时整块都要收起来，
         // 由 addVideo() 在拿到内容后一起插入，避免只剩一个空标题。
     }
@@ -957,13 +958,24 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     private void getHistory(boolean renew) {
         List<History> items = History.get();
-        int historyIndex = getHistoryIndex();
-        // 直接看「历史标题后面那一行」是不是历史行本身：不再依赖「更新推荐」标题的位置，
-        // 因为后者会随网格为空 / 有内容动态增删。
-        boolean exist = isHistoryRow(historyIndex);
         if (renew) mHistoryAdapter = new ArrayObjectAdapter(mPresenter = new HistoryPresenter(this));
-        if ((items.isEmpty() && exist) || (renew && exist)) mAdapter.removeItems(historyIndex, 1);
-        if ((!items.isEmpty() && !exist) || (renew && exist)) mAdapter.add(historyIndex, new ListRow(mHistoryAdapter));
+        int header = indexOfHeader(R.string.home_history);
+        boolean hasBlock = header >= 0;
+        boolean hasRow = hasBlock && isHistoryRow(header + 1);
+        if (items.isEmpty()) {
+            // 空列表：标题与网格作为一个整体收起，不留下空标题占位。
+            if (hasRow) mAdapter.removeItems(header + 1, 1);
+            if (hasBlock) mAdapter.removeItems(header, 1);
+        } else if (!hasBlock) {
+            // 有记录但整块还没挂出来：标题与行一起插入（位置在主视觉之后）。
+            int at = historyInsertIndex();
+            mAdapter.add(at, new RowHeader(R.string.home_history, getString(R.string.home_history)));
+            mAdapter.add(at + 1, new ListRow(mHistoryAdapter));
+        } else if (!hasRow) {
+            mAdapter.add(header + 1, new ListRow(mHistoryAdapter));
+        } else if (renew) {
+            mAdapter.replace(header + 1, new ListRow(mHistoryAdapter));
+        }
         mHistoryAdapter.setItems(items, new BaseDiffCallback<History>());
     }
 
@@ -980,15 +992,24 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     private void clearHistory() {
-        mAdapter.removeItems(getHistoryIndex(), 1);
+        removeHistoryBlock();
         History.clear(VodConfig.getCid());
         mPresenter.setDelete(false);
         mHistoryAdapter.clear();
     }
 
-    private int getHistoryIndex() {
-        int index = mAdapter.indexOf(R.string.home_history);
-        return index < 0 ? 0 : index + 1;
+    /** 「最近观看」区块的插入位置：主视觉之后；没有主视觉时就是列表顶部。 */
+    private int historyInsertIndex() {
+        int hero = indexOfHero();
+        return hero >= 0 ? hero + 1 : 0;
+    }
+
+    /** 整块移除「最近观看」：先删网格行，再删标题；重复调用安全。 */
+    private void removeHistoryBlock() {
+        int header = indexOfHeader(R.string.home_history);
+        if (header < 0) return;
+        if (isHistoryRow(header + 1)) mAdapter.removeItems(header + 1, 1);
+        mAdapter.removeItems(header, 1);
     }
 
     /**
@@ -998,9 +1019,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private int getRecommendStart() {
         int header = indexOfHeader(R.string.home_recommend);
         if (header >= 0) return header;
-        int start = getHistoryIndex();
-        if (isHistoryRow(start)) start++;
-        return Math.min(start, mAdapter.size());
+        int history = indexOfHeader(R.string.home_history);
+        int end = history < 0 ? historyInsertIndex() : history + 1;
+        if (isHistoryRow(end)) end++;
+        return Math.min(end, mAdapter.size());
     }
 
     /** 按资源 id 找栏目标题；标题可能是动态文字，所以只能按 key 比对，不能用 indexOf(Integer)。 */
@@ -1311,7 +1333,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     public void onItemDelete(History item) {
         mHistoryAdapter.remove(item.delete());
         if (mHistoryAdapter.size() > 0) return;
-        mAdapter.removeItems(getHistoryIndex(), 1);
+        // 删到一条不剩时整块收起（标题 + 网格），不留空标题占位。
+        removeHistoryBlock();
         mPresenter.setDelete(false);
     }
 
@@ -1345,7 +1368,12 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionDown(event) && !isVisible(mSheet.getRoot())) {
             // 工具栏按 ↓：优先回到返回前记住的那张海报，而不是列表的默认选中项。
-            if (KeyUtil.isDownKey(event) && isToolbarFocused() && restorePendingPoster()) return true;
+            if (KeyUtil.isDownKey(event) && isToolbarFocused()) {
+                if (restorePendingPoster()) return true;
+                // 首页为空（无主视觉 / 无最近观看 / 无推荐 / 站源也没有内容）时，
+                // 列表里没有任何可聚焦项：放行会让焦点掉出界面，这里直接吞掉，焦点留在顶栏。
+                if (!hasFocusableContent()) return true;
+            }
             // 主视觉是通栏 item，几何上「向上找焦点」永不成立，这里显式把焦点交给导航按钮。
             if (KeyUtil.isUpKey(event) && mBinding.recycler.getSelectedPosition() == 0 && mBinding.recycler.hasFocus()) {
                 focusNav();
@@ -1353,6 +1381,22 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    /** 列表里是否有可聚焦的内容行：影片卡、非空主视觉、非空横向行才算法。 */
+    private boolean hasFocusableContent() {
+        if (mAdapter == null) return false;
+        for (int i = 0; i < mAdapter.size(); i++) {
+            Object item = mAdapter.get(i);
+            if (item instanceof Vod) return true;
+            if (item instanceof DoubanHotRow) {
+                if (((DoubanHotRow) item).size() > 0) return true;
+            } else if (item instanceof ListRow) {
+                Object adapter = ((ListRow) item).getAdapter();
+                if (adapter instanceof ArrayObjectAdapter && ((ArrayObjectAdapter) adapter).size() > 0) return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -1429,10 +1473,16 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             hideConfigSheet();
         } else if (isVisible(mSheet.getRoot())) {
             hideSiteSheet();
-        } else if (mBinding.progressLayout.isProgress()) {
+        } else if (mBinding.progressLayout.isProgress() && hasFocusableContent()) {
+            // 已有内容时返回键先跳过进度条；空列表（未加载站点）不在这里消费，
+            // 否则按键会被反复耗在「切内容」上，永远走不到退出分支。
             showContent();
         } else if (mPresenter.isDelete()) {
             setHistoryDelete(false);
+        } else if (!hasFocusableContent()) {
+            // 首页没有任何内容（未加载站点 / 站源列表为空）：焦点只可能在顶栏，
+            // 返回键直接按「连按两次退出」处理，不落到下面按列表位置判断的分支。
+            requestExitBack();
         } else if (isContentFocused()) {
             View poster = getCurrentFocus();
             boolean belowHero = focusedRow(poster) > getDoubanHotIndex();
@@ -1459,31 +1509,46 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             focusNav();
             mLastBackAt = 0;
         } else if (isHomeNavFocused()) {
-            if (mBinding.recycler.getSelectedPosition() != 0) {
+            if (!isAtContentTop()) {
                 // 已在「首页」按钮：先把列表滚回顶部，并让顶栏状态与滚动位置一致。
                 mLastBackAt = 0;
                 scrollBackToHero();
             } else {
-                // 首页 + 列表顶点：2 秒内连按两次才退出，避免误触。
-                long now = SystemClock.elapsedRealtime();
-                if (now - mLastBackAt <= BACK_EXIT_WINDOW) {
-                    exitHome();
-                } else {
-                    mLastBackAt = now;
-                    Notify.show(R.string.back_exit_hint);
-                }
+                requestExitBack();
             }
         } else if (isNavFocused()) {
             // 其余导航按钮：统一回「首页」，旧海报随之失效。
             clearPendingPoster();
             mLastBackAt = 0;
             mToolbar.navHome.requestFocus();
-        } else if (mBinding.recycler.getSelectedPosition() != 0) {
+        } else if (!isAtContentTop()) {
             // 兜底（焦点丢失等）：先把列表滚回顶部，并让顶栏状态与滚动位置一致。
             mLastBackAt = 0;
             scrollBackToHero();
         } else {
+            requestExitBack();
+        }
+    }
+
+    /**
+     * 列表是否已经在顶部。
+     *
+     * <p>不能用 {@code getSelectedPosition() == 0}：没有任何内容行时（未加载站点、站源列表为空）
+     * 列表没有选中项，位置是 {@code -1}，那样的判断会恒成立，返回键每次都只执行「滚回顶部」
+     * 而永远退不出去。空列表与位置 {@code <= 0} 都按顶点处理。</p>
+     */
+    private boolean isAtContentTop() {
+        return mBinding.recycler.getSelectedPosition() <= 0 || !hasFocusableContent();
+    }
+
+    /** 首页返回的最后一站：2 秒内连按两次才退出，避免误触。 */
+    private void requestExitBack() {
+        long now = SystemClock.elapsedRealtime();
+        if (now - mLastBackAt <= BACK_EXIT_WINDOW) {
             exitHome();
+        } else {
+            mLastBackAt = now;
+            Notify.show(R.string.back_exit_hint);
         }
     }
 
@@ -1517,7 +1582,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 焦点是否还在顶部工具栏内（含任意后代）。 */
     private boolean isToolbarFocused() {
-        return mToolbar.getRoot().hasFocus();
+        // 焦点实际落在导航项 / 搜索钮等子控件上，父容器不一定 hasFocus。
+        return isDescendant(getCurrentFocus(), mToolbar.getRoot());
     }
 
     private static boolean isDescendant(View child, View parent) {

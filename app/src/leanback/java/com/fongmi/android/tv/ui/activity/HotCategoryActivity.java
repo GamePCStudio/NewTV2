@@ -886,13 +886,33 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionDown(event) && !isVisible(mSheet.getRoot())) {
-            if (KeyUtil.isDownKey(event) && isToolbarFocused() && restorePendingPoster()) return true;
+            if (KeyUtil.isDownKey(event) && isToolbarFocused()) {
+                if (restorePendingPoster()) return true;
+                // 页面为空（主视觉与四个平台容器都没有内容）时列表里没有可聚焦项：
+                // 放行会让焦点掉出界面，这里直接吞掉，焦点留在顶栏。
+                if (!hasFocusableContent()) return true;
+            }
             if (KeyUtil.isUpKey(event) && isFirstContentRow() && mBinding.recycler.hasFocus()) {
                 focusNav();
                 return true;
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    /** 列表里是否有可聚焦的内容行：非空主视觉或非空平台容器。 */
+    private boolean hasFocusableContent() {
+        if (mAdapter == null) return false;
+        for (int i = 0; i < mAdapter.size(); i++) {
+            Object item = mAdapter.get(i);
+            if (item instanceof DoubanHotRow) {
+                if (((DoubanHotRow) item).size() > 0) return true;
+            } else if (item instanceof ListRow) {
+                Object adapter = ((ListRow) item).getAdapter();
+                if (adapter instanceof ArrayObjectAdapter && ((ArrayObjectAdapter) adapter).size() > 0) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1011,7 +1031,8 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     }
 
     private boolean isToolbarFocused() {
-        return mToolbar.getRoot().hasFocus();
+        // 焦点实际落在导航项 / 搜索钮等子控件上，父容器不一定 hasFocus。
+        return isDescendant(getCurrentFocus(), mToolbar.getRoot());
     }
 
     private static boolean isDescendant(View child, View parent) {

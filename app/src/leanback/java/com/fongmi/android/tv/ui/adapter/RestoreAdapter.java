@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.databinding.AdapterRestoreBinding;
 import com.fongmi.android.tv.db.BackupManager;
-import com.github.catvod.utils.Path;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -40,7 +39,7 @@ public class RestoreAdapter extends RecyclerView.Adapter<RestoreAdapter.ViewHold
     public int remove(File item) {
         int position = mItems.indexOf(item);
         if (position == -1) return -1;
-        Path.clear(item);
+        BackupManager.delete(item);
         mItems.remove(position);
         notifyItemRemoved(position);
         return getItemCount();

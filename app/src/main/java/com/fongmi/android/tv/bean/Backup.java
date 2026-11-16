@@ -101,11 +101,15 @@ public class Backup {
     }
 
     /**
-     * 偏好按「整份替换」恢复：先清空再写入，避免备份之后新增的键留在设备上，
-     * 造成恢复结果与备份内容不一致。类型逐个还原（StringSet 也要保留）。
+     * 偏好按「覆盖」恢复：备份里有的键写回，备份里没有的键保持设备现值。
+     *
+     * <p><b>不能先 {@code clear()}</b>：旧版本备份不包含后来新增的配置（刮削站点与密钥、
+     * 提示过滤词表等），整份清空会把这些键连同用户当前设置一起抹掉，表现就是
+     * 「恢复完刮削站点没了」。备份里明确为空的键（空串、空数组、false）照常覆盖，
+     * 因此「用户主动清空的配置」仍能如实恢复。类型逐个还原（StringSet 也要保留）。</p>
      */
     private void restorePrefers() {
-        SharedPreferences.Editor editor = Prefers.getPrefers().edit().clear();
+        SharedPreferences.Editor editor = Prefers.getPrefers().edit();
         for (Map.Entry<String, ?> entry : getPrefers().entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
@@ -209,6 +213,19 @@ public class Backup {
 
     public void setFiles(Map<String, String> files) {
         this.files = files;
+    }
+
+    /**
+     * 备份里是否有可恢复的内容。
+     *
+     * <p>不能只看「点播配置」一张表：新装设备 / 尚未添加站源时这张表是空的，但偏好、
+     * 观看历史、收藏等可能已有数据。旧逻辑用配置表判空，导致这类设备点了备份直接提示失败，
+     * 恢复端也会把一份正常备份判成「无效文件」。</p>
+     */
+    public boolean hasData() {
+        return !getConfig().isEmpty() || !getSite().isEmpty() || !getKeep().isEmpty()
+                || !getHistory().isEmpty() || !getTrack().isEmpty() || !getDevice().isEmpty()
+                || !getPrefers().isEmpty() || (files != null && !files.isEmpty());
     }
 
     @NonNull

@@ -5,8 +5,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.BuildConfig;
@@ -50,21 +48,6 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
 
     private ActivitySettingBinding mBinding;
     private String[] size;
-    /** 从系统授权页回来后要继续执行的动作（备份或恢复）。 */
-    private Runnable pendingGrantedAction;
-    /** 一次会话只拉一次授权页：用户不授权就别反复跳，直接走内部目录这条退路。 */
-    private static boolean allFilesAsked;
-
-    /**
-     * 「所有文件访问权限」授权页没有返回值语义，只能等用户回来再自行判定，
-     * 所以这里不用权限库的回调，统一在返回时继续原动作（没授权时备份会退到内部目录）。
-     */
-    private final ActivityResultLauncher<Intent> allFilesLauncher =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-                Runnable action = pendingGrantedAction;
-                pendingGrantedAction = null;
-                if (action != null) action.run();
-            });
 
     public static void start(Activity activity) {
         activity.startActivity(new Intent(activity, SettingActivity.class));
@@ -267,32 +250,25 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
     /**
-     * 备份与恢复默认读写外置存储的 TV/backup 目录，Android 11 起没有「所有文件访问权限」
-     * 会直接 EPERM：备份报失败，恢复连列表都是空的。所以两个入口都先走权限判断：
-     * 已授权直接执行；系统有授权页就拉起来，回来后再继续；完全没入口时也不拦，
-     * 备份模块会自动改写到应用内部目录，恢复则同时列两处。
+     * 备份与恢复的入口：先走与「选择文件」相同的系统授权链路，再执行实际动作。
+     *
+     * <p>Android 11 起写外置的 TV/backup 需要「所有文件访问权限」，没有权限就会 EPERM；
+     * 旧版那种「静默退到应用内部目录」的做法，备份会随卸载一起消失。
+     * 这里统一调用系统权限请求：用户拒绝就中止并提示，不再偷偷降级。</p>
      */
     private void onBackup(View view) {
-        runWithFileAccess(this::doBackup);
+        requestStorageAccess(this::doBackup);
     }
 
     private void onRestore(View view) {
-        runWithFileAccess(this::doRestore);
+        requestStorageAccess(this::doRestore);
     }
 
-    private void runWithFileAccess(Runnable action) {
-        if (allFilesAsked || !PermissionUtil.needsAllFiles(this)) {
-            action.run();
-            return;
-        }
-        Intent intent = PermissionUtil.allFilesIntent(this);
-        if (intent == null) {
-            action.run();
-            return;
-        }
-        allFilesAsked = true;
-        pendingGrantedAction = action;
-        allFilesLauncher.launch(intent);
+    private void requestStorageAccess(Runnable action) {
+        PermissionUtil.requestFile(this, granted -> {
+            if (granted) action.run();
+            else Notify.show(R.string.backup_access_denied);
+        });
     }
 
     private void doBackup() {

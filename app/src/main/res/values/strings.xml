@@ -307,6 +307,7 @@
     <string name="restore_fail">Restore failed</string>
     <string name="backup_success">Backup successful</string>
     <string name="backup_fail">Backup failed</string>
+    <string name="backup_access_denied">Storage access not granted, operation canceled</string>
 
     <!-- Player -->
     <string name="player">Player</string>

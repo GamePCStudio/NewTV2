@@ -61,6 +61,16 @@ public final class HistoryEpisode {
     private static final Pattern EPISODE = Pattern.compile("(?i)(?<![a-z])(?:ep|e)\\s*([0-9]{1,4})(?![0-9])");
     /** 整串就是一个集数数字（{@code 12} / {@code 07}）：补成「第12集」。 */
     private static final Pattern BARE_NUMBER = Pattern.compile("^[0-9]{1,3}$");
+    /**
+     * 日期型集名：{@code 20261123}、{@code 20261123先导片}、{@code 2026-11-23 第5期}。
+     *
+     * <p>综艺常以播出日期作为集名。日期本身就是集数标识，必须原样展示：
+     * 截成「20261」既看不懂，也不能再拿片名去查弹幕接口——接口只会返回同一部剧的
+     * 「第1期」，于是每一集看起来都停在第一期。</p>
+     */
+    private static final Pattern DATE_LABEL = Pattern.compile("^\\s*20\\d{2}\\s*[-/.年]?\\s*\\d{1,2}\\s*[-/.月]?\\s*\\d{1,2}(?!\\d)");
+    /** 日期型集名允许的展示长度：足够放下「20261123先导片」，又不至于撑破卡片。 */
+    private static final int DATE_MAX_CHARS = 12;
 
     private HistoryEpisode() {
     }
@@ -76,6 +86,8 @@ public final class HistoryEpisode {
     public static String resolve(String name, String remarks, Consumer<String> update) {
         String raw = remarks == null ? "" : remarks.trim();
         if (raw.isEmpty()) return "";
+        // 日期型集名：直接原样展示，既不按 5 字截断，也不排队查弹幕接口。
+        if (DATE_LABEL.matcher(raw).find()) return clampDate(raw);
         if (raw.codePointCount(0, raw.length()) <= MAX_CHARS) return normalize(raw);
         String label = clamp(raw);
         String key = key(name, raw);
@@ -83,6 +95,13 @@ public final class HistoryEpisode {
         if (cached != null) return cached.isEmpty() ? normalize(label) : cached;
         enqueue(new Task(key, name == null ? "" : name, raw, update));
         return normalize(label);
+    }
+
+    /** 日期型集名单独放宽到 {@link #DATE_MAX_CHARS}：保留「日期 + 标题」的完整可读性。 */
+    private static String clampDate(String text) {
+        String value = text == null ? "" : text.trim();
+        if (value.codePointCount(0, value.length()) <= DATE_MAX_CHARS) return value;
+        return value.substring(0, value.offsetByCodePoints(0, DATE_MAX_CHARS));
     }
 
     /**
