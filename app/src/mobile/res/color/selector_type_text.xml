@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  分类导航条专用文字色（mobile，仅 adapter_type.xml 使用）：
-    当前页（聚焦 / 未聚焦）→ 纯黑（分别落在纯白底与 60% 透明白底上）；
-    其余（含非当前页焦点）  → 纯白（#1D1F23 底上保持可读）。
+  分类导航条 / 筛选子项共用的文字色（mobile），与 selector_type_chip_bg 状态表一一对应：
 
-  顺序不可调换：两条 state_selected 必须排在 state_focused 之前。
+    禁用                  → 40% 透明白；
+    当前页 + 聚焦/悬停    → 纯黑（纯白底 + 白描边上）；
+    当前页 + 未聚焦       → 纯黑（60% 透明白底上）；
+    其余                  → 纯白（#1D1F23 底上）。
+
+  顺序不可调换：禁用项最先，两条 state_selected 排在通用焦点项之前。
   原 @color/selector_text 走主题属性，被其它选中态控件共用，故保持独立。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <item android:color="@color/white_40" android:state_enabled="false" />
     <item android:color="@color/black" android:state_focused="true" android:state_selected="true" />
+    <item android:color="@color/black" android:state_hovered="true" android:state_selected="true" />
     <item android:color="@color/black" android:state_selected="true" />
-    <item android:color="@color/white" android:state_focused="true" />
     <item android:color="@color/white" />
 
 </selector>

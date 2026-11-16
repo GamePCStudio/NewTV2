@@ -1,21 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  分类导航条专用背景选择器（adapter_type.xml 独用，不影响 selector_item_round 的其它使用者）。
+  分类导航条 / 筛选子项共用的背景状态表（TV）。
 
-  state_selected = 当前页，state_focused = 遥控器焦点：
-    当前页 + 聚焦     → 纯白实底 + 1.5dp 白描边（shape_type_focused），文字黑；
-    当前页 + 未聚焦   → 60% 透明白胶囊（shape_type_selected），文字黑；
-    非当前页 + 聚焦   → 保留原有 black_40 + 白描边（shape_item_round_focused），文字白；
-    非当前页 + 未聚焦 → #1D1F23 实底（shape_type_normal），文字白。
+  state_selected = 当前页 / 当前筛选值，state_focused|state_hovered = 遥控器焦点或鼠标悬停。
+  配色规则（自上而下匹配，先命中者生效）：
+    禁用                → 20% 透明黑实底，无描边；
+    当前页 + 聚焦/悬停  → 纯白实底 + 1.5dp 白描边（shape_type_focused）；
+    当前页 + 未聚焦     → 60% 透明白（shape_type_selected）；
+    非当前页 + 聚焦/悬停→ 原焦点反馈 black_40 + 1.5dp 白描边（shape_item_round_focused）；
+    非当前页 + 未聚焦   → #1D1F23 实底（shape_type_normal）。
 
-  顺序不可调换：两条 state_selected 必须排在 state_focused 之前，
-  否则「当前页 + 聚焦」会被非当前页的焦点样式抢走，纯白底黑字失效。
+  顺序不可调换：禁用项必须最先，两条 state_selected 必须排在通用焦点项之前，
+  否则「当前页 + 聚焦」会被非当前页的焦点样式抢走。
+  文字 / 图标颜色由 @color/selector_type_text 按同一状态表驱动，颜色切换严格同步。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <item android:drawable="@drawable/shape_type_disabled" android:state_enabled="false" />
     <item android:drawable="@drawable/shape_type_focused" android:state_focused="true" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_type_focused" android:state_hovered="true" android:state_selected="true" />
     <item android:drawable="@drawable/shape_type_selected" android:state_selected="true" />
     <item android:drawable="@drawable/shape_item_round_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_item_round_focused" android:state_hovered="true" />
     <item android:drawable="@drawable/shape_type_normal" />
 
 </selector>
