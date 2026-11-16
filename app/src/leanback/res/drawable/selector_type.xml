@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  分类导航条专用背景选择器（adapter_type.xml 独用，不影响 selector_item_round 的其它使用者）。
+
+  state_selected = 当前页，state_focused = 遥控器焦点：
+    当前页 + 聚焦 / 未聚焦 → 50% 透明白胶囊（@color/white_50），文字黑；
+    非当前页 + 聚焦        → 保留原有 black_40 + 白描边（shape_item_round_focused），文字白；
+    非当前页 + 未聚焦      → #1D1F23 实底（shape_type_normal），文字白。
+
+  顺序不可调换：state_selected 的两条必须排在 state_focused 之前，
+  否则「当前页 + 聚焦」会被非当前页的焦点样式抢走，白底黑字失效。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:drawable="@drawable/shape_type_selected" android:state_focused="true" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_type_selected" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_item_round_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_type_normal" />
+
+</selector>

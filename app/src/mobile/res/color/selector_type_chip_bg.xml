@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  分类导航条专用底色（mobile adapter_type.xml 独用）：
+
+  当前页   → 50% 透明白（@color/white_50）；
+  非当前页 → #1D1F23（@color/type_chip_normal）。
+
+  原 @drawable/shape_item_round 还被搜索记录 / 热词 chip 复用，故不修改它。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:color="@color/white_50" android:state_selected="true" />
+    <item android:color="@color/type_chip_normal" />
+
+</selector>
