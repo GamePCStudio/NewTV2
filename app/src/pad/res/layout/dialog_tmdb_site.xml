@@ -13,7 +13,6 @@
         android:imeOptions="actionNext"
         android:importantForAutofill="no"
         android:inputType="textUri"
-        android:nextFocusDown="@id/key"
         android:singleLine="true"
         android:textSize="18sp" />
 
@@ -27,7 +26,6 @@
         android:imeOptions="actionDone"
         android:importantForAutofill="no"
         android:inputType="text"
-        android:nextFocusDown="@id/positive"
         android:singleLine="true"
         android:textSize="18sp" />
 
@@ -43,8 +41,6 @@
             android:layout_marginEnd="12dp"
             android:layout_weight="1"
             android:background="@drawable/selector_button"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:singleLine="true"
             android:text="@string/tmdb_site_delete"
@@ -59,8 +55,6 @@
             android:layout_marginEnd="12dp"
             android:layout_weight="1"
             android:background="@drawable/selector_button"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:singleLine="true"
             android:text="@string/phone_input"
@@ -74,8 +68,6 @@
             android:layout_marginEnd="12dp"
             android:layout_weight="1"
             android:background="@drawable/selector_button"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:singleLine="true"
             android:text="@string/dialog_positive"
@@ -88,8 +80,6 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:background="@drawable/selector_button"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:singleLine="true"
             android:text="@string/dialog_negative"

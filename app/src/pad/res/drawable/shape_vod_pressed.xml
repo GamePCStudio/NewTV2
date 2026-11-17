@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 海报卡按下态：20% 白底、卡片圆角，不画白描边（TV 焦点框已移除）。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#33FFFFFF" />
+    <corners android:radius="@dimen/pad_card_radius" />
+</shape>

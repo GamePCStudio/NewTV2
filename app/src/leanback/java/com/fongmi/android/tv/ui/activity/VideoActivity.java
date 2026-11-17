@@ -116,6 +116,7 @@ import com.fongmi.android.tv.utils.PartUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Traffic;
+import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.Util;
 import com.github.bassaer.library.MDColor;
 import com.github.catvod.utils.UriUtil;
@@ -2421,6 +2422,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     private void setOutsideFocusable(boolean focusable) {
+        // Pad 触控：播放按钮与视频区域永不进入焦点态，浮层开关只影响 TV
+        if (TouchUi.isTouch(this)) focusable = false;
         ViewGroup actionRoot = (ViewGroup) mBinding.control.action.getRoot();
         actionRoot.setDescendantFocusability(focusable ? ViewGroup.FOCUS_BEFORE_DESCENDANTS : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         actionRoot.setFocusable(focusable);
@@ -2430,6 +2433,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     private void setSeekFocusable(boolean focusable) {
+        if (TouchUi.isTouch(this)) focusable = false;
         View timeBar = mBinding.control.seek.findViewById(androidx.media3.ui.R.id.exo_progress);
         if (timeBar == null) return;
         timeBar.setFocusable(focusable);

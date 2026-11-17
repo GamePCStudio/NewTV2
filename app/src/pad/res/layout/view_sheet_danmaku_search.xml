@@ -55,8 +55,6 @@
             android:layout_marginStart="4dp"
             android:background="@drawable/selector_sheet_chip_round"
             android:contentDescription="@string/dialog_action_search_settings"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:padding="7dp"
             android:src="@drawable/ic_danmaku_setting" />
 
@@ -81,7 +79,6 @@
             android:imeOptions="actionSearch"
             android:inputType="textCapWords|textAutoCorrect|textAutoComplete"
             android:maxLength="255"
-            android:nextFocusRight="@id/search"
             android:paddingHorizontal="14dp"
             android:singleLine="true"
             android:textColor="@color/white"
@@ -95,9 +92,6 @@
             android:layout_marginStart="8dp"
             android:background="@drawable/selector_sheet_chip_round"
             android:contentDescription="@string/danmaku_search_action"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusLeft="@id/keyword"
             android:padding="8dp"
             android:src="@drawable/ic_action_search" />
 

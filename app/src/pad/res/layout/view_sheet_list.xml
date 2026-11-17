@@ -58,14 +58,13 @@
             android:overScrollMode="never"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-        <!-- 唯一的选中框：位置由 SheetList.syncSelectionFrame() 计算，始终钳制在列表容器内 -->
+        <!-- Pad 触控模式不绘制焦点/选中框；保留节点只为兼容共享 Java 的 findViewById -->
         <View
             android:id="@+id/sheetSelection"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:background="@drawable/shape_sheet_focus"
+            android:background="@android:color/transparent"
             android:clickable="false"
-            android:focusable="false"
             android:importantForAccessibility="no"
             android:visibility="gone" />
 

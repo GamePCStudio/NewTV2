@@ -5,6 +5,8 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.widget.HorizontalScrollView;
 
+import com.fongmi.android.tv.utils.TouchUi;
+
 public class CustomHorizontalScrollView extends HorizontalScrollView {
 
     public CustomHorizontalScrollView(Context context, AttributeSet attrs) {
@@ -13,6 +15,7 @@ public class CustomHorizontalScrollView extends HorizontalScrollView {
 
     @Override
     public boolean arrowScroll(int direction) {
+        if (TouchUi.isTouch(this)) return super.arrowScroll(direction);
         View focused = findFocus();
         if (focused != null) {
             int id = switch (direction) {

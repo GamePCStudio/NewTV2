@@ -16,10 +16,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:clipChildren="false"
-    android:descendantFocusability="afterDescendants"
     android:elevation="16dp"
-    android:focusable="true"
-    android:focusableInTouchMode="true"
     android:visibility="gone">
 
     <!-- 点击面板外关闭；遮罩极淡，不改变主视觉观感 -->
@@ -27,8 +24,7 @@
         android:id="@+id/siteScrim"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#1A000000"
-        android:focusable="false" />
+        android:background="#1A000000" />
 
     <!-- 面板宽度由宿主的 positionSheet() 按最长站源名自适应计算 -->
     <FrameLayout

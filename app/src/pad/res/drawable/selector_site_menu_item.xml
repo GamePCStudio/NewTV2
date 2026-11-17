@@ -2,12 +2,7 @@
 <!-- 下拉列表项底色：聚焦最亮，当前站源次之，常态透明 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:state_focused="true">
-        <shape android:shape="rectangle">
-            <corners android:radius="6dp" />
-            <solid android:color="@color/white_20" />
-        </shape>
-    </item>
+    
 
     <item android:state_selected="true">
         <shape android:shape="rectangle">

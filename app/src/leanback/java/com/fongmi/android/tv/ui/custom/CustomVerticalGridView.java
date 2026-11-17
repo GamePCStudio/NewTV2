@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.utils.KeyUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 
 import java.util.Arrays;
 import java.util.List;
@@ -94,7 +95,7 @@ public class CustomVerticalGridView extends VerticalGridView {
 
     public boolean moveToTop() {
         if (views == null || getSelectedPosition() == 0 || getAdapter() == null || getAdapter().getItemCount() == 0) return false;
-        for (View view : views) if (view.getId() == R.id.recycler) view.requestFocus();
+        if (!TouchUi.isTouch(this)) for (View view : views) if (view.getId() == R.id.recycler) view.requestFocus();
         scrollToPosition(0);
         showHeader();
         return true;

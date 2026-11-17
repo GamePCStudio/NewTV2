@@ -34,10 +34,6 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="@drawable/selector_chip_round"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusUp="@id/search"
-            android:nextFocusDown="@id/change"
             android:padding="8dp"
             android:src="@drawable/ic_site_search"
             app:tint="@color/white" />
@@ -49,10 +45,6 @@
             android:layout_height="40dp"
             android:layout_marginTop="16dp"
             android:background="@drawable/selector_chip_round"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusUp="@id/search"
-            android:nextFocusDown="@id/select"
             android:padding="8dp"
             android:src="@drawable/ic_site_change"
             app:tint="@color/white" />
@@ -64,10 +56,6 @@
             android:layout_height="40dp"
             android:layout_marginTop="16dp"
             android:background="@drawable/selector_chip_round"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusUp="@id/change"
-            android:nextFocusDown="@id/cancel"
             android:padding="8dp"
             android:src="@drawable/ic_site_select" />
 
@@ -78,10 +66,6 @@
             android:layout_height="40dp"
             android:layout_marginTop="16dp"
             android:background="@drawable/selector_chip_round"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusUp="@id/select"
-            android:nextFocusDown="@id/mode"
             android:padding="8dp"
             android:src="@drawable/ic_site_cancel" />
 
@@ -91,10 +75,6 @@
             android:layout_height="40dp"
             android:layout_marginTop="16dp"
             android:background="@drawable/selector_chip_round"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusUp="@id/cancel"
-            android:nextFocusDown="@id/mode"
             android:padding="8dp"
             tools:src="@drawable/ic_site_list" />
 

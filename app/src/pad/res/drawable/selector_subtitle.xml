@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 字幕调节圆钮：按下 30% 白底，常态透明；无白描边。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_subtitle_pressed" android:state_focused="true" android:state_pressed="true" />
-    <item android:drawable="@drawable/shape_subtitle_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_subtitle_touch" android:state_pressed="true" />
+    <item android:drawable="@drawable/shape_subtitle_normal" />
 </selector>

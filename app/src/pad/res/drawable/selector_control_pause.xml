@@ -5,7 +5,7 @@
   只切换 drawable 的颜色版本，几何、尺寸、padding 与原来完全相同。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/ic_control_pause_tone" android:state_focused="true" />
+    
     <item android:drawable="@drawable/ic_control_pause_tone" android:state_activated="true" />
     <item android:drawable="@drawable/ic_control_pause_white" />
 </selector>

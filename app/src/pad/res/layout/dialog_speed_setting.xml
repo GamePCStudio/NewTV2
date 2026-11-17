@@ -27,7 +27,6 @@
             style="@style/PlaybackDialogAction"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:nextFocusDown="@id/slider"
             android:text="@string/speed_setting_reset"
             android:textColor="?attr/colorPrimary" />
 

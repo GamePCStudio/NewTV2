@@ -3,5 +3,4 @@
     style="@style/Control.Script"
     android:ellipsize="end"
     android:maxWidth="180dp"
-    android:singleLine="true"
-    android:focusable="true" />
+    android:singleLine="true" />

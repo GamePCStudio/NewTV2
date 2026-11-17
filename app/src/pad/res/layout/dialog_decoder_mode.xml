@@ -32,7 +32,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:nextFocusDown="@id/auto"
             android:text="@string/decoder_tab_video" />
 
         <com.google.android.material.button.MaterialButton

@@ -29,9 +29,6 @@
                 android:layout_height="36dp"
                 android:layout_gravity="center_vertical"
                 android:layout_marginEnd="12dp"
-                android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:nextFocusDown="@id/keyboard"
                 android:src="@drawable/ic_search_mic" />
 
             <com.fongmi.android.tv.ui.custom.CustomSearchView
@@ -40,19 +37,18 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:background="@null"
-                android:focusable="true"
-                android:focusableInTouchMode="true"
                 android:hint="@string/search_keyword"
                 android:imeOptions="actionDone"
                 android:inputType="textCapWords|textAutoCorrect|textAutoComplete"
                 android:letterSpacing="0.02"
                 android:maxLength="255"
-                android:nextFocusDown="@id/keyboard"
                 android:singleLine="true"
                 android:textColor="@color/white"
                 android:textColorHint="@color/white"
                 android:textCursorDrawable="@drawable/shape_cursor"
-                android:textSize="24sp" />
+                android:textSize="24sp"
+                android:focusable="true"
+                android:focusableInTouchMode="true" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

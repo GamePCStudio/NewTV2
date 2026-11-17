@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Pad 详情页根容器不再绘制焦点前景；保留透明项以兼容 foreground 引用。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_video_focused" android:state_focused="true" />
+    <item android:drawable="@android:color/transparent" />
 </selector>

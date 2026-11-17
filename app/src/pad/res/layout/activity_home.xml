@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   首页分四层（FrameLayout 的子 View 顺序即绘制顺序，后画的压在先画的之上；
-  再用 elevation 显式拉开 Z 序，避免 recycler 内部聚焦 item / 系统焦点高亮抢到上层）：
+  再用 elevation 显式拉开 Z 序，Pad 触控模式下列表 item 不聚焦，层级不受焦点绘制影响）：
 
     L0  ProgressLayout → VerticalGridView
         主视觉 + 全部内容行。
@@ -14,7 +14,7 @@
         其次 6 个导航文字按钮（首页 / 电影 / 剧集 / 综艺 / 片库 / 我的——「我的」是设置入口）；
         右侧依次是 站源下拉入口 → 时钟。
     L3  siteSheet（elevation 16dp，最后一个子 View）
-        FocusTrapFrameLayout：显示期间把方向焦点搜索截断在容器内部；内容为站源列表。
+        站源列表浮层：Pad 触控下点外部即可关闭，无方向键焦点陷阱。
         原品牌入口的功能 sheet（moreSheet）已随 logo 弹窗菜单一并移除。
     L4  splashBrand（elevation 32dp）
         启动画面 banner：静态显示 640×360（原始 1280×720 的 50%）等比居中，
@@ -44,11 +44,9 @@
             android:clipChildren="false"
             android:clipToPadding="false"
             android:paddingStart="@dimen/pad_page_margin"
-            android:paddingTop="8dp"
+            android:paddingTop="@dimen/pad_gap_s"
             android:paddingEnd="@dimen/pad_page_margin"
-            android:paddingBottom="24dp"
-            app:focusOutEnd="true"
-            app:focusOutFront="true" />
+            android:paddingBottom="@dimen/pad_gap_l" />
 
     </com.fongmi.android.tv.ui.custom.ProgressLayout>
 
@@ -60,7 +58,6 @@
         android:layout_gravity="top"
         android:background="@drawable/shape_top_scrim"
         android:clickable="false"
-        android:focusable="false"
         android:importantForAccessibility="no" />
 
     <!-- L2：顶部工具栏（可复用布局 view_home_toolbar.xml，与分类页共用同一份样式） -->
@@ -82,7 +79,6 @@
         android:layout_height="match_parent"
         android:clickable="true"
         android:elevation="32dp"
-        android:focusable="false"
         android:importantForAccessibility="no" />
 
 </FrameLayout>

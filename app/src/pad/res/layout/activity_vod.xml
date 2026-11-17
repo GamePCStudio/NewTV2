@@ -30,7 +30,6 @@
         android:layout_gravity="top"
         android:background="@drawable/shape_top_scrim"
         android:clickable="false"
-        android:focusable="false"
         android:importantForAccessibility="no" />
 
     <!-- L1：顶栏 → 分类导航 → 内容，垂直排列 -->
@@ -51,10 +50,8 @@
             android:clipChildren="false"
             android:clipToPadding="false"
             android:paddingStart="@dimen/pad_page_margin"
-            android:paddingTop="8dp"
-            android:paddingEnd="@dimen/pad_page_margin"
-            app:focusOutEnd="false"
-            app:focusOutFront="false" />
+            android:paddingTop="@dimen/pad_gap_s"
+            android:paddingEnd="@dimen/pad_page_margin" />
 
         <!-- 0dp + weight=1：吃掉顶栏与分类导航之外的全部高度，杜绝重叠 / 溢出 -->
         <com.fongmi.android.tv.ui.custom.CustomViewPager

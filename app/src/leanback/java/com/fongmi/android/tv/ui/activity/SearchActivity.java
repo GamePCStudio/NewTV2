@@ -30,6 +30,7 @@ import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.utils.HotRank;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.SearchSuggest;
+import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.utils.ZhuToPin;
 import com.github.catvod.net.OkHttp;
@@ -481,7 +482,7 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     @Override
     protected void onResume() {
         super.onResume();
-        mBinding.mic.setFocusable(true);
+        if (!TouchUi.isTouch(this)) mBinding.mic.setFocusable(true);
         // 从任意页面返回搜索页：清空搜索框内的全部字符；首次进入时保留 start(keyword) 带来的词。
         if (mResumed) clearKeyword();
         else mResumed = true;

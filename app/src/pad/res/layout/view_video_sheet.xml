@@ -15,7 +15,6 @@
     android:clickable="true"
     android:clipChildren="true"
     android:clipToPadding="true"
-    android:focusable="false"
     android:orientation="vertical"
     android:padding="12dp"
     android:visibility="gone">

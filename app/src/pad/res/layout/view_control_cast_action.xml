@@ -16,7 +16,6 @@
             android:visibility="gone"
             style="@style/Control"
             android:layout_marginEnd="8dp"
-            android:nextFocusLeft="@id/video"
             android:text="@string/play_exo" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -61,7 +60,6 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/video"
             style="@style/Control"
-            android:nextFocusRight="@id/player"
             android:tag="2"
             android:text="@string/play_track_video" />
 

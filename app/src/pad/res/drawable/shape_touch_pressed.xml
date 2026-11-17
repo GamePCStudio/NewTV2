@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 触控按下态：30% 白底，无描边。仅用于 Pad，替代 TV 的 1.5dp 白描边焦点框。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#4DFFFFFF" />
+    <corners android:radius="@dimen/pad_card_radius" />
+</shape>

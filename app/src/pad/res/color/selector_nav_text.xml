@@ -1,18 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  顶部导航文字颜色（与 selector_nav_button 的三态胶囊配套）：
-
-  聚焦（选中）    → 纯黑（纯白底上的最强对比）；
-  当前页未聚焦    → 纯黑（60% 透明白胶囊上仍保持可读）；
-  其余导航项      → 纯白（透明底，压在剧照上）。
-
-  当前页两态统一为黑字，和分类导航条的「当前页」口径一致；
-  其余项仍为白字，焦点反馈只由背景胶囊承担。
+  顶部导航文字色（Pad）：
+    当前页 → 黑字（60% 透明白胶囊上仍可读）；
+    其余   → 白字（透明底，压在剧照上）。
+  按下态只由背景胶囊表达，文字色不变，避免按下瞬间白字叠白底。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <item android:color="@color/black" android:state_focused="true" />
     <item android:color="@color/black" android:state_selected="true" />
     <item android:color="@color/white" />
-
 </selector>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 圆形胶囊按钮：按下 30% 白底，选中沿用既有实底，无描边。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_chip_round_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_pill_pressed" android:state_pressed="true" />
     <item android:drawable="@drawable/shape_chip_round_activated" android:state_selected="true" />
     <item android:drawable="@drawable/shape_chip_round_normal" />
 </selector>

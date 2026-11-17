@@ -44,7 +44,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:nextFocusUp="@id/primary"
             android:text="@string/mpv_script_tab_buttons" />
 
         <com.google.android.material.button.MaterialButton
@@ -53,7 +52,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:nextFocusUp="@id/primary"
             android:text="@string/mpv_script_tab_automatic" />
 
     </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -115,8 +113,6 @@
                         android:layout_height="wrap_content"
                         android:importantForAutofill="no"
                         android:inputType="text"
-                        android:nextFocusDown="@id/command"
-                        android:nextFocusUp="@id/primary"
                         android:singleLine="true" />
 
                 </com.google.android.material.textfield.TextInputLayout>
@@ -137,7 +133,6 @@
                         android:imeOptions="actionDone"
                         android:importantForAutofill="no"
                         android:inputType="textNoSuggestions"
-                        android:nextFocusUp="@id/title"
                         android:singleLine="true" />
 
                 </com.google.android.material.textfield.TextInputLayout>

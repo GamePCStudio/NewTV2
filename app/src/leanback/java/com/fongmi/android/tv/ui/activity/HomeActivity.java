@@ -86,6 +86,7 @@ import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.net.OkHttp;
 
@@ -1426,6 +1427,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 首帧画出来时焦点已经在目标控件上。</p>
      */
     private void installInitialFocus() {
+        if (TouchUi.isTouch(this)) return;
         View anchor = mToolbar.getRoot();
         anchor.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -1438,7 +1440,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 投放首帧焦点：优先「首页」，失败下一帧重试，最后退回列表，焦点不悬空。 */
     private void requestInitialFocus() {
-        if (mBinding == null || mInitialFocusDone) return;
+        if (TouchUi.isTouch(this) || mBinding == null || mInitialFocusDone) return;
         if (mToolbar.navHome.requestFocus()) {
             mInitialFocusDone = true;
             return;
@@ -1598,6 +1600,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 焦点回到导航按钮：优先回离开前的那个，没有（或已不可见）则回「首页」。 */
     private void focusNav() {
+        if (TouchUi.isTouch(this)) return;
         View target = mLastNav != null && mLastNav.isShown() ? mLastNav : mToolbar.navHome;
         target.requestFocus();
     }
@@ -1607,6 +1610,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 校验 isAttachedToWindow + isShown，列表刷新或滚动回收后自动退化为系统默认落焦。
      */
     private boolean restorePendingPoster() {
+        if (TouchUi.isTouch(this)) return false;
         View target = mPendingPoster;
         if (target == null) return false;
         mPendingPoster = null;

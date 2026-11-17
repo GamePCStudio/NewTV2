@@ -8,7 +8,6 @@
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:focusable="false"
         android:overScrollMode="never">
 
         <androidx.appcompat.widget.LinearLayoutCompat
@@ -47,8 +46,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:contentDescription="@string/content_search"
-                        android:focusable="true"
-                        android:nextFocusRight="@id/current"
                         android:text="@string/content_search_action" />
 
                     <com.google.android.material.button.MaterialButton
@@ -58,8 +55,6 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="@dimen/playback_dialog_spacing"
                         android:contentDescription="@string/content_current"
-                        android:focusable="true"
-                        android:nextFocusLeft="@id/search"
                         android:text="@string/content_current" />
 
                 </androidx.appcompat.widget.LinearLayoutCompat>
@@ -78,9 +73,6 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:nextFocusDown="@id/keyword"
-                    android:nextFocusRight="@id/danmaku"
-                    android:nextFocusUp="@id/search"
                     android:text="@string/play_track_text" />
 
                 <com.google.android.material.button.MaterialButton
@@ -89,9 +81,6 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:nextFocusDown="@id/keyword"
-                    android:nextFocusLeft="@id/subtitles"
-                    android:nextFocusUp="@id/search"
                     android:text="@string/danmaku" />
 
             </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -108,7 +97,6 @@
                 android:imeOptions="actionSearch"
                 android:inputType="text"
                 android:minHeight="48dp"
-                android:nextFocusDown="@id/recycler"
                 android:singleLine="true"
                 android:textSize="14sp"
                 android:visibility="gone" />
@@ -139,7 +127,6 @@
             android:layout_height="match_parent"
             android:nestedScrollingEnabled="false"
             android:clipToPadding="false"
-            android:nextFocusRight="@id/current"
             android:overScrollMode="never"
             android:paddingHorizontal="@dimen/playback_dialog_inset"
             android:paddingTop="@dimen/playback_dialog_spacing"

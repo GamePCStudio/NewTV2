@@ -14,6 +14,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.TextView;
 
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 
 import java.util.WeakHashMap;
 
@@ -55,6 +56,8 @@ public final class PosterFocusAnimator {
     }
 
     public static void bind(View card, boolean elevate, OnFocus extra) {
+        // Pad 触控模式：卡片不聚焦、不缩放、不画描边，按压反馈由 PadTouchHelper 负责
+        if (TouchUi.isTouch(card)) return;
         if (card instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) card;
             group.setClipChildren(false);
@@ -67,6 +70,7 @@ public final class PosterFocusAnimator {
     }
 
     public static void animate(View view, boolean focused, boolean elevate) {
+        if (TouchUi.isTouch(view)) return;
         float scale = focused ? FOCUS_SCALE_CARD : 1f;
         float elevation = focused && elevate ? ResUtil.dp2px(ELEVATION_DP) : 0f;
         Animator previous = RUNNING.get(view);
@@ -150,6 +154,11 @@ public final class PosterFocusAnimator {
      * 也不会像反复 setEllipsize(MARQUEE) 那样触发 requestLayout 造成焦点切换抖动。
      */
     public static void marquee(TextView title, boolean focused) {
+        if (TouchUi.isTouch(title)) {
+            if (title.getEllipsize() != TextUtils.TruncateAt.END) title.setEllipsize(TextUtils.TruncateAt.END);
+            title.setSelected(false);
+            return;
+        }
         boolean marquee = focused && isTruncated(title);
         TextUtils.TruncateAt target = marquee ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.END;
         if (title.getEllipsize() != target) title.setEllipsize(target);

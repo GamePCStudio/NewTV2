@@ -50,9 +50,9 @@
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:background">@drawable/selector_chip</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
-        <item name="android:nextFocusUp">@id/exo_progress</item>
+        
+        
+        
         <item name="android:textColor">@color/text</item>
         <item name="android:textSize">14sp</item>
     </style>
@@ -126,7 +126,7 @@
     <style name="PlaybackContentAction" parent="PlaybackDialogAction" />
 
     <style name="PlaybackContentCurrentAction" parent="PlaybackContentAction">
-        <item name="android:focusableInTouchMode">true</item>
+        
         <item name="android:textColor">@color/selector_content_current</item>
     </style>
 
@@ -134,8 +134,8 @@
 
     <style name="PlaybackContentItem">
         <item name="android:background">@drawable/selector_chip_round</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
     </style>
 
     <style name="PlaybackContentText">
@@ -144,21 +144,21 @@
 
     <style name="MpvScriptItem">
         <item name="android:background">@drawable/selector_chip</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
     </style>
 
 
     <!-- ===== 移植自 tv-latest：播放页浮层 / 控制条槽位样式 ===== -->
     <style name="ControlSlot">
-        <item name="android:layout_width">50dp</item>
-        <item name="android:layout_height">40dp</item>
+        <item name="android:layout_width">56dp</item>
+        <item name="android:layout_height">@dimen/pad_touch_min</item>
         <item name="android:layout_marginStart">3dp</item>
         <item name="android:layout_marginEnd">3dp</item>
         <item name="android:background">@drawable/selector_chip</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
         <item name="android:gravity">center</item>
-        <item name="android:nextFocusUp">@id/exo_progress</item>
+        
         <item name="android:textColor">@color/text</item>
         <item name="android:textSize">14sp</item>
     </style>
@@ -175,10 +175,10 @@
         <item name="android:layout_marginStart">0dp</item>
         <item name="android:layout_marginEnd">2dp</item>
         <item name="android:background">@drawable/selector_chip</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
         <item name="android:gravity">center</item>
-        <item name="android:nextFocusUp">@id/exo_progress</item>
+        
         <item name="android:paddingStart">10dp</item>
         <item name="android:paddingEnd">10dp</item>
         <item name="android:paddingTop">4dp</item>
@@ -188,7 +188,7 @@
 
     <style name="ControlTextSlot" parent="ControlSlot">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">40dp</item>
+        <item name="android:layout_height">@dimen/pad_touch_min</item>
         <item name="android:textColor">@color/selector_control_text</item>
         <item name="android:minWidth">58dp</item>
         <item name="android:layout_marginStart">2dp</item>
@@ -209,17 +209,17 @@
         <item name="android:layout_marginStart">5dp</item>
         <item name="android:layout_marginEnd">5dp</item>
         <item name="android:background">#33FFFFFF</item>
-        <item name="android:focusable">false</item>
+        
         <item name="android:importantForAccessibility">no</item>
     </style>
 
     <style name="ControlPanelChip">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">40dp</item>
+        <item name="android:layout_height">@dimen/pad_touch_min</item>
         <item name="android:layout_marginEnd">8dp</item>
         <item name="android:background">@drawable/selector_sheet_chip</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
         <item name="android:gravity">center</item>
         <item name="android:minWidth">96dp</item>
         <item name="android:paddingStart">10dp</item>
@@ -232,12 +232,12 @@
 
     <style name="SheetPanelRow">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">44dp</item>
+        <item name="android:layout_height">@dimen/pad_touch_min</item>
         <item name="android:background">@drawable/selector_sheet_chip</item>
         <item name="android:clickable">true</item>
         <item name="android:ellipsize">end</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
         <item name="android:gravity">center_vertical</item>
         <item name="android:minWidth">220dp</item>
         <item name="android:paddingStart">24dp</item>
@@ -266,10 +266,12 @@
     <style name="LogFilterChip">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/pad_touch_min</item>
+        <item name="android:gravity">center</item>
         <item name="android:layout_marginEnd">8dp</item>
         <item name="android:background">@drawable/selector_item</item>
-        <item name="android:focusable">true</item>
-        <item name="android:focusableInTouchMode">true</item>
+        
+        
         <item name="android:paddingStart">14dp</item>
         <item name="android:paddingTop">4dp</item>
         <item name="android:paddingEnd">14dp</item>

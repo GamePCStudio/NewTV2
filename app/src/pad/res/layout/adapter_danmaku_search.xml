@@ -17,8 +17,6 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/selector_sheet_chip"
-    android:focusable="true"
-    android:focusableInTouchMode="true"
     android:orientation="vertical"
     android:paddingHorizontal="12dp"
     android:paddingVertical="9dp">

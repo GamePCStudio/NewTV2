@@ -56,6 +56,7 @@ import com.fongmi.android.tv.ui.danmaku.DanmakuPlayerViewController;
 import com.fongmi.android.tv.ui.dialog.CloudflareDialog;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.crawler.SpiderDebug;
@@ -291,12 +292,13 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void setSeekNextFocusDown(int id) {
+        if (TouchUi.isTouch(this)) return;
         View timeBar = getSeekView().findViewById(androidx.media3.ui.R.id.exo_progress);
         if (timeBar != null) timeBar.setNextFocusDownId(id);
     }
 
     protected void setActionFocusBoundary(View view) {
-        if (view == null) return;
+        if (view == null || TouchUi.isTouch(this)) return;
         if (view.isFocusable() && view.getId() != View.NO_ID) view.setNextFocusDownId(view.getId());
         if (view instanceof ViewGroup group) for (int i = 0; i < group.getChildCount(); i++) setActionFocusBoundary(group.getChildAt(i));
     }

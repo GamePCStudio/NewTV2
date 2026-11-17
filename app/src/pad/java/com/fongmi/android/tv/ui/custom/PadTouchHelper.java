@@ -56,18 +56,28 @@ public final class PadTouchHelper {
         if (!(root instanceof ViewGroup group)) return;
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);
-            if ("pad_expand".equals(child.getTag()) && child.getParent() instanceof View parent) {
+            boolean forced = "pad_expand".equals(child.getTag());
+            boolean clickable = child.isClickable() || child.hasOnClickListeners();
+            if ((forced || clickable) && child.getParent() instanceof View parent && parent.getTouchDelegate() == null) {
                 parent.post(() -> {
                     Rect rect = new Rect();
                     child.getHitRect(rect);
                     int min = child.getResources().getDimensionPixelSize(R.dimen.pad_touch_min);
                     int growX = Math.max(0, (min - rect.width()) / 2);
                     int growY = Math.max(0, (min - rect.height()) / 2);
+                    if (growX == 0 && growY == 0) return;
                     rect.inset(-growX, -growY);
-                    parent.setTouchDelegate(new TouchDelegate(rect, child));
+                    rect.left = Math.max(0, rect.left);
+                    rect.top = Math.max(0, rect.top);
+                    rect.right = Math.min(parent.getWidth(), rect.right);
+                    rect.bottom = Math.min(parent.getHeight(), rect.bottom);
+                    if (!rect.isEmpty()) parent.setTouchDelegate(new TouchDelegate(rect, child));
                 });
             }
-            expandTouchTargets(child);
+            // 列表/翻页容器由自身处理触摸滚动，不递归给 item 挂 delegate
+            if (!(child instanceof androidx.recyclerview.widget.RecyclerView)
+                    && !(child instanceof androidx.viewpager.widget.ViewPager)
+                    && !(child instanceof android.widget.AbsListView)) expandTouchTargets(child);
         }
     }
 

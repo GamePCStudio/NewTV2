@@ -47,9 +47,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:nextFocusDown="@id/filterSourceAll"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:text="@string/tmdb_log_clear"
@@ -77,19 +74,16 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterSourceAll"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterStatusAll"
             android:text="@string/tmdb_filter_all" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterSourceTmdb"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterStatusAll"
             android:text="@string/tmdb_filter_tmdb" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterSourceDouban"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterStatusAll"
             android:text="@string/tmdb_filter_douban" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -112,37 +106,31 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusAll"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_all" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusDone"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_done" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusFail"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_fail" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusSkip"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_skip" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusOther"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_other" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/filterStatusBlacklist"
             style="@style/LogFilterChip"
-            android:nextFocusDown="@id/filterKeyword"
             android:text="@string/tmdb_filter_blacklist" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -168,8 +156,6 @@
             style="@style/LogFilterChip"
             android:ellipsize="end"
             android:maxWidth="380dp"
-            android:nextFocusDown="@id/tmdbLogList"
-            android:nextFocusUp="@id/filterStatusAll"
             android:singleLine="true"
             android:text="@string/tmdb_filter_keyword_none"
             tools:text="关键字：敦煌英雄" />

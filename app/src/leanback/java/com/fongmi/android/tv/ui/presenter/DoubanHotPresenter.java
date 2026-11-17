@@ -37,6 +37,7 @@ import com.fongmi.android.tv.databinding.AdapterDoubanHotBinding;
 import com.fongmi.android.tv.ui.custom.BackdropStyle;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -248,9 +249,11 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         private void setListeners() {
-            // 聚焦放大动画已取消；按钮改用「底色 + 文字色」两态反馈（见 styleAction）。
-            binding.getRoot().setOnFocusChangeListener((view, hasFocus) -> styleAction(hasFocus));
-            binding.getRoot().setOnKeyListener((view, keyCode, event) -> {
+            // Pad 触控：不挂焦点/方向键监听，主视觉只响应点击进详情
+            if (!TouchUi.isTouch(binding.getRoot())) {
+                // 聚焦放大动画已取消；按钮改用「底色 + 文字色」两态反馈（见 styleAction）。
+                binding.getRoot().setOnFocusChangeListener((view, hasFocus) -> styleAction(hasFocus));
+                binding.getRoot().setOnKeyListener((view, keyCode, event) -> {
                 if (event.getAction() != KeyEvent.ACTION_DOWN || items.size() < 2) return false;
                 if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                     show(index - 1, true);
@@ -262,8 +265,9 @@ public class DoubanHotPresenter extends Presenter {
                     restart();
                     return true;
                 }
-                return false;
-            });
+                    return false;
+                });
+            }
             binding.getRoot().setOnClickListener(view -> {
                 DoubanHotItem item = current();
                 if (item != null) listener.onDoubanHotClick(item);
@@ -282,6 +286,7 @@ public class DoubanHotPresenter extends Presenter {
          * 而非给 view 设 alpha，所以不会被冲淡；聚焦反馈由纯白底 + 近黑字的强对比承担。</p>
          */
         private void styleAction(boolean focused) {
+            if (TouchUi.isTouch(binding.getRoot())) focused = false;
             binding.action.setBackgroundResource(focused ? R.drawable.shape_hot_action_focused : R.drawable.shape_hot_action);
             binding.actionText.setTextColor(focused ? 0xFF101114 : 0xFFFFFFFF);
         }

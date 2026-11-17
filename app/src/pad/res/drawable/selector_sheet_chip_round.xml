@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  播放页浮层（字幕 / 音轨 / 弹幕列表与动作图标）的焦点选择器。
-  聚焦态用内缩描边 shape_sheet_focus；常态 / 当前项沿用原 selector_chip_round 的样式，保持底色一致。
--->
+<!-- 播放页浮层圆角按钮：按下 30% 白底、选中沿用既有底，无描边。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_sheet_focus" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_pill_pressed" android:state_pressed="true" />
     <item android:drawable="@drawable/shape_chip_round_activated" android:state_selected="true" />
     <item android:drawable="@drawable/shape_chip_round_normal" />
 </selector>

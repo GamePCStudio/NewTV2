@@ -65,6 +65,7 @@ import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.TouchUi;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -945,6 +946,7 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     }
 
     private void installInitialFocus() {
+        if (TouchUi.isTouch(this)) return;
         View anchor = mToolbar.getRoot();
         anchor.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -956,7 +958,7 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     }
 
     private void requestInitialFocus() {
-        if (mBinding == null || mInitialFocusDone) return;
+        if (TouchUi.isTouch(this) || mBinding == null || mInitialFocusDone) return;
         if (nav().requestFocus()) {
             mInitialFocusDone = true;
             return;
@@ -1046,6 +1048,7 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     }
 
     private void focusNav() {
+        if (TouchUi.isTouch(this)) return;
         View target = mLastNav != null && mLastNav.isShown() ? mLastNav : nav();
         // 本页的导航项可能因为刮削关闭被隐藏：退回「首页」，别把焦点丢在不可见控件上。
         if (target == null || !target.isShown()) target = mToolbar.navHome;
@@ -1053,6 +1056,7 @@ public abstract class HotCategoryActivity extends BaseActivity implements SiteLi
     }
 
     private boolean restorePendingPoster() {
+        if (TouchUi.isTouch(this)) return false;
         View target = mPendingPoster;
         if (target == null) return false;
         mPendingPoster = null;

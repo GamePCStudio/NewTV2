@@ -1,27 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  分类导航条 / 筛选子项共用的背景状态表（TV）。
-
-  state_selected = 当前页 / 当前筛选值，state_focused|state_hovered = 遥控器焦点或鼠标悬停。
-  配色规则（自上而下匹配，先命中者生效）：
-    禁用                → 20% 透明黑实底，无描边；
-    当前页 + 聚焦/悬停  → 纯白实底 + 1.5dp 白描边（shape_type_focused）；
-    当前页 + 未聚焦     → 60% 透明白（shape_type_selected）；
-    非当前页 + 聚焦/悬停→ 原焦点反馈 black_40 + 1.5dp 白描边（shape_item_round_focused）；
-    非当前页 + 未聚焦   → #1D1F23 实底（shape_type_normal）。
-
-  顺序不可调换：禁用项必须最先，两条 state_selected 必须排在通用焦点项之前，
-  否则「当前页 + 聚焦」会被非当前页的焦点样式抢走。
-  文字 / 图标颜色由 @color/selector_type_text 按同一状态表驱动，颜色切换严格同步。
+  分类导航条 / 筛选子项的 Pad 触控状态表：
+    禁用            → 20% 透明黑实底；
+    按下 + 当前项   → 纯白底（保持当前页黑字）；
+    当前项          → 60% 透明白底；
+    按下            → 30% 白底；
+    常态            → #1D1F23 实底。
+  状态优先级自上而下；文字 / 图标颜色由 @color/selector_type_text 按同一状态表驱动。
+  无 focus/hover 分支，也不画白色描边。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item android:drawable="@drawable/shape_type_disabled" android:state_enabled="false" />
-    <item android:drawable="@drawable/shape_type_focused" android:state_focused="true" android:state_selected="true" />
-    <item android:drawable="@drawable/shape_type_focused" android:state_hovered="true" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_pad_selected" android:state_pressed="true" android:state_selected="true" />
     <item android:drawable="@drawable/shape_type_selected" android:state_selected="true" />
-    <item android:drawable="@drawable/shape_item_round_focused" android:state_focused="true" />
-    <item android:drawable="@drawable/shape_item_round_focused" android:state_hovered="true" />
+    <item android:drawable="@drawable/shape_pill_pressed" android:state_pressed="true" />
     <item android:drawable="@drawable/shape_type_normal" />
 
 </selector>

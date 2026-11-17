@@ -8,6 +8,7 @@
     <dimen name="pad_toolbar_height">64dp</dimen>
     <dimen name="pad_hero_height">260dp</dimen>
     <dimen name="pad_card_radius">8dp</dimen>
+    <dimen name="pad_pill_radius">24dp</dimen>
     <dimen name="pad_surface_radius">16dp</dimen>
     <dimen name="pad_poster_columns_spacing">14dp</dimen>
     <integer name="pad_poster_columns">5</integer>

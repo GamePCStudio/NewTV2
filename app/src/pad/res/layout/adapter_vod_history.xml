@@ -19,11 +19,9 @@
     android:layout_height="wrap_content"
     android:clipChildren="false"
     android:clipToPadding="false"
-    android:focusable="true"
-    android:focusableInTouchMode="true"
     android:orientation="vertical">
 
-    <!-- duplicateParentState：焦点在卡片根上，让描边能跟随 state_focused。 -->
+    <!-- duplicateParentState：让海报容器的按压态跟随卡片根，Pad 无焦点描边。 -->
     <FrameLayout
         android:id="@+id/poster"
         android:layout_width="match_parent"

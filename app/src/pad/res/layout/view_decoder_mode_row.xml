@@ -4,7 +4,6 @@
     android:layout_height="wrap_content"
     android:background="@drawable/selector_chip"
     android:clickable="true"
-    android:focusable="true"
     android:gravity="center_vertical"
     android:minHeight="48dp"
     android:orientation="vertical">

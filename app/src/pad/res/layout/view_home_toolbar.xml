@@ -12,15 +12,13 @@
     搜索圆钮（放大镜）→ 6 个导航按钮（首页 / 电影 / 剧集 / 综艺 / 片库 / 我的）
     → 弹性空白 → 站源下拉入口 → 时钟。
 
-  <b>尺寸口径</b>：导航与站源名 16sp 加粗，时钟 18sp；
-  导航选中框 / 搜索圆钮 / 站源入口 统一 36dp 高，焦点胶囊圆角 18dp（= 半高）。
-  搜索圆钮与「首页」的列间距 18dp（上一版 12dp 的 150%），让「搜索」与频道导航分成两簇。
+  <b>尺寸口径</b>：导航与站源名 16sp 加粗，时钟 18sp；导航胶囊高 @dimen/pad_nav_height、
+  最小宽 @dimen/pad_nav_min_width，圆角随 @dimen/pad_pill_radius 断点变化；热区由 TouchDelegate 外扩。
 
-  <b>选中态</b>：聚焦 = 纯白胶囊 + 黑字；当前页未聚焦 = 60% 透明白胶囊（@color/white_60）+ 黑字；
-  其余 = 全透明 + 白字。搜索圆钮同源：聚焦时圆底转纯白、放大镜转深色，与导航胶囊的取反逻辑一致。
+  <b>触控态</b>：当前页 = 60% 透明白胶囊 + 黑字；其余 = 全透明 + 白字；
+  按下 = 30% 白底胶囊。搜索圆钮按下时圆底转纯白、放大镜转黑。无焦点态、无白描边。
 
-  <b>左右基线 48dp</b>（1080p 下 96px ≈ 5% 安全区）：根节点 paddingStart/End = 48dp，
-  与列表内容（recycler 同样 48dp 内边距）对齐。
+  <b>左右基线</b>：根节点 paddingStart/End = @dimen/pad_page_margin，与列表内容对齐。
 -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -28,11 +26,9 @@
     android:layout_width="match_parent"
     android:layout_height="@dimen/pad_toolbar_height"
     android:layout_gravity="top"
-    android:layout_marginTop="16dp"
+    android:layout_marginTop="@dimen/pad_gap_l"
     android:clipChildren="false"
-    android:descendantFocusability="afterDescendants"
     android:elevation="8dp"
-    android:focusable="false"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingStart="@dimen/pad_page_margin"
@@ -54,9 +50,6 @@
         android:background="@drawable/selector_logo_bg"
         android:clickable="true"
         android:contentDescription="@string/home_search"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:nextFocusDown="@id/recycler"
         android:padding="5dp"
         android:scaleType="fitCenter"
         android:src="@drawable/ic_home_search"
@@ -82,7 +75,7 @@
         android:id="@+id/navButtons"
         android:layout_width="wrap_content"
         android:layout_height="@dimen/pad_toolbar_height"
-        android:layout_marginStart="18dp"
+        android:layout_marginStart="@dimen/pad_gap_l"
         android:clipChildren="false"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -95,14 +88,11 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_nav_home"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -116,14 +106,11 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_nav_movie"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -137,14 +124,11 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_nav_series"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -158,14 +142,11 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_nav_variety"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -179,14 +160,11 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_vod"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -200,14 +178,11 @@
             android:layout_height="@dimen/pad_nav_height"
             android:background="@drawable/selector_nav_button"
             android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center"
             android:maxLines="1"
             android:minWidth="@dimen/pad_nav_min_width"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:paddingStart="@dimen/pad_gap_m"
+            android:paddingEnd="@dimen/pad_gap_m"
             android:text="@string/home_nav_mine"
             android:textColor="@color/selector_nav_text"
             android:textSize="16sp"
@@ -219,8 +194,7 @@
     <View
         android:layout_width="0dp"
         android:layout_height="1dp"
-        android:layout_weight="1"
-        android:focusable="false" />
+        android:layout_weight="1" />
 
     <!-- 右侧组：站源下拉入口 → 时钟（设置已并入导航「我的」，搜索已并入左侧放大镜圆钮） -->
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -244,10 +218,7 @@
             android:layout_height="@dimen/pad_nav_height"
             android:layout_marginEnd="8dp"
             android:background="@drawable/selector_site_entry"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
             android:gravity="center_vertical"
-            android:nextFocusDown="@id/recycler"
             android:orientation="horizontal"
             android:paddingStart="10dp"
             android:paddingEnd="10dp">

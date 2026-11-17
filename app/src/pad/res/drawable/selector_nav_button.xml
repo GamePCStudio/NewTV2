@@ -1,37 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  顶部导航文字按钮的选中框（胶囊）。
-
-  几何统一（三态一致）：高 36dp（顶栏 48dp 口径的 75%）、圆角 18dp（= 半高，两端正半圆）。
-    聚焦（选中）   → 纯白底 + 黑字；
-    当前页未聚焦   → 60% 透明白胶囊（@color/white_60）+ 黑字；
-    其余           → 全透明 + 白字。
-
-  当前页改用半透明白而非半透明黑，与分类导航条的「当前页」口径一致；
-  聚焦态仍是纯白实心块，两级层级不变。
-
-  与站源入口的焦点反馈刻意区分：后者是「半透明胶囊 + 白描边」的轻量反馈，
-  导航是整条顶栏的主视觉锚点，用实心块强调层级。
+  顶部导航胶囊（Pad 触控口径）：
+    当前页        → 60% 透明白底 + 黑字（"当前页"是业务态，不是焦点框）；
+    按下其他项    → 30% 白底 + 白字；
+    常态          → 全透明 + 白字。
+  圆角随 pad_pill_radius 断点变化；无 focus/hover 分支、无白色描边。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:state_focused="true">
+    <item android:state_selected="true">
         <shape android:shape="rectangle">
-            <corners android:radius="18dp" />
-            <solid android:color="#FFFFFFFF" />
+            <corners android:radius="@dimen/pad_pill_radius" />
+            <solid android:color="@color/white_60" />
         </shape>
     </item>
 
-    <item android:state_selected="true">
+    <item android:state_pressed="true">
         <shape android:shape="rectangle">
-            <corners android:radius="18dp" />
-            <solid android:color="@color/white_60" />
+            <corners android:radius="@dimen/pad_pill_radius" />
+            <solid android:color="#4DFFFFFF" />
         </shape>
     </item>
 
     <item>
         <shape android:shape="rectangle">
-            <corners android:radius="18dp" />
+            <corners android:radius="@dimen/pad_pill_radius" />
             <solid android:color="@android:color/transparent" />
         </shape>
     </item>

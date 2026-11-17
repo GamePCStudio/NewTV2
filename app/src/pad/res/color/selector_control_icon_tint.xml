@@ -7,7 +7,7 @@
   不能因为失焦变白。业务开关（弹幕开/关等）用的是 state_selected，两者互不干扰。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/control_scrubber" android:state_focused="true" />
+    
     <item android:color="@color/control_scrubber" android:state_activated="true" />
     <item android:color="@color/white" />
 </selector>
