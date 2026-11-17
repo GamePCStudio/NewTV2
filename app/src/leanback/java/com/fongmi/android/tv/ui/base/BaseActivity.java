@@ -28,6 +28,8 @@ public abstract class BaseActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(getBinding().getRoot());
+        // pad 变体专属触控基座；leanback/mobile 的 pad_touch=false，反射类不存在时安全跳过
+        if (getResources().getBoolean(com.fongmi.android.tv.R.bool.pad_touch)) installPadTouch();
         EventBus.getDefault().register(this);
         initView(savedInstanceState);
         Util.hideSystemUI(this);
@@ -55,6 +57,15 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     protected void notifyItemChanged(RecyclerView view, RecyclerView.Adapter<?> adapter) {
         view.post(() -> adapter.notifyDataSetChanged());
+    }
+
+    private void installPadTouch() {
+        try {
+            Class<?> helper = Class.forName("com.fongmi.android.tv.ui.custom.PadTouchHelper");
+            helper.getMethod("install", android.app.Activity.class).invoke(null, this);
+        } catch (Exception ignored) {
+            // pad 源集未参与编译时无此类，属于预期
+        }
     }
 
     private void setBackCallback() {

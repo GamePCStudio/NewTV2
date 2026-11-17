@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  分类导航条 / 筛选子项 / 筛选图标共用的文字与图标色（TV）。
+  与 @drawable/selector_type 的状态顺序严格一一对应：
+
+    禁用                  → 40% 透明白（white_40）；
+    当前页 + 聚焦/悬停    → 纯黑（纯白底上最强对比）；
+    当前页 + 未聚焦       → 纯黑（60% 透明白底上仍可读）；
+    非当前页 + 聚焦/悬停  → 纯白（black_40 + 白描边上保持可读）；
+    非当前页 + 未聚焦     → 纯白（#1D1F23 底上保持可读）。
+
+  ic_vod_filter_on/off 的 tint 直接引用本选择器，因此图标与文字共用同一份
+  ColorStateList：宿主 View 状态变化时两者由同一次 drawableStateChanged 驱动，
+  不存在文字已变色而图标滞留旧色的中间帧。
+  原 @color/text 中 state_selected 为黄色，被集数等控件共用，故另立专用选择器。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:color="@color/white_40" android:state_enabled="false" />
+    <item android:color="@color/black" android:state_focused="true" android:state_selected="true" />
+    <item android:color="@color/black" android:state_hovered="true" android:state_selected="true" />
+    <item android:color="@color/black" android:state_selected="true" />
+    <item android:color="@color/white" android:state_focused="true" />
+    <item android:color="@color/white" android:state_hovered="true" />
+    <item android:color="@color/white" />
+
+</selector>

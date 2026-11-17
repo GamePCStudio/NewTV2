@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!--
+      名称（选填）：与配置库里的名称字段一一对应。
+      用于给站源起一个短名字（顶部站源入口、设置项都显示它），留空则回退显示地址。
+      长度上限与移动端保持一致。
+    -->
+    <com.fongmi.android.tv.ui.custom.CustomEditText
+        android:id="@+id/name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:hint="@string/dialog_config_name"
+        android:imeOptions="actionNext"
+        android:importantForAutofill="no"
+        android:inputType="text"
+        android:maxLength="10"
+        android:nextFocusDown="@id/text"
+        android:singleLine="true"
+        android:textSize="18sp" />
+
+    <com.fongmi.android.tv.ui.custom.CustomEditText
+        android:id="@+id/text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:hint="@string/dialog_config_hint"
+        android:imeOptions="actionDone"
+        android:importantForAutofill="no"
+        android:nextFocusDown="@id/positive"
+        android:nextFocusUp="@id/name"
+        android:inputType="text"
+        android:singleLine="true"
+        android:textSize="18sp" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/phone"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_button"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/phone_input"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/choose"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_button"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/setting_choose"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/positive"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_button"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/dialog_positive"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/negative"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/selector_button"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/dialog_negative"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+</androidx.appcompat.widget.LinearLayoutCompat>

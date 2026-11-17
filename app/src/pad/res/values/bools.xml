@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <bool name="pad_touch">true</bool>
+    <!-- Pad 横屏优先：旋转交给系统重建，不复用 TV 的多方向焦点链 -->
+    <bool name="pad_landscape_only">true</bool>
+</resources>

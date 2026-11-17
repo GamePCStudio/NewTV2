@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 触控模式开关：main 默认关闭，pad 源集覆盖为 true。共用的 leanback Java 据此分支。 -->
+<resources>
+    <bool name="pad_touch">false</bool>
+</resources>

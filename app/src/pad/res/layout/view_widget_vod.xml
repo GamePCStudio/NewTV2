@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <RelativeLayout
+        android:id="@+id/top"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_widget_top"
+        android:paddingStart="48dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="48dp"
+        android:paddingBottom="28dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <!-- 片名与当前集数同一行，中间用「：」分隔（集数由代码拼到 subtitle 文本前） -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/titleRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_toStartOf="@+id/clock"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- 宽度由代码按「整行 − 集数」分配：短片名不会把集数顶到右侧时钟旁 -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/title"
+                style="@style/Shadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFeatureSettings="tnum"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                tools:text="慶餘年第一季" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/subtitle"
+                style="@style/Shadow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFeatureSettings="tnum"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="：第1集"
+                tools:visibility="visible" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!--
+          弹幕标题（两行）：仅在「当前选中弹幕来自弹幕接口且已成功获取」时启用，
+          与上面的 titleRow 互斥显示。
+          结构与弹幕搜索结果条目一致：主行大标题「剧名 · 集数 分集标题」，副行「年份 · 类型 · 平台」。
+        -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/danmakuRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_toStartOf="@+id/clock"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="gone">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/danmakuTitle"
+                style="@style/Shadow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                tools:text="小城良方 · 第3集 摸鱼败将" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/danmakuSubtitle"
+                style="@style/Shadow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="@color/white_60"
+                android:textSize="14sp"
+                tools:text="2026 · 国产剧 · 爱奇艺" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 播放页时钟：HH:mm，18sp 加粗（与首页 / 投屏页全局统一） -->
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/clock"
+            style="@style/Shadow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            tools:text="21:36" />
+
+    </RelativeLayout>
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/error"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/shape_widget"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:src="@drawable/ic_widget_error" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            tools:text="@string/error_play_url" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="40dp"
+        android:background="@drawable/shape_widget_message"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:visibility="gone"
+        tools:text="Speed 3.0x"
+        tools:visibility="visible" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/shape_widget"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/statusIcon"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:src="@drawable/ic_widget_play" />
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/position"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="00:00:00" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="/"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                tools:text="00:00:00" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+</FrameLayout>

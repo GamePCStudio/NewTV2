@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  首页顶部工具栏（可复用组件）：首页与分类页（VodActivity）共用这一份布局，
+  <b>样式 / 布局只在这里维护</b>，改这里两个页面同时生效。
+
+  引用方式：<include android:id="@+id/homeToolbar" layout="@layout/view_home_toolbar" />
+    - include 不覆盖 layout_width / layout_height，宿主按本文件根节点的参数
+      （match_parent × 64dp、layout_gravity=top、marginTop=16dp）布局；
+    - 宿主必须存在 id 为 recycler 的可聚焦列表，工具栏各控件的 nextFocusDown 指向它。
+
+  结构（单行，行高 64dp）：
+    搜索圆钮（放大镜）→ 6 个导航按钮（首页 / 电影 / 剧集 / 综艺 / 片库 / 我的）
+    → 弹性空白 → 站源下拉入口 → 时钟。
+
+  <b>尺寸口径</b>：导航与站源名 16sp 加粗，时钟 18sp；
+  导航选中框 / 搜索圆钮 / 站源入口 统一 36dp 高，焦点胶囊圆角 18dp（= 半高）。
+  搜索圆钮与「首页」的列间距 18dp（上一版 12dp 的 150%），让「搜索」与频道导航分成两簇。
+
+  <b>选中态</b>：聚焦 = 纯白胶囊 + 黑字；当前页未聚焦 = 60% 透明白胶囊（@color/white_60）+ 黑字；
+  其余 = 全透明 + 白字。搜索圆钮同源：聚焦时圆底转纯白、放大镜转深色，与导航胶囊的取反逻辑一致。
+
+  <b>左右基线 48dp</b>（1080p 下 96px ≈ 5% 安全区）：根节点 paddingStart/End = 48dp，
+  与列表内容（recycler 同样 48dp 内边距）对齐。
+-->
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/homeToolbar"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/pad_toolbar_height"
+    android:layout_gravity="top"
+    android:layout_marginTop="16dp"
+    android:clipChildren="false"
+    android:descendantFocusability="afterDescendants"
+    android:elevation="8dp"
+    android:focusable="false"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/pad_page_margin"
+    android:paddingEnd="@dimen/pad_page_margin">
+
+    <!--
+      搜索圆钮：品牌位改成「放大镜」——50% 透明黑圆底（#80000000）+ 白色放大镜，点击 / 确认键进搜索页。
+      尺寸 36dp 与导航选中框等高，内边距 5dp → 图标盒 26dp、可见墨迹约 19~20dp
+      （ic_home_search 墨迹占 viewBox 的 80%×75%），与 16sp 文字的视觉重量相当，也与原三角 54% 的比例接近。
+      焦点反馈与导航胶囊同源：圆底转纯白、放大镜转纯黑（selector_logo_bg / selector_logo_tint），
+      因此不再另画描边，也不会与白色导航胶囊抢层级。
+      列间距 18dp（navButtons 的 marginStart = 上一版 12dp 的 150%），把搜索与频道分成两簇。
+    -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/brandEntry"
+        android:tag="pad_expand"
+        android:layout_width="36dp"
+        android:layout_height="@dimen/pad_nav_height"
+        android:background="@drawable/selector_logo_bg"
+        android:clickable="true"
+        android:contentDescription="@string/home_search"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:nextFocusDown="@id/recycler"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_home_search"
+        android:tint="@color/selector_logo_tint" />
+
+    <!--
+      频道导航：6 个文字按钮，16sp 加粗。
+      顺序即焦点顺序（未写 nextFocusLeft/Right，交给布局顺序自动串联）：
+      首页 → 电影 → 剧集 → 综艺 → 片库 → 我的。
+      「首页」是 index 0，启动 / setFocus() / 返回「回首页」都指向它。
+      <b>不写 focusedByDefault</b>：默认焦点会让新页面先亮一下「首页」再跳到
+      「片库」，视觉上像焦点从旧位置飞过来；改由各页在首次布局完成、绘制之前
+      显式投放焦点（见 HomeActivity / VodActivity 的 installInitialFocus）。
+      「片库」进 VodActivity；「我的」在最后，作为设置入口（SettingActivity）；
+      电影 / 剧集 / 综艺 分别进入对应的热榜频道页（MovieActivity / SeriesActivity /
+      VarietyActivity），三页共用 HotCategoryActivity 模板与同一份顶栏。
+
+      尺寸统一：固定 36dp 高（与搜索圆钮、站源入口同高）、
+      最小宽 64dp（2 个汉字 16sp = 32dp + 左右各 16dp 内边距）、间距 8dp、圆角 18dp（半高）。
+      文字色由 res/color/selector_nav_text 控制（聚焦黑 / 其余白）。
+    -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/navButtons"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/pad_toolbar_height"
+        android:layout_marginStart="18dp"
+        android:clipChildren="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navHome"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_nav_home"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navMovie"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_nav_movie"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navSeries"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_nav_series"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navVariety"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_nav_variety"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navVod"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_vod"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- 我的：导航组最后一项，设置入口；组内最后一项不再留右边距 -->
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/navMine"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:background="@drawable/selector_nav_button"
+            android:ellipsize="end"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:minWidth="@dimen/pad_nav_min_width"
+            android:nextFocusDown="@id/recycler"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="@string/home_nav_mine"
+            android:textColor="@color/selector_nav_text"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <!-- 中间撑开：把右侧组推到屏幕右缘；自身不可聚焦 -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:focusable="false" />
+
+    <!-- 右侧组：站源下拉入口 → 时钟（设置已并入导航「我的」，搜索已并入左侧放大镜圆钮） -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/rightGroup"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/pad_toolbar_height"
+        android:clipChildren="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!--
+          站源下拉入口：未选中状态没有胶囊容器（selector_site_entry 常态全透明），
+          只有站源名 + 三角；聚焦时才出现半透明胶囊 + 白描边作为焦点反馈。
+          站源名 16sp，左右内边距 10dp、右距 8dp；三角 16×8dp、与文字间距 12dp。
+          行高 36dp（与导航胶囊一致）。
+        -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/siteEntry"
+            android:tag="pad_expand"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/pad_nav_height"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/selector_site_entry"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:gravity="center_vertical"
+            android:nextFocusDown="@id/recycler"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/siteName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="配置|中心" />
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/siteArrow"
+                android:layout_width="16dp"
+                android:layout_height="8dp"
+                android:layout_marginStart="12dp"
+                android:src="@drawable/ic_site_arrow" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 时间：HH:mm 无秒，18sp 加粗，位于顶栏最右（全局时钟统一口径） -->
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            tools:text="21:36" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+</androidx.appcompat.widget.LinearLayoutCompat>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  触控 Pad 令牌（紧凑档，w<840dp）。pad 源集专用，不与 leanback 共用。
+  目标设备 2560x1600 @320dpi = 1280x800dp，走 values-w1120dp 宽屏档。
+-->
+<resources>
+    <dimen name="pad_page_margin">20dp</dimen>
+    <dimen name="pad_gap_xs">4dp</dimen>
+    <dimen name="pad_gap_s">8dp</dimen>
+    <dimen name="pad_gap_m">12dp</dimen>
+    <dimen name="pad_gap_l">16dp</dimen>
+    <dimen name="pad_touch_min">48dp</dimen>
+    <dimen name="pad_nav_height">44dp</dimen>
+    <dimen name="pad_nav_min_width">72dp</dimen>
+    <dimen name="pad_toolbar_height">56dp</dimen>
+    <dimen name="pad_hero_height">220dp</dimen>
+    <dimen name="pad_card_radius">8dp</dimen>
+    <dimen name="pad_surface_radius">16dp</dimen>
+    <dimen name="pad_poster_columns_spacing">12dp</dimen>
+    <integer name="pad_poster_columns">4</integer>
+    <integer name="pad_focus_stroke">2</integer>
+</resources>

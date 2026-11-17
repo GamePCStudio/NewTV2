@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  触控 Pad 通用按钮底：与 selector_pad_text 同状态表。
+  disabled → selected+pressed → selected → pressed → focused → hovered → normal。
+  纯白底描边也是白色，读者依靠底色与黑字辨认选中。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/shape_pad_disabled" android:state_enabled="false" />
+    <item android:drawable="@drawable/shape_pad_selected" android:state_pressed="true" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_pad_selected" android:state_selected="true" />
+    <item android:drawable="@drawable/shape_pad_pressed" android:state_pressed="true" />
+    <item android:drawable="@drawable/shape_pad_focused" android:state_focused="true" />
+    <item android:drawable="@drawable/shape_pad_focused" android:state_hovered="true" />
+    <item android:drawable="@drawable/shape_pad_normal" />
+</selector>

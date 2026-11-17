@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  触控 Pad 通用文字/图标色：与 selector_pad_button 共用同一状态表。
+    disabled        → white_40
+    selected+pressed→ black（纯白底）
+    selected        → black
+    pressed         → white（30% 白底仍可读）
+    focused/hovered → white
+    default         → white
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/white_40" android:state_enabled="false" />
+    <item android:color="@color/black" android:state_pressed="true" android:state_selected="true" />
+    <item android:color="@color/black" android:state_selected="true" />
+    <item android:color="@color/white" android:state_pressed="true" />
+    <item android:color="@color/white" android:state_focused="true" />
+    <item android:color="@color/white" android:state_hovered="true" />
+    <item android:color="@color/white" />
+</selector>

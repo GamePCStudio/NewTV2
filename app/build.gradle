@@ -39,6 +39,20 @@ android {
         mobile {
             dimension "device"
         }
+        // 触控 Pad：业务 Java 复用 leanback，资源由 src/pad/res 覆盖。
+        // 目标设备 2560x1600 @320dpi = 1280x800dp（16:10，横屏优先）。
+        pad {
+            dimension "device"
+        }
+    }
+
+    sourceSets {
+        pad {
+            manifest.srcFile 'src/pad/AndroidManifest.xml'
+            // Java 复用 leanback 业务代码；res 独立成集（AGP 不允许同一源集内两个 res 目录含同名资源）
+            java.srcDirs = ['src/pad/java', 'src/leanback/java']
+            res.srcDirs = ['src/pad/res']
+        }
     }
 
     splits {
@@ -146,6 +160,9 @@ dependencies {
     implementation libs.textdrawable
     leanbackImplementation libs.leanback
     leanbackImplementation libs.androidautosize
+    // pad 复用 leanback Java 与布局，必须声明同一组 leanback / AutoSize 依赖
+    padImplementation libs.leanback
+    padImplementation libs.androidautosize
     mobileImplementation libs.biometric
     mobileImplementation libs.zxing.android.embedded
     annotationProcessor libs.room.compiler

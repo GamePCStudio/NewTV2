@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  顶部导航文字按钮的选中框（胶囊）。
+
+  几何统一（三态一致）：高 36dp（顶栏 48dp 口径的 75%）、圆角 18dp（= 半高，两端正半圆）。
+    聚焦（选中）   → 纯白底 + 黑字；
+    当前页未聚焦   → 60% 透明白胶囊（@color/white_60）+ 黑字；
+    其余           → 全透明 + 白字。
+
+  当前页改用半透明白而非半透明黑，与分类导航条的「当前页」口径一致；
+  聚焦态仍是纯白实心块，两级层级不变。
+
+  与站源入口的焦点反馈刻意区分：后者是「半透明胶囊 + 白描边」的轻量反馈，
+  导航是整条顶栏的主视觉锚点，用实心块强调层级。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <solid android:color="@color/white_60" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="18dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+</selector>
