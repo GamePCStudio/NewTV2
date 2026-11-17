@@ -50,9 +50,9 @@
             android:layout_height="wrap_content"
             android:clipChildren="false"
             android:clipToPadding="false"
-            android:paddingStart="48dp"
+            android:paddingStart="@dimen/pad_page_margin"
             android:paddingTop="8dp"
-            android:paddingEnd="48dp"
+            android:paddingEnd="@dimen/pad_page_margin"
             app:focusOutEnd="false"
             app:focusOutFront="false" />
 
