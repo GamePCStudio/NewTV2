@@ -86,7 +86,6 @@ import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.net.OkHttp;
 
@@ -959,10 +958,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     private void getHistory(boolean renew) {
         List<History> items = History.get();
-        if (renew) mHistoryAdapter = new ArrayObjectAdapter(mPresenter = new HistoryPresenter(this));
         int header = indexOfHeader(R.string.home_history);
         boolean hasBlock = header >= 0;
+        // 必须先按「旧」adapter 判定行是否已挂载：isHistoryRow() 靠适配器身份识别，
+        // 若提前换掉 mHistoryAdapter，旧行就再也匹配不上，下面会新增而不是替换，
+        // 表现为设置里改海报尺寸后首页出现两行「最近观看」（旧行被挤到推荐区内）。
         boolean hasRow = hasBlock && isHistoryRow(header + 1);
+        if (renew) mHistoryAdapter = new ArrayObjectAdapter(mPresenter = new HistoryPresenter(this));
         if (items.isEmpty()) {
             // 空列表：标题与网格作为一个整体收起，不留下空标题占位。
             if (hasRow) mAdapter.removeItems(header + 1, 1);
@@ -1427,7 +1429,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 首帧画出来时焦点已经在目标控件上。</p>
      */
     private void installInitialFocus() {
-        if (TouchUi.isTouch(this)) return;
         View anchor = mToolbar.getRoot();
         anchor.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -1440,7 +1441,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 投放首帧焦点：优先「首页」，失败下一帧重试，最后退回列表，焦点不悬空。 */
     private void requestInitialFocus() {
-        if (TouchUi.isTouch(this) || mBinding == null || mInitialFocusDone) return;
+        if (mBinding == null || mInitialFocusDone) return;
         if (mToolbar.navHome.requestFocus()) {
             mInitialFocusDone = true;
             return;
@@ -1600,7 +1601,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 焦点回到导航按钮：优先回离开前的那个，没有（或已不可见）则回「首页」。 */
     private void focusNav() {
-        if (TouchUi.isTouch(this)) return;
         View target = mLastNav != null && mLastNav.isShown() ? mLastNav : mToolbar.navHome;
         target.requestFocus();
     }
@@ -1610,7 +1610,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 校验 isAttachedToWindow + isShown，列表刷新或滚动回收后自动退化为系统默认落焦。
      */
     private boolean restorePendingPoster() {
-        if (TouchUi.isTouch(this)) return false;
         View target = mPendingPoster;
         if (target == null) return false;
         mPendingPoster = null;
