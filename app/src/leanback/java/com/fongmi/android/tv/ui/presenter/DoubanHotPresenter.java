@@ -22,8 +22,10 @@ import androidx.annotation.Nullable;
 import androidx.leanback.widget.Presenter;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.Priority;
 import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.FutureTarget;
 import com.bumptech.glide.request.RequestListener;
@@ -61,8 +63,8 @@ import java.util.concurrent.TimeUnit;
  *       {@link RankLatest#imageUrl(String)} 拼出完整地址交给 Glide；
  *       图片基地址取设置里已配置的站点，未配置时用官方 {@code image.tmdb.org}，
  *       站点不支持图片路径时自动回落官方地址重试一次；</li>
- *   <li><b>顺序预取</b>：绑定后立即从列表第一条开始，按榜单顺序串行下载「横版剧照 + logo」，
- *       不等到切换才拉图；</li>
+ *   <li><b>顺序预取</b>：绑定后立即从列表第一条开始，按榜单顺序串行下载横版剧照（最高优先级），
+ *       logo 用与展示完全相同的 Glide key 异步预热，不阻塞串行链、也不重复下载；</li>
  *   <li><b>就绪才展示</b>：只有剧照真正下载成功的条目才进入轮播池，下载中与下载失败的
  *       一律不显示（不占位、不闪空白）；全都没就绪时主视觉区保持底色；</li>
  *   <li><b>自动轮播</b>：7 秒一张，页面失去窗口焦点（退到后台）时暂停；</li>
@@ -318,21 +320,42 @@ public class DoubanHotPresenter extends Presenter {
             if (item == null) return;
             prefetching = true;
             int gen = prefetchGeneration;
+            // 首条判断必须在提交前的主线程读取，避免与主线程上的 shownOnce 产生可见性问题。
+            boolean first = !shownOnce;
             PRELOAD.execute(() -> {
+                if (gen != prefetchGeneration) return;
+                // logo 与剧照并行预热，但不占用串行链：首条给高优先级，其余低优先级。
+                // 用与 loadLogo() 相同的 key，展示时直接命中缓存，不会二次请求。
+                if (item.hasLogo()) preloadLogo(item, first);
                 boolean backdrop = download(item.getBackdrop(), true);
-                // 剧照一就绪就交给主线程入池：首条不必等 logo（logo 下载慢时会拖慢首屏）。
+                // 剧照一就绪就交给主线程入池，不等 logo（logo 只是装饰，失败也不阻塞展示）。
                 App.post(() -> {
                     if (gen != prefetchGeneration) return;
                     if (backdrop) onPrefetched(item);
                     else blocked.add(item.getTitle());
-                });
-                if (backdrop && item.hasLogo()) download(item.getLogo(), false);
-                App.post(() -> {
-                    if (gen != prefetchGeneration) return;
                     prefetching = false;
+                    // 首屏关键资源就绪后立刻推进下一条，中间不加额外等待。
                     prefetchNext();
                 });
             });
+        }
+
+        /**
+         * 异步预热片名 logo。
+         *
+         * <p>用 Application Context 走 Glide 单例，不受 Activity 生命周期影响；参数和
+         * {@link #loadLogo} 完全一致（同 URL、同 {@code SIZE_ORIGINAL}、同
+         * {@link DiskCacheStrategy#ALL}），因此两条链路共用缓存与进行中的请求，
+         * 不会为同一张 logo 发出两次下载。</p>
+         */
+        private void preloadLogo(DoubanHotItem item, boolean first) {
+            String url = RankLatest.logoUrl(item.getLogo());
+            if (TextUtils.isEmpty(url)) return;
+            Glide.with(App.get())
+                    .load(url)
+                    .priority(first ? Priority.HIGH : Priority.LOW)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .preload(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL);
         }
 
         /** 一部影片预取完成：加入轮播池；第一条到位才真正显示主视觉。 */
@@ -370,7 +393,9 @@ public class DoubanHotPresenter extends Presenter {
             if (TextUtils.isEmpty(url)) return false;
             FutureTarget<File> target = null;
             try {
-                target = Glide.with(App.get()).asFile().load(url).submit();
+                target = Glide.with(App.get()).asFile().load(url)
+                        .priority(backdrop ? Priority.IMMEDIATE : Priority.NORMAL)
+                        .submit();
                 File file = target.get(backdrop ? BACKDROP_TIMEOUT_MS : LOGO_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 return file != null && file.exists() && file.length() > 0;
             } catch (Exception e) {
@@ -581,6 +606,9 @@ public class DoubanHotPresenter extends Presenter {
                 return;
             }
             manager.load(url)
+                    // 当前可见的片名 logo 优先于后台预热；缓存参数与 preloadLogo() 一致。
+                    .priority(Priority.HIGH)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
                     // logo 是透明 PNG、体积不大；按原图解码，避免按当前容器尺寸下采样后放大发虚。
                     .override(Target.SIZE_ORIGINAL)
                     .dontAnimate()
