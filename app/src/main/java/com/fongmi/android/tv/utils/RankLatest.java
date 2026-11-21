@@ -72,6 +72,11 @@ public final class RankLatest {
 
     private static volatile Data memory;
     private static volatile long memoryTime;
+    /** 配置站点不提供 /t/p/ 图片时置位：后续剧照与 logo 都直接走官方，避免重复 404。 */
+    private static volatile boolean baseImageBlocked;
+    /** 正在等待同一次刷新的调用者；并发 load 共用一次 HTTP，避免重复下载整份榜单。 */
+    private static final List<Callback> PENDING = new ArrayList<>();
+    private static boolean fetching;
 
     private RankLatest() {
     }
@@ -119,18 +124,46 @@ public final class RankLatest {
             memoryTime = disk.time;
         }
         Data stale = disk != null && !disk.data.isEmpty() ? disk.data : cache;
-        EXECUTOR.execute(() -> {
-            Fetched fetched = fetch();
-            if (fetched == null || fetched.data.isEmpty()) {
-                Data fallback = stale == null ? Data.empty() : stale;
-                App.post(() -> callback.onResult(fallback));
-                return;
+        synchronized (RankLatest.class) {
+            PENDING.add(callback);
+            if (!fetching) {
+                fetching = true;
+                EXECUTOR.execute(() -> fetchAndDispatch(stale));
             }
-            write(fetched.json);
-            memory = fetched.data;
-            memoryTime = System.currentTimeMillis();
-            App.post(() -> callback.onResult(fetched.data));
-        });
+        }
+    }
+
+    /**
+     * 一次刷新服务所有等待者。
+     *
+     * <p>首页可能在短时间内多次请求榜单（初始化、点「首页」刷新），搜索页也可能同时进入；
+     * 若各自提交一个任务，单线程 executor 会串行发出完全相同的 HTTP。这里把调用者挂到
+     * 同一批里，只发一次请求、一次写盘，再把结果分发给全部等待者。</p>
+     */
+    private static void fetchAndDispatch(Data stale) {
+        Data result = stale == null ? Data.empty() : stale;
+        try {
+            Fetched fetched = fetch();
+            if (fetched != null && !fetched.data.isEmpty()) {
+                write(fetched.json);
+                memory = fetched.data;
+                memoryTime = System.currentTimeMillis();
+                result = fetched.data;
+            }
+        } catch (Throwable ignored) {
+            // 兜底沿用旧数据；finally 里必须把等待者全部释放，否则后续请求会一直挂住。
+        } finally {
+            List<Callback> callbacks;
+            synchronized (RankLatest.class) {
+                callbacks = new ArrayList<>(PENDING);
+                PENDING.clear();
+                fetching = false;
+            }
+            final Data dispatch = result;
+            App.post(() -> {
+                for (Callback callback : callbacks) callback.onResult(dispatch);
+            });
+        }
     }
 
     /* ------------------------------------------------------------- 取数 / 解析 */
@@ -269,10 +302,25 @@ public final class RankLatest {
         return imageUrl(DEFAULT_IMAGE_BASE, TmdbApi.LOGO_SIZE, path);
     }
 
-    /** 图片基地址：设置里第一个有效站点，未配置时官方默认地址。 */
+    /**
+     * 标记配置站点不提供图片：首屏任一资源在配置地址上失败时调用。
+     * 之后所有图片地址直接走官方，预热也不会再向该站点发无效请求。
+     */
+    public static void markBaseImageUnavailable() {
+        baseImageBlocked = true;
+    }
+
+    /** 进入页面时重置：用户可能刚在设置里换过站点，应重新给新地址一次机会。 */
+    public static void resetBaseImage() {
+        baseImageBlocked = false;
+    }
+
+    /** 图片基地址：设置里第一个有效站点，未配置或已判定不可用时用官方默认地址。 */
     public static String imageBase() {
-        for (TmdbSite site : TmdbSetting.getSites()) {
-            if (site != null && site.isValid()) return site.base();
+        if (!baseImageBlocked) {
+            for (TmdbSite site : TmdbSetting.getSites()) {
+                if (site != null && site.isValid()) return site.base();
+            }
         }
         return DEFAULT_IMAGE_BASE;
     }
