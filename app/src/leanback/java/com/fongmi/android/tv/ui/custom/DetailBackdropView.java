@@ -59,7 +59,7 @@ public class DetailBackdropView extends FrameLayout {
      * 极端窄高视口保底的呼吸位（dp）：锚点算出的高度也不会超过「视口 − 这个值」。
      *
      * <p>无锚点时的兜底高度直接走 {@link BackdropStyle#measuredHeight(View, int)}，
-     * 与首页「豆瓣热门」主视觉同源，不再单独持有比例常量。</p>
+     * 与首页主视觉同源，不再单独持有比例常量。</p>
      */
     private static final int BOTTOM_GAP_DP = BackdropStyle.BOTTOM_GAP_DP;
     /** 宽高比低于此值视为竖版海报，改走降采样柔焦。 */
@@ -216,7 +216,7 @@ public class DetailBackdropView extends FrameLayout {
     /**
      * 摆放剧照：<b>宽度铺满、水平居中、垂直向上偏移 {@link BackdropStyle#TOP_SHIFT_RATIO}</b>。
      *
-     * <p>具体算法与首页「豆瓣热门」主视觉共用 {@link BackdropStyle#applyMatrix(ImageView)}，
+     * <p>具体算法与首页主视觉共用 {@link BackdropStyle#applyMatrix(ImageView)}，
      * 改一处两处同时生效；这里只做转发，保证详情页不会偏离统一样式。</p>
      */
     private void applyArtworkMatrix() {
@@ -343,7 +343,7 @@ public class DetailBackdropView extends FrameLayout {
         // 渐变区间固定为底边往上的 fade 半径：终点 = height，收尾处 alpha 恰为 255，
         // 画出来就是纯页面底色，与下方内容区同值。区间内按 smoothstep 走 S 形曲线
         // （两端斜率为 0，无 Mach 带）；CLAMP 让区间以上恒取端点色（全透明 = 纯净原图）。
-        // 画笔由 BackdropStyle 统一构造，与首页「豆瓣热门」主视觉同源。
+        // 画笔由 BackdropStyle 统一构造，与首页主视觉同源。
         bottomScrim = BackdropStyle.fadePaint(this, height);
     }
 

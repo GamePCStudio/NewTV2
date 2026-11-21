@@ -170,19 +170,6 @@ public final class TmdbStore {
         }
     }
 
-    /**
-     * 单条移出黑名单时调用：丢掉该片在索引里的记录（含所有别名），让它下次抓取
-     * 重新走完整链路，不再被「未命中冷却」或旧别名短路。磁盘图片留着复用，不额外清理。
-     */
-    public static void forget(String name) {
-        synchronized (LOCK) {
-            Map<String, TmdbArt> map = load();
-            TmdbArt art = findExact(map, name);
-            if (art == null) return;
-            map.values().removeIf(value -> value == art);
-            persist(map);
-        }
-    }
 
     /**
      * 缓存总量控制：超过 {@link #MAX_SETS} 套时，按抓取时间清掉最早的那批。
@@ -276,7 +263,7 @@ public final class TmdbStore {
 
     /**
      * 配置变更后清掉「确认无结果」的 miss 记录，让新地址 / 新密钥立刻生效。
-     * Douban Bridge可能只取到竖版海报（没有背景图），这类记录的时间戳刻意保持 0，
+     * 只有竖版海报、没有背景图的记录时间戳刻意保持 0，
      * 不属于 miss，必须保留，否则换一次开关就会把已经拿到的海报一起删掉。
      */
     public static void clearMisses() {

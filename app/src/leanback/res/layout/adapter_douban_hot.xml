@@ -14,7 +14,7 @@
   并保证画框边缘像素与窗口底色逐像素一致。聚焦放大动画已取消。
 
   文字层是背景层的兄弟节点（压在羽化之上），所以底部渐隐不会吃掉文字。
-  「豆瓣热门」栏目标签已移除。
+  「来自 · 站源名」标签在主视觉上方单独渲染。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"

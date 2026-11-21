@@ -21,14 +21,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 刮削日志：内存环形缓冲 + JSONL 文件持久化，供「设置 → 影片刮削设置 → 刮削日志」查看。
- * 同时收录 TMDB 与Douban Bridge两条链路，条目带来源字段可过滤。
+ * 刮削日志：内存环形缓冲 + JSONL 文件持久化，仅记录 TMDB 链路的关键动作，供排查使用。
  *
  * <p>一条日志就是一次可观察的动作（阶段），字段固定：
  * <ul>
  *     <li>{@code time} 发生时间；</li>
- *     <li>{@code source} 来源：TMDB / Douban Bridge（历史日志可能为「豆瓣」）；</li>
- *     <li>{@code stage} 阶段：触发 / 跳过 / 配置 / 搜索 / 图集 / 背景图 / Logo / 桥榜单 / 桥详情 / 桥图片 / 桥素材 / 桥匹配 / 黑名单 / 完成 / 失败；</li>
+ *     <li>{@code source} 来源：固定为 TMDB；</li>
+ *     <li>{@code stage} 阶段：触发 / 跳过 / 配置 / 搜索 / 图集 / 背景图 / Logo / 黑名单 / 完成 / 失败；</li>
  *     <li>{@code keyword} 本次刮削的关键字（便于按片名过滤）；</li>
  *     <li>{@code request} 实际请求的 URL，api_key 只露头尾；</li>
  *     <li>{@code response} 响应摘要（HTTP 码 + 结果条数 / 字节数，失败时附上游错误体片段）；</li>
@@ -36,7 +35,7 @@ import java.util.concurrent.Executors;
  * </ul>
  *
  * <p>写入文件放在独立线程，不阻塞抓取线程与主线程；文件超过上限时按内存里的最新记录整体重写，
- * 保证日志既不会无限增长，也不会把最近的现场丢掉。日志与图片缓存分开放，清理缓存不影响日志。</p>
+ * 保证日志既不会无限增长，也不会把最近的现场丢掉。</p>
  */
 public final class TmdbLog {
 
@@ -50,35 +49,21 @@ public final class TmdbLog {
     public static final String STAGE_LOGO = "Logo";
     public static final String STAGE_DONE = "完成";
     public static final String STAGE_FAIL = "失败";
-    /** 刮削开关、Douban Bridge地址 / 密钥变更：用来解释某段时间为什么没有抓取记录。 */
+    /** 刮削配置变更：用来解释某段时间为什么没有抓取记录。 */
     public static final String STAGE_CONFIG = "配置";
     /** 429 限流：触发限流的站点被单独冷却，日志含站点与解封时间。 */
     public static final String STAGE_RATE_LIMIT = "限流";
-    /** Douban Bridge降级链路的阶段（旧直连豆瓣的日志仍按字符串原样展示）。 */
-    public static final String STAGE_BRIDGE_TRIGGER = "降级触发";
-    public static final String STAGE_BRIDGE_LIST = "桥榜单";
-    public static final String STAGE_BRIDGE_DETAIL = "桥详情";
-    public static final String STAGE_BRIDGE_COVER = "桥图片";
-    public static final String STAGE_BRIDGE_MATCH = "桥匹配";
-    /** Douban Bridge写入索引时的字段摘要：海报 / 背景图 / 评分 / 简介各取到了什么。 */
-    public static final String STAGE_BRIDGE_SAVE = "桥素材";
-    /** 加入黑名单：TMDB 与Douban Bridge都确认「没有这部片」，此后不再刮削。 */
+    /** 加入黑名单：TMDB 确认「没有这部片」，此后不再刮削。 */
     public static final String STAGE_BLACKLIST = "黑名单";
 
     /** 日志来源，供设置页按来源过滤。 */
     public static final String SOURCE_TMDB = "TMDB";
-    /** 旧版直连豆瓣留下的来源标记，仅供历史日志识别。 */
-    public static final String SOURCE_DOUBAN = "豆瓣";
-    /** Douban Bridge：当前豆瓣海报 / 评分 / 简介的唯一来源。 */
-    public static final String SOURCE_BRIDGE = "Douban Bridge";
-    /** 改名之前写进日志文件的旧来源名；筛选时与 {@link #SOURCE_BRIDGE} 一并归入 Douban Bridge。 */
-    public static final String LEGACY_SOURCE_BRIDGE = "豆瓣" + "桥";
     /** 日志状态，供设置页按状态过滤；判定以 failed 优先。 */
     public static final String STATUS_DONE = "完成";
     public static final String STATUS_FAIL = "失败";
     public static final String STATUS_SKIP = "跳过";
     public static final String STATUS_OTHER = "其它";
-    /** 黑名单：可在日志页单独筛出来，看哪些片被判定为「没有这部片」。 */
+    /** 黑名单：被判定为「TMDB 没有这部片」的条目。 */
     public static final String STATUS_BLACKLIST = "黑名单";
 
     /** 内存里保留的条数：电视上滚动查看够用，也不会占太多内存。 */
@@ -135,7 +120,7 @@ public final class TmdbLog {
         add(SOURCE_TMDB, stage, keyword, request, response, reason, failed);
     }
 
-    /** 记录一条指定来源的日志（豆瓣降级链路用）。 */
+    /** 记录一条指定来源的日志。 */
     public static void add(String source, String stage, String keyword, String request, String response, String reason, boolean failed) {
         Entry entry = Entry.create(source, stage, keyword, request, response, reason, failed);
         synchronized (LOCK) {

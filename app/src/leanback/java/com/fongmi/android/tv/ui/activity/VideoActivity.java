@@ -969,7 +969,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         mTmdbKeyword = null;
         mTmdbKeywordReady = false;
         mTmdbFetchedKey = null;
-        // 总开关关闭：不再抓新素材，已缓存的图仍然显示
+        // TMDB 刮削关闭：不再抓新素材，已缓存的图仍然显示
         if (!TmdbSetting.isEnabled()) return;
         // 弹幕关闭 / 接口未配置 / 自动搜索关闭：不指望接口给片名，直接用站源片名
         if (!DanmakuSetting.isLoad() || !DanmakuApi.canSearch()) {
@@ -1012,7 +1012,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         if (TextUtils.equals(key, mTmdbFetchedKey)) return;
         mTmdbFetchedKey = key;
         // 两个名字都登记成别名：换集后即使先用站源片名查，也能命中同一条素材。
-        // 统一入口内部按 TMDB → Douban Bridge → 失败分级处置的顺序处理，两个数据源任一成功都会通知本页刷新。
+        // 统一入口内部按 TMDB 单源抓取与失败分级处置，成功落库后会通知本页刷新。
         ArtSource.fetch(keyword, mTmdbPosterName, tmdbAliases(keyword), ArtSource.CAT_AUTO, false, null);
     }
 
@@ -2282,7 +2282,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
                 + " vis=" + backdrop.getVisibility()
                 + " alpha=" + backdrop.getAlpha()
                 + " enabled=" + TmdbSetting.isEnabled()
-                + " sites=" + TmdbSetting.getSites().size()
+                + " mode=" + TmdbSetting.getMode()
                 + " keyword=" + mTmdbKeyword
                 + " posterName=" + mTmdbPosterName
                 + " art=" + (art == null ? "null" : ("backdrop=" + art.hasBackdrop() + " logo=" + art.getLogo()))

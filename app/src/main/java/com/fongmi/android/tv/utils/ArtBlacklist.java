@@ -17,16 +17,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 刮削黑名单：确认「TMDB 与Douban Bridge都没有这部片」之后才写入，此后再不为它发任何请求，
+ * 刮削黑名单：确认「TMDB 没有这部片」之后才写入，此后再不为它发任何请求，
  * 首页也不再显示它。
  *
  * <p>与 {@link ArtCooldown} 的分工：冷却只挡一小段时间，用于临时性失败；黑名单是长期结论，
- * 只有「两个数据源都正常返回、但确实没有匹配条目」才会进入。网络错误、请求被限流、
+ * 只有「TMDB 正常返回、但确实没有匹配条目」才会进入。网络错误、请求被限流、
  * 鉴权失败、图片下载失败等临时性问题绝不写入，避免把本来能刮到的片子永久误杀。</p>
  *
  * <p>按归一化片名存 {@code files/tmdb/blacklist.json}：这个目录本来就在备份白名单里，
- * 恢复备份会一并还原。移除有两条路：黑名单页逐条删除（纠正误封），
- * 以及「设置 → 清除缓存」清空整个目录。</p>
+ * 恢复备份会一并还原。误封条目通过「设置 → 清除缓存」统一清空。</p>
  */
 public final class ArtBlacklist {
 
@@ -137,40 +136,6 @@ public final class ArtBlacklist {
         }
     }
 
-    /**
-     * 单条移出黑名单（误封时纠正）。调用方需同步清理刮削侧的进程内状态，
-     * 否则已累计的尝试次数与冷却仍会挡住重新抓取。
-     *
-     * @return true 表示确实删掉了一条
-     */
-    public static boolean remove(String title) {
-        if (title == null) return false;
-        String key = TmdbStore.normalize(title);
-        if (key.isEmpty()) return false;
-        synchronized (LOCK) {
-            load();
-            if (ENTRIES.remove(key) == null) return false;
-            persist();
-            return true;
-        }
-    }
-
-    /** 按加入时间倒序返回，最近拉黑的排前面。 */
-    public static List<Entry> list() {
-        synchronized (LOCK) {
-            load();
-            List<Entry> out = new ArrayList<>(ENTRIES.values());
-            out.sort((a, b) -> Long.compare(b.time, a.time));
-            return out;
-        }
-    }
-
-    public static int size() {
-        synchronized (LOCK) {
-            load();
-            return ENTRIES.size();
-        }
-    }
 
     /** 备份恢复 / 清除缓存后丢内存副本：磁盘内容已被替换，下次访问时重新读。 */
     public static void reset() {
@@ -180,18 +145,4 @@ public final class ArtBlacklist {
         }
     }
 
-    /** 过滤一批片名，返回不在黑名单里的那些；页面装配时直接剔除。 */
-    public static List<String> filterTitles(List<String> titles) {
-        if (titles == null || titles.isEmpty()) return titles;
-        synchronized (LOCK) {
-            load();
-            List<String> out = new ArrayList<>(titles.size());
-            for (String title : titles) {
-                if (title == null) continue;
-                if (ENTRIES.containsKey(TmdbStore.normalize(title))) continue;
-                out.add(title);
-            }
-            return out;
-        }
-    }
 }

@@ -852,7 +852,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 ArtSource.apply(vod);
                 if (!vod.getName().isEmpty()) names.add(vod.getName());
             }
-            // 首页混合电影 / 剧集，让豆瓣同时查两类榜单；与最近观看共用同一套解析。
+            // 首页混合电影 / 剧集；与最近观看共用同一套解析。
             ArtSource.enqueue(names, ArtSource.CAT_AUTO);
         }
         if (items.isEmpty()) {

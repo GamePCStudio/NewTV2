@@ -266,15 +266,7 @@
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:screenOrientation="sensorLandscape" />
 
-        <activity
-            android:name=".ui.activity.TmdbLogActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
-            android:screenOrientation="sensorLandscape" />
 
-        <activity
-            android:name=".ui.activity.BlacklistActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
-            android:screenOrientation="sensorLandscape" />
 
         <service
             android:name=".service.DLNARendererService"

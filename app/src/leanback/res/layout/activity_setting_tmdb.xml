@@ -24,47 +24,16 @@
             android:textColor="@color/white"
             android:textSize="20sp" />
 
-        <!-- 标题下方的功能说明：与下方 TMDB 声明共用 SettingHint 样式 -->
         <com.google.android.material.textview.MaterialTextView
             style="@style/SettingHint"
             android:layout_marginBottom="16dp"
-            android:text="@string/tmdb_enable_hint" />
+            android:text="@string/tmdb_connection_hint" />
 
-        <!-- 刮削开关：总开关 + 两个数据源二级开关 + 失败提示，后三项统一缩进一级 -->
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbEnable"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/tmdb_enable"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbEnableText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="关" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
+        <!-- TMDB 刮削开关：不再从属于任何上级总开关 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbScrape"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -91,10 +60,9 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
 
         <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/bridgeScrape"
+            android:id="@+id/tmdbMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -104,28 +72,55 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="16dp"
-                android:text="@string/douban_bridge_scrape"
+                android:text="@string/tmdb_mode"
                 android:textColor="@color/white"
                 android:textSize="18sp" />
 
             <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/bridgeScrapeText"
+                android:id="@+id/tmdbModeText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="end"
                 android:singleLine="true"
                 android:textColor="@color/white"
                 android:textSize="18sp"
-                tools:text="开" />
+                tools:text="默认反代" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 失败提示：属于「启用刮削」的二级子项，缩进与两个数据源开关一致 -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tmdbSite"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/tmdb_site_custom"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/tmdbSiteText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="https://1.tmdbapi.cc.cd" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbToast"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -151,48 +146,12 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- TMDB 分组：站点配置 + 官方署名声明 -->
-        <com.google.android.material.textview.MaterialTextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp"
-            android:alpha="0.55"
-            android:text="@string/setting_group_tmdb"
-            android:textColor="@color/white"
-            android:textSize="14sp" />
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbSites"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbAddSite"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/tmdb_add_site"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <!-- API 条款要求：展示 TMDB 标识 + 固定的非背书声明，与开关状态无关，常驻可见 -->
+        <!-- API 条款要求：与任何开关状态无关，常驻可见 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbAttribution"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="24dp"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatImageView
@@ -205,115 +164,6 @@
                 style="@style/SettingHint"
                 android:layout_marginTop="8dp"
                 android:text="@string/tmdb_attribution" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <!-- Douban Bridge 分组：地址与密钥配置 -->
-        <com.google.android.material.textview.MaterialTextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp"
-            android:alpha="0.55"
-            android:text="@string/setting_group_bridge"
-            android:textColor="@color/white"
-            android:textSize="14sp" />
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbBridge"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/tmdb_bridge"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbBridgeText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="douban-bridge.baran.wang · 已启用" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <!-- 通用分组：刮削日志与黑名单，两个数据源共用 -->
-        <com.google.android.material.textview.MaterialTextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp"
-            android:alpha="0.55"
-            android:text="@string/setting_group_common"
-            android:textColor="@color/white"
-            android:textSize="14sp" />
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/tmdb_log_entry"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbLogText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="12 条 · 失败 1 次" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbBlacklist"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/blacklist_entry"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbBlacklistText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="共 6 部" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

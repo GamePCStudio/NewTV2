@@ -211,7 +211,7 @@ public final class TmdbApi {
         });
     }
 
-    /** 抓取完成广播：供页面就地刷新；Douban Bridge降级成功后也复用同一个通知。 */
+    /** 抓取完成广播：供页面就地刷新。 */
     public static void notifyFetched() {
         App.post(() -> {
             for (WeakReference<Runnable> ref : ON_FETCHED) {
@@ -567,8 +567,7 @@ public final class TmdbApi {
      * 单条结果尝试取图。
      *
      * <p>命中判据只有一条：<b>拿到一张可用的卡片图</b>（横版剧照优先，没有就用竖版海报）。
-     * 横版剧照与 logo 都属于「有更好、没有也算完成」的加分项：Douban Bridge 同样拿不到
-     * 这两类素材，为了缺剧照 / 缺 logo 把整部片推给降级源，只会白跑一趟并拉长完成时间。</p>
+     * 横版剧照与 logo 都属于「有更好、没有也算完成」的加分项，缺这些素材不会触发额外补抓。</p>
      *
      * <p>只有两张图都下载失败才算临时故障（reason 非空，上层记 lastError）；
      * 条目本身一张图都没有时返回空 reason 的 miss，跳过该候选、不计入故障统计。</p>
@@ -638,7 +637,7 @@ public final class TmdbApi {
             }
         }
         if (TextUtils.isEmpty(art.getBackdrop())) {
-            // 这类记录只有竖版海报：Douban Bridge 也没有横版剧照可补，直接按完成收尾，不再降级。
+            // 这类记录只有竖版海报：没有更多来源可补，直接按完成收尾。
             TmdbLog.add(TmdbLog.STAGE_DONE, keyword, "", "", "TMDB 无横版剧照"
                     + (TextUtils.isEmpty(art.getLogo()) ? "、无 logo" : "")
                     + "，已用竖版海报作为卡片图，不再降级", false);
@@ -774,14 +773,6 @@ public final class TmdbApi {
         return withRotation(site -> site.base() + path, url -> download(url, keyword, stage));
     }
 
-    /**
-     * 供Douban Bridge复用：桥给出的剧照 / logo 是 TMDB 图片直链，国内可能不可达，
-     * 优先用用户已配置的 TMDB 站点按同一路径下载，失败再回落到直连。
-     */
-    public static byte[] downloadImage(String path, String keyword, String stage) throws IOException {
-        return downloadRotating(path, keyword, stage);
-    }
-
     private interface UrlBuilder {
         String build(TmdbSite site);
     }
@@ -800,6 +791,7 @@ public final class TmdbApi {
      * 429 冷却中的站点会被跳过；所有站点都在冷却时不再硬撞，直接把最后一次异常抛给上层。
      */
     private static <T> T withRotation(UrlBuilder builder, Fetcher<T> fetcher) throws IOException {
+        if (!TmdbSetting.isConfigured()) throw new IOException("no tmdb site");
         List<TmdbSite> sites = TmdbSetting.getSites();
         int size = sites.size();
         if (size == 0) throw new IOException("no tmdb site");

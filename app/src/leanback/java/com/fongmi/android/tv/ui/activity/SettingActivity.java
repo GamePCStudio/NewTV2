@@ -85,19 +85,10 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         setNoticeText();
     }
 
-    /**
-     * 影片刮削行右侧摘要：按两个数据源的实际配置与启用状态显示，
-     * 不再显示固定的站点条数。两者都可用显示「开」，只可用一个时标出是哪一个，
-     * 总开关关闭或两者都没配好显示「关」。
-     */
+    /** 影片刮削行右侧摘要：TMDB 刮削开启且连接方式可用时显示「开」。 */
     private void setTmdbText() {
-        boolean master = TmdbSetting.isMasterEnabled();
-        boolean tmdb = master && TmdbSetting.isTmdbScrapeEnabled() && !TmdbSetting.getSites().isEmpty();
-        boolean bridge = TmdbSetting.isBridgeEnabled();
-        if (tmdb && bridge) mBinding.tmdbText.setText(Setting.getSwitch(true));
-        else if (tmdb) mBinding.tmdbText.setText(R.string.scrape_state_tmdb_only);
-        else if (bridge) mBinding.tmdbText.setText(R.string.scrape_state_bridge_only);
-        else mBinding.tmdbText.setText(Setting.getSwitch(false));
+        boolean enabled = TmdbSetting.isTmdbScrapeEnabled() && TmdbSetting.isConfigured();
+        mBinding.tmdbText.setText(Setting.getSwitch(enabled));
     }
 
     /** 提示过滤行摘要：只看总开关，关闭显示「关」。 */

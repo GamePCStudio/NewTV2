@@ -11,7 +11,7 @@ import android.widget.ImageView;
 
 /**
  * 横版剧照背景的<b>唯一参数源</b>：详情页整页背景（{@code DetailBackdropView}）与首页
- * 「豆瓣热门」主视觉（{@code HomeHeroBackdropView}）共用本类，保证两处的铺图方式、
+ * 首页主视觉（{@code HomeHeroBackdropView}）共用本类，保证两处的铺图方式、
  * 高度、底部羽化曲线与不透明度同源——改这里就是同时改两处，
  * 不存在「详情页调了、首页忘了同步」的情况。
  *

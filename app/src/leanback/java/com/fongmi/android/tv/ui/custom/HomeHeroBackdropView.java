@@ -17,7 +17,7 @@ import androidx.appcompat.widget.AppCompatImageView;
 import androidx.recyclerview.widget.RecyclerView;
 
 /**
- * 首页「豆瓣热门」主视觉的横版剧照背景层，视觉参数全部来自 {@link BackdropStyle}，
+ * 首页主视觉的横版剧照背景层，视觉参数全部来自 {@link BackdropStyle}，
  * 与播放详情页的整页背景（{@code DetailBackdropView}）<b>同源同值</b>：
  *
  * <ul>

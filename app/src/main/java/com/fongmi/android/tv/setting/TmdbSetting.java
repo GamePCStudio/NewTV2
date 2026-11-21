@@ -4,7 +4,6 @@ import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.TmdbApi;
-import com.fongmi.android.tv.api.TmdbLog;
 import com.github.catvod.utils.Prefers;
 
 import java.util.ArrayList;
@@ -13,156 +12,130 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 刮削配置：TMDB 站点轮换、总开关与两个二级开关、Douban Bridge地址与密钥。
+ * TMDB 刮削配置：全局连接方式 + 单一 API 站点 + 刮削开关与失败提示。
  *
- * <p>配置结构：{@code tmdb_sites} 存一个 JSON 数组，每项是 {@code {"url":"...","key":"..."}}，
- * 一条记录就是一个站点及其专属密钥。数组长度不写死在代码里（{@link #MAX_SITES} 只是 UI 防呆），
- * 增加站点只需追加一项，{@link TmdbApi} 的轮换逻辑自动跟随。</p>
+ * <p>连接方式决定所有 TMDB 请求的基地址：默认反代、官方 API、自定义反代。
+ * 项目内不再有其它数据源，所有图片与元数据拉取都经由这里给出的地址。</p>
  *
- * <p>轮换策略：每个 HTTP 请求调用一次 {@link #nextSiteIndex(int)} 取游标（全局递增、取模），
- * 因此同一个抓取任务里的「搜索 → 图集 → 下载图」会自然落到不同站点，负载被摊开；
- * 某个站点失败时由 {@link TmdbApi} 顺延到下一个站点重试。</p>
+ * <p>站点记录形如 {@code {"url":"...","key":"..."}}，自定义反代地址可带专属密钥，
+ * 密钥允许为空（反代服务可自行注入）；官方地址下填写的密钥同样通过这条记录读取。</p>
  *
- * <p>兼容旧配置：早期版本只有 {@code tmdb_api_url} + {@code tmdb_api_key} 两项，
- * 首次读取时自动迁移成一条站点记录。</p>
- *
- * <p>项目不再内置任何默认站点与密钥：新安装需用户在「设置 → 影片刮削设置」自行添加。
- * 未配置时 {@link #getSites()} 返回空列表，抓取请求会以「no tmdb site」安全失败。</p>
+ * <p>兼容早期版本：旧版 {@code tmdb_api_url} + {@code tmdb_api_key} 或站点数组会在首次读取时
+ * 迁移成单条站点记录，不注入任何内置密钥。</p>
  */
 public final class TmdbSetting {
 
-    /** 留空表示不内置默认站点 / 密钥；保留常量以维持设置页与迁移逻辑的结构。 */
-    public static final String DEFAULT_API_URL = "";
-    public static final String DEFAULT_API_KEY = "";
-    public static final String DEFAULT_API_URL_2 = "";
-    public static final String DEFAULT_API_KEY_2 = "";
+    /** 默认反代：内置公共镜像，密钥可留空。 */
+    public static final int MODE_PROXY = 0;
+    /** 官方 API：使用 themoviedb 官方接口地址。 */
+    public static final int MODE_OFFICIAL = 1;
+    /** 自定义反代：地址与密钥由用户提供。 */
+    public static final int MODE_CUSTOM = 2;
 
-    /** 站点数量上限：仅用于设置页防呆，轮换逻辑本身按实际条数走。 */
-    public static final int MAX_SITES = 8;
+    public static final String PROXY_API_URL = "https://1.tmdbapi.cc.cd";
+    public static final String OFFICIAL_API_URL = "https://api.themoviedb.org";
 
-    /**
-     * Douban Bridge：豆瓣数据的唯一来源，替代此前直连豆瓣网页接口的抓取方式。
-     * 内置公共实例地址，但<b>不内置任何密钥</b>，必须由用户自行填写。
-     */
-    public static final String DEFAULT_BRIDGE_URL = "https://douban-bridge.baran.wang";
-    public static final String DEFAULT_BRIDGE_KEY = "";
-
-    private static final String KEY_SITES = "tmdb_sites";
+    private static final String KEY_MODE = "tmdb_mode";
+    private static final String KEY_SITE = "tmdb_site";
+    private static final String KEY_LEGACY_SITES = "tmdb_sites";
     private static final String KEY_LEGACY_URL = "tmdb_api_url";
     private static final String KEY_LEGACY_KEY = "tmdb_api_key";
-    private static final String KEY_ENABLE = "tmdb_enable";
-    private static final String KEY_ERROR_TOAST = "tmdb_error_toast";
     private static final String KEY_TMDB_SCRAPE = "tmdb_scrape_tmdb";
-    private static final String KEY_BRIDGE_SCRAPE = "douban_bridge_scrape";
-    private static final String KEY_BRIDGE_URL = "douban_bridge_url";
-    private static final String KEY_BRIDGE_KEY = "douban_bridge_key";
+    private static final String KEY_ERROR_TOAST = "tmdb_error_toast";
 
-    /** 轮换游标：每个请求取一次，取模落到具体站点。 */
+    /** 轮换游标保留给 API 层的统一请求入口；当前只有一个全局站点。 */
     private static final AtomicInteger CURSOR = new AtomicInteger();
-    private static volatile List<TmdbSite> cache;
+    private static volatile TmdbSite cache;
 
     private TmdbSetting() {
     }
 
-    /** 当前生效的站点列表；未配置时为空，顺序即轮换顺序。 */
-    public static List<TmdbSite> getSites() {
-        List<TmdbSite> sites = cache;
-        if (sites != null) return sites;
+    /** 当前连接方式。 */
+    public static int getMode() {
+        int mode = Prefers.getInt(KEY_MODE, MODE_PROXY);
+        return mode == MODE_OFFICIAL || mode == MODE_CUSTOM ? mode : MODE_PROXY;
+    }
+
+    public static void putMode(int mode) {
+        if (mode != MODE_PROXY && mode != MODE_OFFICIAL && mode != MODE_CUSTOM) mode = MODE_PROXY;
+        Prefers.put(KEY_MODE, mode);
+        CURSOR.set(0);
+        TmdbApi.onConfigChanged();
+    }
+
+    /** 用户保存的站点记录；固定连接方式下地址字段不参与请求，但密钥仍从这里读。 */
+    public static TmdbSite getSite() {
+        TmdbSite site = cache;
+        if (site != null) return site;
         synchronized (TmdbSetting.class) {
             if (cache != null) return cache;
-            List<TmdbSite> parsed = parse(Prefers.getString(KEY_SITES, ""));
-            sites = parsed.isEmpty() ? migrate() : parsed;
-            cache = Collections.unmodifiableList(sites);
+            cache = migrate();
             return cache;
         }
     }
 
-    public static void putSites(List<TmdbSite> sites) {
-        List<TmdbSite> cleaned = new ArrayList<>();
-        if (sites != null) for (TmdbSite site : sites) add(cleaned, site);
-        // 允许用户清空全部站点；不再回落到一个内置默认站点。
-        Prefers.put(KEY_SITES, App.gson().toJson(cleaned));
-        cache = Collections.unmodifiableList(cleaned);
+    public static void putSite(TmdbSite site) {
+        TmdbSite value = site == null ? new TmdbSite() : site;
+        Prefers.put(KEY_SITE, App.gson().toJson(value));
+        cache = value;
         CURSOR.set(0);
         TmdbApi.onConfigChanged();
     }
 
     /**
-     * 外部整体替换偏好（备份恢复）后调用：丢掉进程内的站点缓存，下次读取重新解析，
-     * 否则恢复完仍拿着恢复前的旧站点/旧密钥在跑。
+     * 统一站点列表：API 层沿用它做请求入口，内容永远只有当前连接方式对应的那一条。
      */
+    public static List<TmdbSite> getSites() {
+        TmdbSite saved = getSite();
+        TmdbSite active = new TmdbSite(getApiBase(), saved.getKey());
+        return Collections.singletonList(active);
+    }
+
+    /** 当前连接方式实际使用的 API 基地址，全局唯一来源。 */
+    public static String getApiBase() {
+        if (getMode() == MODE_OFFICIAL) return OFFICIAL_API_URL;
+        if (getMode() == MODE_CUSTOM) return getSite().base();
+        return PROXY_API_URL;
+    }
+
+    public static String getApiKey() {
+        return getSite().getKey();
+    }
+
+    /** 是否已有可用地址；自定义反代必须由用户填地址。 */
+    public static boolean isConfigured() {
+        String base = getApiBase();
+        if (TextUtils.isEmpty(base)) return false;
+        if (getMode() != MODE_CUSTOM) return true;
+        return getSite().isValid();
+    }
+
+    /** 备份恢复 / 偏好整体替换后调用，重新解析当前站点。 */
     public static void reset() {
         cache = null;
         CURSOR.set(0);
     }
 
-    /** 取下一个站点下标：游标全局递增，天然把请求摊到各站点。 */
     public static int nextSiteIndex(int size) {
         if (size <= 1) return 0;
         return (CURSOR.getAndIncrement() & 0x7FFFFFFF) % size;
     }
 
-    /**
-     * 刮削总开关：默认关闭。关闭后 TMDB 与Douban Bridge都不再抓取，已缓存的图片仍可显示。
-     */
-    public static boolean isMasterEnabled() {
-        return Prefers.getBoolean(KEY_ENABLE, false);
-    }
-
-    public static void putMaster(boolean value) {
-        boolean old = isMasterEnabled();
-        Prefers.put(KEY_ENABLE, value);
-        if (old != value) logConfig(TmdbLog.SOURCE_TMDB, "刮削总开关", value ? "已开启" : "已关闭");
-        TmdbApi.onConfigChanged();
-    }
-
-    /** TMDB 二级开关：默认开启，只有总开关同时打开时才真正生效。 */
+    /** TMDB 刮削开关；连接方式只决定地址，不再受任何上级总开关控制。 */
     public static boolean isTmdbScrapeEnabled() {
         return Prefers.getBoolean(KEY_TMDB_SCRAPE, true);
     }
 
     public static void putTmdbScrape(boolean value) {
-        boolean old = isTmdbScrapeEnabled();
         Prefers.put(KEY_TMDB_SCRAPE, value);
-        if (old != value) logConfig(TmdbLog.SOURCE_TMDB, "TMDB 刮削", value ? "已开启" : "已关闭");
         TmdbApi.onConfigChanged();
     }
 
-    /** Douban Bridge二级开关：默认开启，只有总开关同时打开时才真正生效。 */
-    public static boolean isBridgeScrapeEnabled() {
-        return Prefers.getBoolean(KEY_BRIDGE_SCRAPE, true);
-    }
-
-    public static void putBridgeScrape(boolean value) {
-        boolean old = isBridgeScrapeEnabled();
-        Prefers.put(KEY_BRIDGE_SCRAPE, value);
-        if (old != value) logConfig(TmdbLog.SOURCE_BRIDGE, "Douban Bridge刮削", value ? "已开启" : "已关闭");
-        TmdbApi.onConfigChanged();
-    }
-
-    /**
-     * TMDB 是否可抓取：总开关与 TMDB 二级开关同时开启。
-     * 旧代码统一用这个方法判断，语义从「总开关」收窄为「总开关 + 二级开关」。
-     */
     public static boolean isEnabled() {
-        return isMasterEnabled() && isTmdbScrapeEnabled();
+        return isTmdbScrapeEnabled();
     }
 
-    /** 兼容旧入口：等价于 {@link #putMaster(boolean)}。 */
-    public static void putEnabled(boolean value) {
-        putMaster(value);
-    }
-
-    /**
-     * 播放详情页刮削失败时是否用 Toast 提示。
-     *
-     * <p><b>默认关闭</b>：首次安装没有该键时返回 false —— 刮削失败属于后台的「素材补齐」，
-     * 大多数用户并不关心，默认静默以免反复打扰；需要排查时可在「设置 → 影片刮削设置」里打开。
-     *
-     * <p>本开关<b>只在 TMDB 可抓取（{@link #isEnabled()}：总开关 + TMDB 二级开关）时才有意义</b>：
-     * 刮削关闭时，无论这里返回什么，调用方都不允许弹失败提示（见 {@code VideoActivity#onTmdbResult}）。
-     * 二者是「与」关系，不是并列关系 —— 不要只判断本方法。</p>
-     */
+    /** 刮削失败时是否用 Toast 提示。 */
     public static boolean isErrorToast() {
         return Prefers.getBoolean(KEY_ERROR_TOAST, false);
     }
@@ -171,102 +144,27 @@ public final class TmdbSetting {
         Prefers.put(KEY_ERROR_TOAST, value);
     }
 
-    /** Douban Bridge地址；默认使用内置公共实例，可改为自建地址。 */
-    public static String getBridgeUrl() {
-        String url = Prefers.getString(KEY_BRIDGE_URL, DEFAULT_BRIDGE_URL);
-        return url == null ? "" : url.trim();
-    }
-
-    /** Douban Bridge密钥；不内置默认值，未配置时返回空串。 */
-    public static String getBridgeKey() {
-        String key = Prefers.getString(KEY_BRIDGE_KEY, DEFAULT_BRIDGE_KEY);
-        return key == null ? "" : key.trim();
-    }
-
-    /** Douban Bridge是否已配置好地址与密钥（不代表已启用）。 */
-    public static boolean isBridgeConfigured() {
-        String url = getBridgeUrl();
-        return (url.startsWith("http://") || url.startsWith("https://")) && !getBridgeKey().isEmpty();
-    }
-
-    /** Douban Bridge是否可抓取：总开关、Douban Bridge二级开关、地址与密钥三者同时满足。 */
-    public static boolean isBridgeEnabled() {
-        return isMasterEnabled() && isBridgeScrapeEnabled() && isBridgeConfigured();
-    }
-
-
-    /** 保存Douban Bridge配置；传入空地址表示停用。只在值真正变化时写一条配置日志。 */
-    public static void putBridge(String url, String key) {
-        String base = url == null ? "" : url.trim();
-        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-        String secret = key == null ? "" : key.trim();
-        String oldUrl = getBridgeUrl();
-        String oldKey = getBridgeKey();
-        boolean urlChanged = !TextUtils.equals(oldUrl, base);
-        boolean keyChanged = !TextUtils.equals(oldKey, secret);
-        Prefers.put(KEY_BRIDGE_URL, base);
-        Prefers.put(KEY_BRIDGE_KEY, secret);
-        if (!urlChanged && !keyChanged) return;
-        String reason;
-        if (base.isEmpty()) {
-            reason = "地址已清空，Douban Bridge停用";
-        } else {
-            List<String> parts = new ArrayList<>();
-            if (urlChanged) parts.add("地址已更新为 " + hostOf(base));
-            if (keyChanged) parts.add(secret.isEmpty() ? "密钥已清空" : "密钥已更新");
-            reason = TextUtils.join("；", parts);
+    private static TmdbSite migrate() {
+        String json = Prefers.getString(KEY_SITE, "");
+        if (!TextUtils.isEmpty(json)) {
+            try {
+                TmdbSite site = App.gson().fromJson(json, TmdbSite.class);
+                if (site != null) return site;
+            } catch (Exception ignored) {
+                // 配置损坏时继续尝试更早的版本。
+            }
         }
-        logConfig(TmdbLog.SOURCE_BRIDGE, "Douban Bridge", reason);
-    }
-
-    /** 设置页摘要只显示主机名，避免把长地址与密钥铺满一行。 */
-    public static String getBridgeHost() {
-        return hostOf(getBridgeUrl());
-    }
-
-    private static String hostOf(String url) {
-        if (TextUtils.isEmpty(url)) return "";
-        int start = url.indexOf("://");
-        String host = start >= 0 ? url.substring(start + 3) : url;
-        int slash = host.indexOf('/');
-        return slash >= 0 ? host.substring(0, slash) : host;
-    }
-
-    /** 配置变更只写结论，不写密钥；日志页的来源 / 状态筛选仍按 TMDB 与Douban Bridge归类。 */
-    private static void logConfig(String source, String keyword, String reason) {
-        TmdbLog.add(source, TmdbLog.STAGE_CONFIG, keyword, "", "", reason, false);
-    }
-
-    /** 解析 tmdb_sites；为空或损坏时返回空列表，由调用方决定走迁移。 */
-    private static List<TmdbSite> parse(String json) {
-        List<TmdbSite> sites = new ArrayList<>();
-        if (TextUtils.isEmpty(json)) return sites;
-        try {
-            TmdbSite[] array = App.gson().fromJson(json, TmdbSite[].class);
-            if (array != null) for (TmdbSite site : array) add(sites, site);
-        } catch (Exception ignored) {
-            // 配置损坏时退回迁移逻辑，不能让抓取整体失效。
+        String sites = Prefers.getString(KEY_LEGACY_SITES, "");
+        if (!TextUtils.isEmpty(sites)) {
+            try {
+                TmdbSite[] array = App.gson().fromJson(sites, TmdbSite[].class);
+                if (array != null) for (TmdbSite site : array) if (site != null && site.isValid()) return site;
+            } catch (Exception ignored) {
+                // 继续尝试旧的单站点配置。
+            }
         }
-        return sites;
-    }
-
-    /** 旧版单站点配置 → 新结构。只在 tmdb_sites 缺失时跑一次；不再注入任何内置默认站点。 */
-    private static synchronized List<TmdbSite> migrate() {
-        List<TmdbSite> sites = new ArrayList<>();
-        String url = Prefers.getString(KEY_LEGACY_URL, "").trim();
-        String key = Prefers.getString(KEY_LEGACY_KEY, "").trim();
-        if (!TextUtils.isEmpty(url)) add(sites, new TmdbSite(url, key));
-        Prefers.put(KEY_SITES, App.gson().toJson(sites));
-        CURSOR.set(0);
-        return sites;
-    }
-
-    /** 去重（按 base 地址）+ 校验 + 上限控制，所有入口都过这里。 */
-    private static void add(List<TmdbSite> sites, TmdbSite site) {
-        if (site == null || !site.isValid()) return;
-        if (sites.size() >= MAX_SITES) return;
-        String base = site.base();
-        for (TmdbSite exist : sites) if (TextUtils.equals(exist.base(), base)) return;
-        sites.add(site);
+        String url = Prefers.getString(KEY_LEGACY_URL, "");
+        String key = Prefers.getString(KEY_LEGACY_KEY, "");
+        return new TmdbSite(url == null ? "" : url.trim(), key == null ? "" : key.trim());
     }
 }
