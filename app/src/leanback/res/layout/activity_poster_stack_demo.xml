@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  规范第 4 项：最小示例页布局。深色页面底色 + 5% overscan 安全边距 +
+  单个可聚焦的堆叠按钮；不放置任何切换按钮、计数或标题控件。
+
+  【最小可运行接入说明】
+  1) 在 RowsSupportFragment / BrowseSupportFragment 的页面里 inflate 本布局
+     （或用 ArrayObjectAdapter + PosterStackPresenter 把 adapter_view_all.xml
+     挂进 ListRow，见 PosterStackPresenter 类注释）。
+  2) 绑定三张图：PosterStackView.setPosters(List&lt;Integer&gt;) 传
+     res/drawable-nodpi 里的直角海报资源 id；业务上的网络海报用
+     setPosterUrls(List&lt;String&gt;) 传该分类第 11~13 张的地址。
+  3) 设为首个焦点：在页面首次布局完成后 post 一次
+     stack.requestFocus()（TV 上不要依赖 focusedByDefault）。
+  4) 点击回调：stack.setOnClickListener(v -&gt; 打开更多影片页)，
+     只走业务，不改变任何卡片层级参数。
+
+  下方 shape_stack_outline 只是容器圆角底板，用来示意「容器比卡片多出的
+  48dp / 96dp 余量」，不属于卡片层级。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/stack_page_bg"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:paddingStart="@dimen/stack_overscan_horizontal"
+    android:paddingTop="@dimen/stack_overscan_vertical"
+    android:paddingEnd="@dimen/stack_overscan_horizontal"
+    android:paddingBottom="@dimen/stack_overscan_vertical">
+
+    <FrameLayout
+        android:layout_width="@dimen/stack_demo_width"
+        android:layout_height="@dimen/stack_demo_height"
+        android:layout_gravity="center"
+        android:background="@drawable/shape_stack_outline"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <com.fongmi.android.tv.ui.custom.PosterStackView
+            android:id="@+id/stack"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            app:psvCardMaxWidth="@dimen/stack_card_max_width"
+            app:psvLabel="@string/home_board_more_title" />
+
+    </FrameLayout>
+
+</FrameLayout>

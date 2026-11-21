@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 筛选胶囊按下态：20% 白底，与常态/选中态共用 pad_pill_radius，无描边。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#33FFFFFF" />
-    <corners android:radius="@dimen/pad_pill_radius" />
-    <padding android:bottom="@dimen/pad_gap_s" android:left="@dimen/pad_gap_m" android:right="@dimen/pad_gap_m" android:top="@dimen/pad_gap_s" />
-</shape>

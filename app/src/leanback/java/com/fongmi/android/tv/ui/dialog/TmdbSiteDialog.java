@@ -22,10 +22,11 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 /**
- * 编辑全局 TMDB API 站点：地址（仅自定义反代可改）+ 可选密钥。
+ * 编辑「自定义TMDB反代地址」与可选密钥。
  *
- * <p>默认反代与官方 API 的地址由连接方式决定，这里只让用户补充密钥；
- * 自定义反代复用同一组输入项填写地址与密钥，密钥允许留空。</p>
+ * <p>只服务 {@link TmdbSetting#MODE_CUSTOM}：入口是设置页里那一行，非自定义方式下该行整体收起，
+ * 所以这里<b>永远不回显内置地址</b>（默认反代 / 官方直连都由代码内置），
+ * 输入框只承载用户自己填过的地址，空就是空，避免把内置地址暴露到界面。</p>
  */
 public class TmdbSiteDialog extends BaseAlertDialog {
 
@@ -52,15 +53,13 @@ public class TmdbSiteDialog extends BaseAlertDialog {
 
     @Override
     protected void initView() {
-        boolean custom = TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM;
+        // 地址只回显用户自己的配置；内置地址一律不落到这条输入框里。
         TmdbSite site = TmdbSetting.getSite();
-        binding.url.setText(custom ? site.getUrl() : TmdbSetting.getApiBase());
-        binding.url.setEnabled(custom);
-        binding.url.setFocusable(custom);
-        binding.url.setFocusableInTouchMode(custom);
+        binding.url.setText(site.getUrl());
+        binding.url.setSelection(binding.url.getText().length());
         binding.key.setText(site.getKey());
         binding.key.setSelection(site.getKey().length());
-        binding.phone.setVisibility(custom ? View.VISIBLE : View.GONE);
+        binding.phone.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -70,18 +69,18 @@ public class TmdbSiteDialog extends BaseAlertDialog {
         binding.phone.setOnClickListener(view -> LocalConnectDialog.show(requireActivity(), "tmdb"));
     }
 
-    /** 手机端同步过来的地址与密钥；固定连接方式下地址会被忽略。 */
+    /** 手机端同步过来的自定义反代地址与密钥。 */
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onServerEvent(ServerEvent event) {
         if (event.type() != ServerEvent.Type.TMDB || !isAdded()) return;
-        if (TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM) binding.url.setText(event.text());
+        binding.url.setText(event.text());
         binding.key.setText(event.name());
         binding.key.setSelection(binding.key.getText().length());
     }
 
     private void onSave(View view) {
         TmdbSite site = new TmdbSite(binding.url.getText().toString(), binding.key.getText().toString());
-        if (TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM && !site.isValid()) {
+        if (!site.isValid()) {
             toast(R.string.tmdb_site_invalid);
             return;
         }

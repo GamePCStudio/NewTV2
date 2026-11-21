@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 站源入口按下态：20% 白底胶囊，无描边。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#33FFFFFF" />
-    <corners android:radius="@dimen/pad_pill_radius" />
-</shape>

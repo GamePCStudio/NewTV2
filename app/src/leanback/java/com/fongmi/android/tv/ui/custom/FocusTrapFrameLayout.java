@@ -10,8 +10,6 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.fongmi.android.tv.utils.TouchUi;
-
 /**
  * 焦点陷阱容器：把「方向键找下一个焦点」的搜索<b>截断在自身范围内</b>。
  *
@@ -41,8 +39,6 @@ public class FocusTrapFrameLayout extends FrameLayout {
 
     @Override
     public View focusSearch(View focused, int direction) {
-        // Pad 无焦点导航：交回系统默认实现，不参与任何方向键焦点搜索
-        if (TouchUi.isTouch(this)) return super.focusSearch(focused, direction);
         // 焦点已在陷阱外（例如弹出瞬间还没来得及移交）：直接把焦点收回容器，
         // 而不是交给 super 继续向窗口根部搜索。
         if (!contains(focused)) return this;

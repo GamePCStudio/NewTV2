@@ -8,6 +8,11 @@
     <string name="home_setting">设置</string>
     <string name="home_history">最近观看</string>
     <string name="home_recommend">更新推荐</string>
+    <string name="home_board_douban_movie">豆瓣·热门电影</string>
+    <string name="home_board_douban_series">豆瓣·热门剧集</string>
+    <string name="home_board_tmdb_movie">TMDB·今日电影</string>
+    <string name="home_board_tmdb_tv">TMDB·今日剧集</string>
+    <string name="home_board_more_title">查看全部</string>
     <string name="home_recommend_source">来自 · %1$s</string>
     <string name="hot_rank_tencent">腾讯视频·热搜榜</string>
     <string name="hot_rank_iqiyi">爱奇艺·热搜榜</string>

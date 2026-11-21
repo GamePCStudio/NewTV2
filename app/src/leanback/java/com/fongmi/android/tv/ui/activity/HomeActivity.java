@@ -38,6 +38,7 @@ import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.api.node.NodeRuntime;
 import com.fongmi.android.tv.bean.Cache;
 import com.fongmi.android.tv.bean.Config;
+import com.fongmi.android.tv.bean.ViewAllItem;
 import com.fongmi.android.tv.bean.DoubanHotItem;
 import com.fongmi.android.tv.bean.DoubanHotRow;
 import com.fongmi.android.tv.bean.History;
@@ -72,14 +73,18 @@ import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.HeroInset;
 import com.fongmi.android.tv.ui.custom.HeroTransition;
+import com.fongmi.android.tv.ui.custom.StackRowSelector;
+import com.fongmi.android.tv.ui.presenter.PosterStackPresenter;
 import com.fongmi.android.tv.ui.presenter.DoubanHotPresenter;
 import com.fongmi.android.tv.ui.presenter.HeaderPresenter;
 import com.fongmi.android.tv.ui.presenter.HistoryPresenter;
 import com.fongmi.android.tv.ui.presenter.ProgressPresenter;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
 import com.fongmi.android.tv.utils.Clock;
+import com.fongmi.android.tv.utils.ColdTrace;
 import com.fongmi.android.tv.utils.ArtBlacklist;
 import com.fongmi.android.tv.utils.DoubanHot;
+import com.fongmi.android.tv.utils.HomeBoard;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
@@ -160,6 +165,26 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private List<DoubanHotItem> mHeroItems = new ArrayList<>();
     /** 海报网格素材落库后就地刷新，与首页其它行共用同一套解析与展示逻辑。 */
     private final ArtSource.Listener mArtListener = this::refreshArt;
+    /**
+     * 首页四个分类模块（豆瓣热门电影 / 豆瓣热门剧集 / TMDB今日电影 / TMDB今日剧集）。
+     *
+     * <p>按数组下标对应 {@link HomeBoard} 的四个分类；每格保存标题对象与内容行对象，
+     * 用对象身份定位，避免「推荐块重建 / 主视觉异步插入」导致下标错位。空列表时置 null 表示该行已收起。</p>
+     */
+    private final RowHeader[] mBoardHeaders = new RowHeader[HomeBoard.COUNT];
+    private final ListRow[] mBoardRows = new ListRow[HomeBoard.COUNT];
+    /** 四个分类共用一个 Presenter；与站源行分开，站源 Style 变化时不影响分类行的海报样式。 */
+    private VodPresenter mBoardPresenter;
+    /** 「来自 · 站源名」的完整结果（已去黑名单）：首页只展示前 10 部，其余给「更多影片」页。 */
+    private List<Vod> mRecommendItems = new ArrayList<>();
+    private Style mRecommendStyle = Style.rect();
+    /** 列表样式下的「查看全部」入口：列表卡没有海报位，用一个哑条目代替类海报按钮。 */
+    private Vod mRecommendMore;
+    /**
+     * 分类数据的启动延迟：主视觉的榜单请求在 initView 里就已经发出，
+     * 四个分类晚 800ms 再拉，避免首屏关键请求被这四份 JSON 抢带宽。
+     */
+    private static final long BOARD_DELAY_MS = 800;
 
     /**
      * 站源 sheet 显示期间的焦点守卫：一旦焦点落到面板之外（例如布局变化导致系统重新分配焦点），
@@ -229,28 +254,37 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ColdTrace.mark("home.onCreate.start");
         instanceCount++;
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
+        ColdTrace.mark("home.onCreate.end");
     }
 
     @Override
     protected void initView(Bundle savedInstanceState) {
+        ColdTrace.mark("home.initView.start");
         if (savedInstanceState == null || !savedInstanceState.getBoolean(STATE_ACTION_HANDLED)) pendingAction = getIntent();
         mResult = Result.empty();
         mBinding.progressLayout.showProgress();
         Updater.get().start(this, false);
+        ColdTrace.mark("home.updater.start");
         setRecyclerView();
         setToolbar();
         applyTopScrim();
         setViewModel();
         setAdapter();
+        ColdTrace.mark("home.views.built");
         ArtSource.register(mArtListener);
         checkPermission();
         loadDoubanHot();
+        // 四个分类模块跟在主视觉之后拉取，命中缓存时会立即挂行。
+        App.post(this::loadBoards, BOARD_DELAY_MS);
+        ColdTrace.mark("home.hero.requested");
         installInitialFocus();
         // 启动画面：静态品牌 banner（原始尺寸 50%、等比居中）显示片刻后自动淡出。
         mBinding.splashBrand.play();
+        ColdTrace.mark("home.initView.end");
     }
 
     @Override
@@ -264,6 +298,16 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         ViewTreeObserver observer = getWindow().getDecorView().getViewTreeObserver();
         observer.addOnGlobalFocusChangeListener(focusGuard);
         observer.addOnGlobalFocusChangeListener(toolbarFocusWatcher);
+        // 冷启动埋点：首页第一帧真正进入绘制（含启动画面）的时刻。
+        observer.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                ViewTreeObserver current = mBinding == null ? null : mBinding.getRoot().getViewTreeObserver();
+                if (current != null && current.isAlive()) current.removeOnPreDrawListener(this);
+                ColdTrace.mark("home.firstFrame");
+                return true;
+            }
+        });
         mBinding.recycler.addOnScrollListener(toolbarScrollWatcher);
     }
 
@@ -863,8 +907,28 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         }
         // 标题与网格同进同出：先补标题（站源名可能刚变过），再挂内容。
         ensureRecommendHeader();
-        if (style.isList()) mAdapter.addAll(mAdapter.size(), items);
-        else addGrid(items, style);
+        // 首页只展示前 10 部：超过的部分进「更多影片」页，避免整行无限拉长。
+        mRecommendItems = items;
+        mRecommendStyle = style;
+        boolean more = items.size() >= HomeBoard.HOME_LIMIT;
+        List<Vod> shown = items.size() > HomeBoard.HOME_LIMIT ? new ArrayList<>(items.subList(0, HomeBoard.HOME_LIMIT)) : items;
+        if (style.isList()) {
+            // 列表样式的卡片是整行宽条目，放不下类海报按钮；用一个哑条目承接同一个入口。
+            mRecommendMore = more ? moreEntry() : null;
+            List<Vod> cards = new ArrayList<>(shown);
+            if (mRecommendMore != null) cards.add(mRecommendMore);
+            mAdapter.addAll(mAdapter.size(), cards);
+        } else {
+            mRecommendMore = null;
+            addGrid(shown, style, more);
+        }
+    }
+
+    /** 列表样式下的「查看全部」条目：只有片名，点击由 {@link #onItemClick(Vod)} 分流。 */
+    private Vod moreEntry() {
+        Vod vod = new Vod();
+        vod.setName(getString(R.string.home_board_more_title));
+        return vod;
     }
 
     /** 剔除已拉黑的影片；返回新列表，避免改动站源结果缓存里的原始数据。 */
@@ -890,16 +954,23 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * <p>现在不再切分：一条 ListRow 承载全部条目，RecyclerView 只创建可见范围内的子 View，
      * 条目再多也只占一行高度，左右方向按 {@code FOCUS_SCROLL_ITEM} 走位（只在贴边时滚动，
      * 不会每次换焦点都把整行对齐重排而产生抖动）。</p>
+     *
+     * <p>条目数达到 {@link HomeBoard#HOME_LIMIT} 时，行末追加一张「查看全部」卡片
+     * （与海报卡片同尺寸），点击进入「更多影片」页。</p>
      */
-    private void addGrid(List<Vod> items, Style style) {
+    private void addGrid(List<Vod> items, Style style, boolean more) {
         // 空结果不建行：旧实现用 Lists.partition，空列表天然不会产生任何 ListRow。
         if (items == null || items.isEmpty()) return;
         if (mVodPresenter == null || !mVodPresenter.matches(style)) mVodPresenter = new VodPresenter(this, style);
-        mAdapter.add(mAdapter.size(), createVideoRow(items));
+        List<Object> cards = new ArrayList<>(items);
+        // 行末「查看全部」：三张海报取该模块第 11~13 张，顺序 [后景, 中景, 前景]。
+        if (more) cards.add(new ViewAllItem(ViewAllItem.BOARD_SITE, ViewAllItem.postersFrom(mRecommendItems)));
+        mAdapter.add(mAdapter.size(), createVideoRow(cards, style));
     }
 
-    private ListRow createVideoRow(List<Vod> items) {
-        ArrayObjectAdapter adapter = new ArrayObjectAdapter(mVodPresenter);
+    private ListRow createVideoRow(List<Object> items, Style style) {
+        ArrayObjectAdapter adapter = new ArrayObjectAdapter(
+                new StackRowSelector(mVodPresenter, new PosterStackPresenter(this::openMore, style, this)));
         adapter.addAll(0, items);
         return new ListRow(adapter);
     }
@@ -921,6 +992,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 }
                 if (ArtSource.apply(vod)) mAdapter.notifyArrayItemRangeChanged(i, 1);
             } else if (item instanceof ListRow) {
+                // 四个分类模块的片名/海报/评分都来自各自数据源，不参与站源素材回填与黑名单过滤。
+                if (isBoardRow((ListRow) item)) continue;
                 Object adapter = ((ListRow) item).getAdapter();
                 if (!(adapter instanceof ArrayObjectAdapter)) continue;
                 ArrayObjectAdapter row = (ArrayObjectAdapter) adapter;
@@ -1007,6 +1080,161 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mAdapter.removeItems(header, 1);
     }
 
+    /* ------------------------------------------------------- 首页分类模块 */
+
+    /** 拉取四个分类；命中 12 小时缓存会立即挂行，首次安装则走网络。 */
+    private void loadBoards() {
+        if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
+        for (int board = 0; board < HomeBoard.COUNT; board++) {
+            final int index = board;
+            HomeBoard.load(index, items -> applyBoard(index, items));
+        }
+    }
+
+    private static int boardTitleRes(int board) {
+        switch (board) {
+            case HomeBoard.DOUBAN_SERIES:
+                return R.string.home_board_douban_series;
+            case HomeBoard.TMDB_MOVIE:
+                return R.string.home_board_tmdb_movie;
+            case HomeBoard.TMDB_TV:
+                return R.string.home_board_tmdb_tv;
+            default:
+                return R.string.home_board_douban_movie;
+        }
+    }
+
+    /**
+     * 一个分类的数据到位：建「标题 + 单行横滑海报」，插在「来自 · 站源名」上方。
+     *
+     * <p>卡片只承载片名、海报、评分三项，没有站点与影片 id，点击按片名进搜索结果
+     * （见 {@link #onItemClick(Vod)}）。重复回调就地替换；空列表整行收起，不影响其它三行。</p>
+     */
+    private void applyBoard(int board, List<HomeBoard.Item> items) {
+        if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
+        if (items == null || items.isEmpty()) {
+            removeBoard(board);
+            return;
+        }
+        List<Vod> vods = new ArrayList<>(items.size());
+        for (HomeBoard.Item item : items) {
+            if (item == null || TextUtils.isEmpty(item.getTitle())) continue;
+            Vod vod = new Vod();
+            vod.setName(item.getTitle());
+            vod.setArtPic(item.getPoster());
+            vod.setArtScore(item.getScore());
+            vods.add(vod);
+        }
+        if (vods.isEmpty()) {
+            removeBoard(board);
+            return;
+        }
+        if (mBoardPresenter == null) mBoardPresenter = new VodPresenter(this, Style.rect());
+        Style style = Style.rect();
+        List<Object> cards = new ArrayList<>(Math.min(vods.size(), HomeBoard.HOME_LIMIT) + 1);
+        cards.addAll(vods.subList(0, Math.min(vods.size(), HomeBoard.HOME_LIMIT)));
+        // 满 10 部才出现「查看全部」；不到 10 部不显示，全部影片已经在行内。
+        if (cards.size() >= HomeBoard.HOME_LIMIT) {
+            cards.add(new ViewAllItem(board, ViewAllItem.postersFrom(vods)));
+        }
+        ArrayObjectAdapter adapter = new ArrayObjectAdapter(
+                new StackRowSelector(mBoardPresenter, new PosterStackPresenter(this::openMore, style, this)));
+        adapter.addAll(0, cards);
+        RowHeader header = new RowHeader(boardTitleRes(board), getString(boardTitleRes(board)));
+        ListRow row = new ListRow(adapter);
+        RowHeader oldHeader = mBoardHeaders[board];
+        ListRow oldRow = mBoardRows[board];
+        int headerAt = oldHeader == null ? -1 : mAdapter.indexOf(oldHeader);
+        if (headerAt >= 0) {
+            mBoardHeaders[board] = header;
+            mBoardRows[board] = row;
+            mAdapter.replace(headerAt, header);
+            int rowAt = oldRow == null ? -1 : mAdapter.indexOf(oldRow);
+            if (rowAt >= 0) mAdapter.replace(rowAt, row);
+            else mAdapter.add(headerAt + 1, row);
+            return;
+        }
+        int at = boardInsertIndex(board);
+        mBoardHeaders[board] = header;
+        mBoardRows[board] = row;
+        mAdapter.add(at, header);
+        mAdapter.add(at + 1, row);
+    }
+
+    /** 该分类的插入位置：排在下标更大的分类之前，否则落在「来自 · 站源名」块的前面。 */
+    private int boardInsertIndex(int board) {
+        for (int i = board + 1; i < HomeBoard.COUNT; i++) {
+            if (mBoardHeaders[i] == null) continue;
+            int index = mAdapter.indexOf(mBoardHeaders[i]);
+            if (index >= 0) return index;
+        }
+        return recommendAnchor();
+    }
+
+    /**
+     * 「查看全部」入口：分类行带分类下标，进「更多影片」页后重新读该分类的完整榜单；
+     * 「来自 · 站源名」带当前站源与完整结果，点击可直接起播。
+     */
+    private void openMore(ViewAllItem item) {
+        if (item == null || mBinding == null) return;
+        if (item.isSite()) {
+            HomeMoreActivity.startSite(this, recommendHeader().getText().toString(), getHome().getKey(),
+                    getHome().isIndex(), mRecommendItems, mRecommendStyle);
+        } else {
+            HomeMoreActivity.startBoard(this, getString(boardTitleRes(item.getBoard())), item.getBoard());
+        }
+    }
+
+    /** 收起某个分类：先删内容行再删标题，重复调用安全。 */
+    private void removeBoard(int board) {
+        if (mAdapter == null) return;
+        ListRow row = mBoardRows[board];
+        RowHeader header = mBoardHeaders[board];
+        mBoardHeaders[board] = null;
+        mBoardRows[board] = null;
+        int rowAt = row == null ? -1 : mAdapter.indexOf(row);
+        if (rowAt >= 0) mAdapter.removeItems(rowAt, 1);
+        int headerAt = header == null ? -1 : mAdapter.indexOf(header);
+        if (headerAt >= 0) mAdapter.removeItems(headerAt, 1);
+    }
+
+    /**
+     * 「来自 · 站源名」块可以落位的起点：标题在就用标题位置，占位行在就用占位行，
+     * 都没有就接在「最近观看」之后、并跳过已挂出的分类行。
+     */
+    private int recommendAnchor() {
+        int header = indexOfHeader(R.string.home_recommend);
+        if (header >= 0) return header;
+        int progress = mAdapter.indexOf("progress");
+        if (progress >= 0) return progress;
+        int end = afterHistory();
+        while (isBoardSlot(end)) end++;
+        return Math.min(end, mAdapter.size());
+    }
+
+    /** 「最近观看」区块之后的位置（没有该区块时就是主视觉之后 / 列表顶部）。 */
+    private int afterHistory() {
+        int history = indexOfHeader(R.string.home_history);
+        int end = history < 0 ? historyInsertIndex() : history + 1;
+        if (isHistoryRow(end)) end++;
+        return end;
+    }
+
+    /** 这个位置是不是四个分类模块的标题或内容行（按对象身份判断）。 */
+    private boolean isBoardSlot(int index) {
+        if (index < 0 || index >= mAdapter.size()) return false;
+        Object item = mAdapter.get(index);
+        for (int i = 0; i < HomeBoard.COUNT; i++) {
+            if (item == mBoardHeaders[i] || item == mBoardRows[i]) return true;
+        }
+        return false;
+    }
+
+    private boolean isBoardRow(ListRow row) {
+        for (int i = 0; i < HomeBoard.COUNT; i++) if (mBoardRows[i] == row) return true;
+        return false;
+    }
+
     /**
      * 「来自 · 站源名」区块的起始位置：标题在就用标题的位置；标题被收起时退回
      * 「最近观看」区块之后——两者都不会因为另一块的增删而算错。
@@ -1014,9 +1242,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private int getRecommendStart() {
         int header = indexOfHeader(R.string.home_recommend);
         if (header >= 0) return header;
-        int history = indexOfHeader(R.string.home_history);
-        int end = history < 0 ? historyInsertIndex() : history + 1;
-        if (isHistoryRow(end)) end++;
+        int end = afterHistory();
+        while (isBoardSlot(end)) end++;
         return Math.min(end, mAdapter.size());
     }
 
@@ -1092,6 +1319,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      */
     private void applyHero(List<DoubanHotItem> items) {
         if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
+        ColdTrace.mark("hero.apply", "n=" + (items == null ? 0 : items.size()));
         List<DoubanHotItem> shown = new ArrayList<>();
         if (items != null) for (DoubanHotItem item : items) {
             if (item == null || ArtBlacklist.contains(item.getTitle())) continue;
@@ -1117,6 +1345,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         }
         int anchorPosition = firstVisiblePosition();
         int anchorTop = firstVisibleTop();
+        ColdTrace.mark("hero.row.insert", "renderable=" + renderable.size() + ", at=" + getDoubanHotIndex());
         mAdapter.add(getDoubanHotIndex(), DoubanHotRow.create(renderable));
         mHeroSignature = signature;
         applyContentInset(true);
@@ -1302,14 +1531,17 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     @Override
     public void onItemClick(Vod item) {
-        if (item.isAction()) mViewModel.action(getHome().getKey(), item.getAction());
-        else if (getHome().isIndex()) openCollect(item.getName());
+        // 列表样式下的「查看全部」哑条目：不进搜索，直接开更多页。
+        if (item == mRecommendMore) openMore(ViewAllItem.site());
+        else if (item.isAction()) mViewModel.action(getHome().getKey(), item.getAction());
+        // 分类模块的卡片没有站点与影片 id（只有片名/海报/评分），按片名进搜索结果。
+        else if (item.getSite() == null || getHome().isIndex()) openCollect(item.getName());
         else VideoActivity.start(this, getHome().getKey(), item, null);
     }
 
     @Override
     public boolean onLongClick(Vod item) {
-        if (item.isAction()) return false;
+        if (item == mRecommendMore || item.isAction()) return false;
         openCollect(item.getName());
         return true;
     }
@@ -1392,10 +1624,14 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     protected void onResume() {
         super.onResume();
+        ColdTrace.mark("home.onResume");
         // 设置页改过 TMDB 连接方式/站点：旧主视觉行内容没变但图片地址已失效，清签名强制重建。
         if (RankLatest.consumeConfigChanged()) {
             mHeroSignature = "";
             loadDoubanHot();
+            // TMDB 分类的海报地址跟随全局连接方式：丢内存副本后按新地址重新解析磁盘缓存。
+            HomeBoard.reset();
+            loadBoards();
         }
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");

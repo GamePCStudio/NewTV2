@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 胶囊按钮：按下 30% 白底，无白描边。 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_pill_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/shape_button_normal" />
-</selector>

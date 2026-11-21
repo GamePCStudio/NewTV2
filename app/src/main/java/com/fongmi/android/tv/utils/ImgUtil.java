@@ -47,6 +47,9 @@ public class ImgUtil {
     private static final int MAX_CACHE_SIZE = 16 * 1024 * 1024;
     private static final int MAX_DATA_URI_LENGTH = 8 * 1024 * 1024;
     private static final Pattern IMAGE_MIME = Pattern.compile("image/[a-z0-9.+-]+");
+    /** 豆瓣图床防盗链：只带 UA 仍返回 418，必须同时带站内 Referer。 */
+    private static final String DOUBAN_REFERER = "https://movie.douban.com/";
+    private static final String BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
     private static final Set<String> failed = Collections.synchronizedSet(new HashSet<>());
     private static final Cache<String, Image> CACHE = CacheBuilder.newBuilder().maximumWeight(MAX_CACHE_SIZE).weigher((String key, Image value) -> value.data().length).build();
 
@@ -110,12 +113,22 @@ public class ImgUtil {
         url = UrlUtil.convert(url);
         if (url.startsWith("data:")) return url;
         LazyHeaders.Builder builder = new LazyHeaders.Builder();
+        // 豆瓣图床直连会 418：先补默认 Referer / UA，URL 自带的 @Referer= / @User-Agent= 可覆盖。
+        if (isDouban(url)) {
+            builder.addHeader(HttpHeaders.REFERER, DOUBAN_REFERER);
+            builder.addHeader(HttpHeaders.USER_AGENT, BROWSER_UA);
+        }
         if (url.contains("@Headers=")) addHeader(builder, param = url.split("@Headers=")[1].split("@")[0]);
         if (url.contains("@Cookie=")) builder.addHeader(HttpHeaders.COOKIE, param = url.split("@Cookie=")[1].split("@")[0]);
         if (url.contains("@Referer=")) builder.addHeader(HttpHeaders.REFERER, param = url.split("@Referer=")[1].split("@")[0]);
         if (url.contains("@User-Agent=")) builder.addHeader(HttpHeaders.USER_AGENT, param = url.split("@User-Agent=")[1].split("@")[0]);
         url = param == null ? url : url.split("@")[0];
         return TextUtils.isEmpty(url) ? null : new GlideUrl(url, builder.build());
+    }
+
+    /** 豆瓣图片域名（img1/2/3.doubanio.com、movie.douban.com 等）。 */
+    private static boolean isDouban(String url) {
+        return url.contains("doubanio.com") || url.contains("douban.com");
     }
 
     public static String cache(String url) {

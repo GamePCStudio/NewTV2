@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  焦点描边 / 光晕 selector。
+  PosterStackView 里的焦点环 View 由代码 setSelected(focused)，
+  选中态显示金色圆角环，常态全透明；环的渐显由代码用 180ms 动画控制。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:drawable="@drawable/shape_stack_focus_ring" />
+    <item android:state_focused="true" android:drawable="@drawable/shape_stack_focus_ring" />
+    <item android:drawable="@android:color/transparent" />
+</selector>

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Pad 海报片名统一纯白：触控模式没有"聚焦提亮"这一步，低对比浅灰会降低可读性。 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/white" />
-</selector>

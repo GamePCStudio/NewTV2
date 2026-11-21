@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.utils;
 
+import android.os.SystemClock;
 import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
@@ -112,10 +113,12 @@ public final class RankLatest {
 
     /** 读取榜单：缓存新鲜则立即回调，否则后台刷新；回调只会触发一次。 */
     public static void load(Callback callback) {
+        ColdTrace.mark("rank.load.start", "mem=" + (memory != null) + ", fetching=" + fetching);
         Data cache = memory;
         // 「新鲜」还要「带 logo」：结构升级前写下的缓存没有 logoPath，
         // 若直接命中，主视觉在 TTL 内会一直没有片名 logo。宁可多拉一次。
         if (cache != null && !cache.isEmpty() && cache.hasAnyLogo() && System.currentTimeMillis() - memoryTime < TTL) {
+            ColdTrace.mark("rank.hit.memory", "age=" + (System.currentTimeMillis() - memoryTime) + "ms");
             App.post(() -> callback.onResult(cache));
             return;
         }
@@ -123,6 +126,7 @@ public final class RankLatest {
         if (disk != null && !disk.data.isEmpty() && disk.data.hasAnyLogo() && System.currentTimeMillis() - disk.time < TTL) {
             memory = disk.data;
             memoryTime = disk.time;
+            ColdTrace.mark("rank.hit.disk", "age=" + (System.currentTimeMillis() - disk.time) + "ms");
             App.post(() -> callback.onResult(disk.data));
             return;
         }
@@ -130,9 +134,11 @@ public final class RankLatest {
         if (disk != null && !disk.data.isEmpty()) {
             memory = disk.data;
             memoryTime = disk.time;
+            ColdTrace.mark("rank.stale.disk", "age=" + (System.currentTimeMillis() - disk.time) + "ms");
             final Data staleData = disk.data;
             App.post(() -> callback.onResult(staleData));
         }
+        ColdTrace.mark("rank.fetch.schedule", "noUsableCache=" + (disk == null || disk.data.isEmpty()));
         Data stale = disk != null && !disk.data.isEmpty() ? disk.data : cache;
         synchronized (RankLatest.class) {
             PENDING.add(callback);
@@ -151,6 +157,7 @@ public final class RankLatest {
      * 同一批里，只发一次请求、一次写盘，再把结果分发给全部等待者。</p>
      */
     private static void fetchAndDispatch(Data stale) {
+        long started = SystemClock.elapsedRealtime();
         Data result = stale == null ? Data.empty() : stale;
         try {
             Fetched fetched = fetch();
@@ -170,6 +177,8 @@ public final class RankLatest {
                 fetching = false;
             }
             final Data dispatch = result;
+            ColdTrace.mark("rank.dispatch", "callbacks=" + callbacks.size() + ", empty=" + dispatch.isEmpty()
+                    + ", fetchTotal=" + (SystemClock.elapsedRealtime() - started) + "ms");
             App.post(() -> {
                 for (Callback callback : callbacks) callback.onResult(dispatch);
             });
@@ -180,13 +189,22 @@ public final class RankLatest {
 
     private static Fetched fetch() {
         try {
+            ColdTrace.mark("rank.http.start", URL);
+            long t0 = SystemClock.elapsedRealtime();
             okhttp3.Response response = OkHttp.newCall(URL).execute();
+            long t1 = SystemClock.elapsedRealtime();
             if (response.body() == null) return null;
             String json = response.body().string();
+            long t2 = SystemClock.elapsedRealtime();
             if (TextUtils.isEmpty(json)) return null;
+            ColdTrace.mark("rank.http.end", "code=" + response.code() + ", chars=" + json.length()
+                    + ", connect=" + (t1 - t0) + "ms, body=" + (t2 - t1) + "ms");
             Data data = parse(json);
+            ColdTrace.mark("rank.parse.end", "items=" + (data.getSeries().size() + data.getMovie().size())
+                    + ", cost=" + (SystemClock.elapsedRealtime() - t2) + "ms");
             return data.isEmpty() ? null : new Fetched(json, data);
         } catch (Exception e) {
+            ColdTrace.mark("rank.http.fail", String.valueOf(e));
             return null;
         }
     }
@@ -397,21 +415,28 @@ public final class RankLatest {
 
     private static Disk read() {
         File file = cacheFile();
-        if (!file.exists() || file.length() == 0) return null;
+        if (!file.exists() || file.length() == 0) {
+            ColdTrace.mark("rank.disk.miss", "no=" + file.getAbsolutePath());
+            return null;
+        }
         try (InputStream in = new FileInputStream(file)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             int len;
             while ((len = in.read(buffer)) != -1) out.write(buffer, 0, len);
+            long t0 = SystemClock.elapsedRealtime();
             Data data = parse(new String(out.toByteArray(), StandardCharsets.UTF_8));
+            ColdTrace.mark("rank.disk.read", "bytes=" + file.length() + ", parse=" + (SystemClock.elapsedRealtime() - t0) + "ms");
             return data.isEmpty() ? null : new Disk(file.lastModified(), data);
         } catch (Exception e) {
+            ColdTrace.mark("rank.disk.fail", String.valueOf(e));
             return null;
         }
     }
 
     private static void write(String json) {
         try {
+            long t0 = SystemClock.elapsedRealtime();
             File target = cacheFile();
             File tmp = new File(target.getParentFile(), CACHE_NAME + ".tmp");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
@@ -419,6 +444,7 @@ public final class RankLatest {
             }
             if (target.exists() && !target.delete()) return;
             tmp.renameTo(target);
+            ColdTrace.mark("rank.disk.write", "bytes=" + json.length() + ", cost=" + (SystemClock.elapsedRealtime() - t0) + "ms");
         } catch (Exception ignored) {
             // 写盘失败不影响本次展示，内存缓存仍然有效。
         }

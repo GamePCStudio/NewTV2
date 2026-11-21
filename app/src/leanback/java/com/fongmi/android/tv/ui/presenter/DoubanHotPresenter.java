@@ -5,11 +5,12 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
-import android.text.style.LeadingMarginSpan;
-import android.os.Looper;
 import android.text.TextUtils;
+import android.text.style.LeadingMarginSpan;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -38,6 +39,7 @@ import com.fongmi.android.tv.bean.DoubanHotRow;
 import com.fongmi.android.tv.bean.TmdbArt;
 import com.fongmi.android.tv.databinding.AdapterDoubanHotBinding;
 import com.fongmi.android.tv.ui.custom.BackdropStyle;
+import com.fongmi.android.tv.utils.ColdTrace;
 import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.ResUtil;
 
@@ -98,6 +100,16 @@ public class DoubanHotPresenter extends Presenter {
     /** 预取超时：剧照给足 15s（w1280），logo 只是片名图，6s 足够。 */
     private static final long BACKDROP_TIMEOUT_MS = 15_000L;
     private static final long LOGO_TIMEOUT_MS = 6_000L;
+    /**
+     * 文字片名占位的延迟窗口。
+     *
+     * <p>logo 命中 Glide 内存/磁盘缓存时，{@code into()} 仍要走一次异步回调，
+     * 但通常 1–3 帧内就能拿到 drawable。若像早期实现那样先把文字设为 VISIBLE，
+     * 切换海报时就会先亮一下文字再被 logo 顶掉——正是「已缓存仍闪文字」的来源。
+     * 这里先留出 200ms 窗口：缓存命中时文字全程不出现；只有真要联网下载的条目
+     * 才在窗口结束后落文字占位，不影响「加载期间有片名」的兜底语义。</p>
+     */
+    private static final long TITLE_TEXT_DELAY_MS = 200L;
     /**
      * 主视觉预取线程池：固定 2 线程，支持每批 2 条并发。
      *
@@ -294,6 +306,7 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         private void bind(DoubanHotRow row) {
+            ColdTrace.mark("hero.bind", "candidates=" + row.getItems().size() + ", imageBase=" + RankLatest.imageBase());
             stop();
             candidates.clear();
             candidates.addAll(row.getItems());
@@ -348,6 +361,7 @@ public class DoubanHotPresenter extends Presenter {
             prefetching = true;
             batchRemaining = batch.size();
             int gen = prefetchGeneration;
+            ColdTrace.mark("hero.prefetch.batch", "seq=" + seqs.get(0) + ", n=" + count + ", initial=" + initial);
             for (int i = 0; i < batch.size(); i++) {
                 final DoubanHotItem item = batch.get(i);
                 final int seq = seqs.get(i);
@@ -358,10 +372,13 @@ public class DoubanHotPresenter extends Presenter {
         /** 单条预取：先异步预热 logo，再阻塞下载剧照到磁盘缓存。 */
         private void prefetchOne(DoubanHotItem item, int seq, boolean initial, int gen) {
             if (gen != prefetchGeneration) return;
+            long started = SystemClock.elapsedRealtime();
             // logo 与剧照并行预热，但不占用取图链：首条给高优先级，其余低优先级。
             // 用与 loadLogo() 相同的 key，展示时直接命中缓存，不会二次请求。
             if (item.hasLogo()) preloadLogo(item, initial);
             boolean backdrop = download(item.getBackdrop(), true);
+            ColdTrace.mark("hero.prefetch.one", "seq=" + seq + ", ok=" + backdrop + ", cost="
+                    + (SystemClock.elapsedRealtime() - started) + "ms, title=" + item.getTitle());
             App.post(() -> finishPrefetch(seq, backdrop, gen));
         }
 
@@ -403,6 +420,7 @@ public class DoubanHotPresenter extends Presenter {
             if (items.contains(item)) return;
             items.add(item);
             bindDots(items.size());
+            ColdTrace.mark("hero.pool.add", "n=" + items.size() + ", title=" + item.getTitle());
             if (!shownOnce) {
                 shownOnce = true;
                 show(0, false);
@@ -432,13 +450,20 @@ public class DoubanHotPresenter extends Presenter {
         private boolean fetch(String url, boolean backdrop) {
             if (TextUtils.isEmpty(url)) return false;
             FutureTarget<File> target = null;
+            long started = SystemClock.elapsedRealtime();
             try {
                 target = Glide.with(App.get()).asFile().load(url)
                         .priority(backdrop ? Priority.IMMEDIATE : Priority.NORMAL)
                         .submit();
                 File file = target.get(backdrop ? BACKDROP_TIMEOUT_MS : LOGO_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-                return file != null && file.exists() && file.length() > 0;
+                boolean ok = file != null && file.exists() && file.length() > 0;
+                ColdTrace.mark("hero.download", "kind=" + (backdrop ? "backdrop" : "logo") + ", ok=" + ok
+                        + ", bytes=" + (file == null ? -1 : file.length())
+                        + ", cost=" + (SystemClock.elapsedRealtime() - started) + "ms, url=" + url);
+                return ok;
             } catch (Exception e) {
+                ColdTrace.mark("hero.download.fail", "kind=" + (backdrop ? "backdrop" : "logo")
+                        + ", cost=" + (SystemClock.elapsedRealtime() - started) + "ms, url=" + url + ", err=" + e);
                 return false;
             } finally {
                 if (target != null) {
@@ -480,6 +505,7 @@ public class DoubanHotPresenter extends Presenter {
             index = Math.floorMod(position, items.size());
             DoubanHotItem item = current();
             if (item == null) return;
+            ColdTrace.mark("hero.show", "pos=" + index + ", items=" + items.size() + ", animate=" + animate);
             binding.action.setVisibility(View.VISIBLE);
             // 复用 ViewHolder 时按钮可能残留上一部的聚焦样式，按当前焦点立即校正。
             styleAction(binding.getRoot().hasFocus());
@@ -550,6 +576,8 @@ public class DoubanHotPresenter extends Presenter {
                         @Override
                         public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> t, @NonNull DataSource source, boolean first) {
                             if (gen != generation) return false;
+                            ColdTrace.mark("hero.painted", "title=" + item.getTitle() + ", source=" + source
+                                    + ", animate=" + animate + ", size=" + resource.getIntrinsicWidth() + "x" + resource.getIntrinsicHeight());
                             // drawable 已就位，先按新图尺寸重算矩阵再淡入，避免第一帧错位
                             binding.backdrop.applyMatrices();
                             reveal(target, old, animate);
@@ -603,7 +631,8 @@ public class DoubanHotPresenter extends Presenter {
          * 只有榜单给了 logoPath 且本地没有时才异步加载网络图。logo 按原尺寸解码，避免
          * Glide 的 fitCenter 按小 ImageView 下采样后放大发虚。</p>
          *
-         * <p>网络 logo 加载期间<b>先显示文字片名占位</b>，成功后由 {@link #showLogo} 用图片替换，
+         * <p>网络 logo 在 {@link #TITLE_TEXT_DELAY_MS} 窗口内就位时<b>文字全程不出现</b>（缓存命中即此路径）；
+         * 超过窗口仍未拿到图才落文字片名占位，成功后由 {@link #showLogo} 用图片替换，
          * 两次失败才回落本地缓存 / 保留文字。进入时先清空文字并隐藏两者，避免闪过上一部的残留片名。</p>
          *
          * <p>容器高度按 logo 宽高比动态分三档：宽/高 &lt; 1/1.6（竖版）200dp、
@@ -622,13 +651,29 @@ public class DoubanHotPresenter extends Presenter {
             // 本地已有 logo：同帧显示，避免先闪一下文字再换图。
             if (applyLocalLogo(item, gen)) return;
             if (item.hasLogo()) {
-                // 网络 logo 期间先留文字片名占位，成功后再由 showLogo() 替换。
-                binding.name.setVisibility(View.VISIBLE);
+                // 已缓存的 logo 会在几帧内到位：先不显示文字，避免切换时闪一下片名；
+                // 只有超过窗口仍未拿到图（要联网）才把文字落下来做占位。
+                showTextLater(gen);
                 loadLogo(item, gen, false);
                 return;
             }
             // 榜单没给 logo（旧缓存 / 该条目未匹配到）：退本地缓存，没有就用文字。
             bindLocalLogo(item, gen);
+        }
+
+        /**
+         * 延迟显示文字片名占位。
+         *
+         * <p>logo 命中缓存时不显示文字（{@link #showLogo} 已把 logo 设为可见，
+         * 这里看到可见就直接放弃）；加载失败走 {@link #bindLocalLogo}，那条路径会立即显示文字，
+         * 不必等这个窗口。{@code gen} 保证切换到下一部后旧任务自动失效。</p>
+         */
+        private void showTextLater(int gen) {
+            binding.name.postDelayed(() -> {
+                if (gen != logoGeneration) return;
+                if (binding.logo.getVisibility() == View.VISIBLE) return;
+                binding.name.setVisibility(View.VISIBLE);
+            }, TITLE_TEXT_DELAY_MS);
         }
 
         /**
@@ -669,6 +714,7 @@ public class DoubanHotPresenter extends Presenter {
                         public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> t, @NonNull DataSource source, boolean first) {
                             // 已手动按图片比例设置尺寸与可见性，阻止 Glide 再套一次默认 fitCenter。
                             if (gen != logoGeneration) return true;
+                            ColdTrace.mark("hero.logo.ready", "title=" + item.getTitle() + ", source=" + source);
                             showLogo(resource, item, gen);
                             return true;
                         }

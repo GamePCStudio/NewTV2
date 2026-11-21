@@ -29,36 +29,7 @@
             android:layout_marginBottom="16dp"
             android:text="@string/tmdb_connection_hint" />
 
-        <!-- TMDB 刮削开关：不再从属于任何上级总开关 -->
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbScrape"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/tmdb_scrape_tmdb"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbScrapeText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="开" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
+        <!-- 全局连接方式：点开即选，选中即生效，不再走「确定 / 取消」二次确认 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbMode"
             android:layout_width="match_parent"
@@ -78,8 +49,9 @@
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tmdbModeText"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:gravity="end"
                 android:singleLine="true"
                 android:textColor="@color/white"
@@ -88,14 +60,21 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
+        <!--
+          自定义反代地址：只在「自定义TMDB反代」下出现。
+          内置地址（默认反代 / TMDB官方直连）不写进这一行，避免把内置地址暴露在界面上。
+        -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbSite"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:visibility="gone"
+            tools:visibility="visible">
 
             <com.google.android.material.textview.MaterialTextView
                 android:layout_width="wrap_content"
@@ -107,51 +86,23 @@
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tmdbSiteText"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:gravity="end"
                 android:singleLine="true"
                 android:textColor="@color/white"
                 android:textSize="18sp"
-                tools:text="https://1.tmdbapi.cc.cd" />
+                tools:text="https://example.com" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/tmdbToast"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:orientation="horizontal">
-
-            <com.google.android.material.textview.MaterialTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
-                android:text="@string/tmdb_error_toast"
-                android:textColor="@color/white"
-                android:textSize="18sp" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/tmdbToastText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="end"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="关" />
-
-        </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <!-- API 条款要求：与任何开关状态无关，常驻可见 -->
+        <!-- API 条款要求：常驻可见，与连接方式无关 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbAttribution"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="32dp"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatImageView

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 字幕调节圆钮按下态：30% 白底，无白色描边。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="#4DFFFFFF" />
-</shape>

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-  顶栏搜索圆钮内放大镜颜色：按下转纯黑（圆底同步转纯白），常态品牌橙。
-  与 selector_logo_bg 共用同一按下状态，不依赖焦点。
--->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="#FF000000" android:state_pressed="true" />
-    <item android:color="#FFFF8F3C" />
-</selector>

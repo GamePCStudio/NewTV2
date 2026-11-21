@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「海报卡片堆叠」按钮的可调参数。文件独立于 main 源集的 attrs.xml，
+  两者按资源条目合并（不同 declare-styleable 名，互不覆盖）。
+  所有默认值来自 dimens.xml / colors.xml，便于集中调整。
+-->
+<resources>
+    <declare-styleable name="PosterStackView">
+        <!-- 卡片最大宽度；实际宽度会再受测量约束收窄，但不超过此值 -->
+        <attr name="psvCardMaxWidth" format="dimension" />
+        <!-- 卡片 宽:高 中的 高/宽 系数（343:456 ≈ 1.3294） -->
+        <attr name="psvCardRatio" format="float" />
+        <!-- 容器在卡片之外额外留出的空间，用于容纳后层露出与阴影 -->
+        <attr name="psvExtraWidth" format="dimension" />
+        <attr name="psvExtraHeight" format="dimension" />
+        <!-- 前景卡相对「容器正中」的微调偏移，默认 0dp；后层左上方露出由容器余量容纳 -->
+        <attr name="psvCardLeft" format="dimension" />
+        <attr name="psvCardTop" format="dimension" />
+        <!-- 圆角半径；三层取同一值，默认 16dp 与周边海报卡（Vod.Grid）统一 -->
+        <attr name="psvCornerRadius" format="dimension" />
+        <!-- 相邻层之间的偏移步长：中景 1 倍、后景 2 倍 -->
+        <attr name="psvOffsetXStep" format="dimension" />
+        <attr name="psvOffsetYStep" format="dimension" />
+        <!-- 相邻层之间的缩放步长：前景 1.00、中景 1-step、后景 1-2*step -->
+        <attr name="psvScaleStep" format="float" />
+        <!-- 中景 / 后景的海报内容透明度 -->
+        <attr name="psvAlphaMiddle" format="float" />
+        <attr name="psvAlphaBack" format="float" />
+        <!-- 三层阴影高度 -->
+        <attr name="psvElevationFront" format="dimension" />
+        <attr name="psvElevationMiddle" format="dimension" />
+        <attr name="psvElevationBack" format="dimension" />
+        <!-- 焦点态：整体放大倍数、时长、整体抬升量、前景文案 -->
+        <attr name="psvFocusScale" format="float" />
+        <attr name="psvFocusDuration" format="integer" />
+        <attr name="psvFocusLift" format="dimension" />
+        <attr name="psvLabel" format="string" />
+    </declare-styleable>
+</resources>

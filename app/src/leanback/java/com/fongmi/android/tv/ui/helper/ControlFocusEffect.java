@@ -7,7 +7,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.fongmi.android.tv.ui.custom.GlowBackground;
-import com.fongmi.android.tv.utils.TouchUi;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -57,8 +56,7 @@ public final class ControlFocusEffect {
      * @return 焦点特效句柄，供调用方设置弹窗锚点的粘性高亮；root 为空或没有按钮时返回 null
      */
     public static Effect attach(View root, View[] glowTargets, View[] scaleTargets) {
-        // Pad 触控模式不安装全局焦点监听，也不替换按钮背景为辉光 drawable
-        if (root == null || TouchUi.isTouch(root)) return null;
+        if (root == null) return null;
         Effect effect = new Effect(root);
         if (glowTargets != null) {
             for (View view : glowTargets) {

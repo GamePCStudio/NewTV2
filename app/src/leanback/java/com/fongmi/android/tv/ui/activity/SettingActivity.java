@@ -85,10 +85,14 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         setNoticeText();
     }
 
-    /** 影片刮削行右侧摘要：TMDB 刮削开启且连接方式可用时显示「开」。 */
+    /**
+     * 影片刮削行右侧摘要：显示当前 TMDB 连接方式。
+     *
+     * <p>子页已经没有开关，这里不再用开/关，直接反映「默认反代 / TMDB官方直连 /
+     * 自定义TMDB反代」三种状态，进来前就能看到实际走哪条线路。</p>
+     */
     private void setTmdbText() {
-        boolean enabled = TmdbSetting.isTmdbScrapeEnabled() && TmdbSetting.isConfigured();
-        mBinding.tmdbText.setText(Setting.getSwitch(enabled));
+        mBinding.tmdbText.setText(TmdbSetting.getModeLabelRes());
     }
 
     /** 提示过滤行摘要：只看总开关，关闭显示「关」。 */

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「查看全部」列表项：整个 item 根就是堆叠按钮本身，焦点与确认键都落在它上面。
+  实际宽高由 PosterStackPresenter 在 onCreateViewHolder 里按 Product.getSpec()
+  写入 LayoutParams，与同行左侧海报卡的画框尺寸同源。
+-->
+<com.fongmi.android.tv.ui.custom.PosterStackView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/stack"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clickable="true"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    app:psvLabel="@string/home_board_more_title" />

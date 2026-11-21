@@ -612,12 +612,10 @@
 
     <!-- Media scraping (Settings → Media scraping settings) -->
     <string name="setting_tmdb">Media scraping settings</string>
-    <string name="tmdb_scrape_tmdb">Enable TMDB scraping</string>
-    <string name="tmdb_site_url_hint">Site URL, e.g. https://example.com</string>
+    <string name="tmdb_site_url_hint">Custom proxy URL, e.g. https://example.com</string>
     <string name="tmdb_site_key_hint">API key (optional)</string>
     <string name="tmdb_site_delete">Delete</string>
     <string name="tmdb_site_invalid">URL must start with http:// or https://</string>
-    <string name="tmdb_error_toast">Scrape failure toast</string>
     <string name="tmdb_fetch_failed">TMDB scrape failed: %1$s</string>
     <string name="tmdb_retry">TMDB scrape</string>
     <string name="tmdb_retry_start">Scraping TMDB again…</string>
@@ -628,9 +626,10 @@
     <string name="tmdb_connection_hint">Choose how the app reaches TMDB. This address is used for all TMDB artwork and metadata.</string>
     <string name="tmdb_mode">TMDB connection</string>
     <string name="tmdb_mode_proxy">Default proxy</string>
-    <string name="tmdb_mode_official">Official API</string>
+    <string name="tmdb_mode_official">TMDB direct connection</string>
     <string name="tmdb_mode_custom">Custom proxy</string>
-    <string name="tmdb_site_custom">TMDB API site</string>
+    <string name="tmdb_site_custom">Custom TMDB proxy address</string>
+    <string name="tmdb_site_unset">Not set</string>
     <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>
     <string name="tmdb_attribution_title">Data provided by TMDB</string>
     <string name="setting_notice">Toast filter settings</string>

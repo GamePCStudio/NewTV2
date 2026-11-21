@@ -18,7 +18,6 @@ import com.fongmi.android.tv.databinding.ViewSheetItemBinding;
 import com.fongmi.android.tv.databinding.ViewSheetListBinding;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.utils.TouchUi;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -166,11 +165,6 @@ public final class SheetList {
      * 钳制在 {@code [0, 容器尺寸 - 框尺寸]} 内。焦点不在列表里、或列表还没布局时隐藏框。
      */
     private void syncSelectionFrame() {
-        // Pad 触控模式：不画焦点/选中框，列表靠按压态与当前项底色表达状态
-        if (TouchUi.isTouch(binding.getRoot())) {
-            binding.sheetSelection.setVisibility(View.GONE);
-            return;
-        }
         View row = binding.sheetList.getFocusedChild();
         // 钳制基准是「只含列表」的容器，不含上方标题行；否则标题高度会被算进容器，框整体下坠
         int width = binding.sheetListFrame.getWidth();

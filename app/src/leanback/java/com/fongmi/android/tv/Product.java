@@ -29,48 +29,7 @@ public class Product {
     }
 
     public static int getColumn() {
-        if (isPad()) {
-            try {
-                int columns = App.get().getResources().getInteger(R.integer.pad_poster_columns);
-                return columns > 0 ? columns : Math.abs(PlayerSetting.getSize() - 7);
-            } catch (Exception ignored) {
-                return Math.abs(PlayerSetting.getSize() - 7);
-            }
-        }
         return Math.abs(PlayerSetting.getSize() - 7);
-    }
-
-    /** 触控 Pad 变体判定：只由资源开关决定，编译期不依赖 pad 专属类。 */
-    public static boolean isPad() {
-        try {
-            return App.get().getResources().getBoolean(R.bool.pad_touch);
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    /** 卡片横向间距：Pad 按断点令牌，TV 保持 20dp 常量。 */
-    public static int getPosterSpacingDp() {
-        if (isPad()) {
-            try {
-                return Math.round(App.get().getResources().getDimension(R.dimen.pad_poster_columns_spacing) / App.get().getResources().getDisplayMetrics().density);
-            } catch (Exception ignored) {
-                return POSTER_SPACING_DP;
-            }
-        }
-        return POSTER_SPACING_DP;
-    }
-
-    /** 页面左右安全区（单边）：Pad 按断点令牌，TV 保持 48dp 常量。 */
-    public static int getSafeInsetDp() {
-        if (isPad()) {
-            try {
-                return Math.round(App.get().getResources().getDimension(R.dimen.pad_page_margin) / App.get().getResources().getDisplayMetrics().density);
-            } catch (Exception ignored) {
-                return POSTER_SAFE_INSET_DP;
-            }
-        }
-        return POSTER_SAFE_INSET_DP;
     }
 
     public static int getColumn(Style style) {
@@ -82,7 +41,7 @@ public class Product {
      * 收藏页 / 最近观看 / 分类页 / 首页共用这一处，避免各自硬编码 48dp 而再次漏算单边。
      */
     public static int getPosterSpace(int column) {
-        return ResUtil.dp2px(getSafeInsetDp() * 2) + ResUtil.dp2px(getPosterSpacingDp() * (column - 1));
+        return ResUtil.dp2px(POSTER_SAFE_INSET_DP * 2) + ResUtil.dp2px(POSTER_SPACING_DP * (column - 1));
     }
 
     public static int[] getSpec(Style style) {

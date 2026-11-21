@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「海报卡片堆叠」按钮的全部数值。规范中的层级参数表逐项落在这里，
+  Java 只读取、不写死数字，便于统一调整。
+
+  卡片比例 343:456（宽/高 ≈ 0.7527，即 高/宽 ≈ 1.3294）；最大宽度 300dp。
+
+  【高度契约｜与周边海报严格统一】
+  周边海报卡（adapter_vod_rect）由三段组成：画框 height = size[1]，下面
+  8dp marginTop + 26dp 片名 + 2dp + 20dp 元数据 = 56dp 文字区，
+  整卡高 = size[1] + 56dp。因此本按钮的 item 高度也取 size[1] + 56dp，
+  但卡片只排在顶部 size[1] 的区域内：整卡高度、行高、垂直对齐与周边完全一致，
+  而「堆叠视觉块」的高度刚好等于周边画框高度。
+
+  【几何契约｜不裁切】
+  视觉块外廓 = 左侧海报画框（宽 size[0]、高 size[1]），三层都落在其内：
+  后景贴左上、前景贴右下。相邻层偏移由 stack_offset_* 给出并随卡片尺寸等比缩放；
+  2×偏移 + 基准卡宽/高 = 画框宽/高，故选中框贴合整个视觉块外轮廓。
+  列表侧还有 8dp 上下 padding 兜底，焦点放大后上下各溢出约画框的 1.5%，
+  仍在 padding 内，选中/未选中都不裁切。
+
+  【圆角契约｜视觉等效】
+  stack_corner_radius 是左侧海报卡的圆角基准（16dp）。三层海报缩小后不再直接沿用
+  该值，而是按各自实际宽度相对画框的比例缩放（前景 × baseW/框宽、中景 × 0.93、
+  后景 × 0.86），保证圆角占卡片比例与左侧海报一致。
+-->
+<resources>
+
+    <!-- ===== 卡片本体 ===== -->
+    <dimen name="stack_card_max_width">300dp</dimen>
+    <item name="stack_card_ratio" type="dimen" format="float">1.3294</item>
+    <!-- 左侧海报卡（styles.xml Vod.Grid）的圆角基准；各层按缩放比例换算后使用 -->
+    <dimen name="stack_corner_radius">16dp</dimen>
+    <!-- 周边卡画框下方的片名 + 元数据区总高，用于把 item 高度对齐整卡 -->
+    <dimen name="stack_poster_text_block">56dp</dimen>
+    <dimen name="stack_extra_width">48dp</dimen>
+    <dimen name="stack_extra_height">96dp</dimen>
+    <!-- 前景卡相对「可用范围正中」的微调偏移，默认 0dp -->
+    <dimen name="stack_card_left">0dp</dimen>
+    <dimen name="stack_card_top">0dp</dimen>
+    <dimen name="stack_stroke_width">1dp</dimen>
+    <dimen name="stack_highlight_height">72dp</dimen>
+    <!-- 「查看全部」文案字号与透明度；其余文字样式（粗体 / 白色 / 居中）不变 -->
+    <dimen name="stack_label_size">14sp</dimen>
+    <item name="stack_label_alpha" type="dimen" format="float">0.7</item>
+
+    <!-- ===== 层级参数表（前景 1.00 / 中景 0.93 / 后景 0.86） =====
+         层级顺序 30 / 20 / 10 由 elevation 与 addView 顺序共同表达：
+         Android 的 ViewGroup 本就按 Z 排序绘制子 View，再调用 setZ()
+         会覆盖 elevation 而破坏阴影，故不额外写 z 数值。 -->
+    <!-- 相邻层偏移步长（露出量）：在当前 9/15dp 基础上 ×1.6 → 14.4/24dp。
+         其余间距与层级逻辑不变；实际仍按卡片尺寸等比缩放。 -->
+    <dimen name="stack_offset_x_step">14.4dp</dimen>
+    <dimen name="stack_offset_y_step">24dp</dimen>
+    <dimen name="stack_elevation_front">24dp</dimen>
+    <dimen name="stack_elevation_middle">14dp</dimen>
+    <dimen name="stack_elevation_back">8dp</dimen>
+    <item name="stack_scale_step" type="dimen" format="float">0.07</item>
+    <!-- 中景 0.48 / 后景 0.26：后景明显暗于中景，透出卡片深色底 -->
+    <item name="stack_alpha_middle" type="dimen" format="float">0.48</item>
+    <item name="stack_alpha_back" type="dimen" format="float">0.26</item>
+
+    <!-- ===== 焦点反馈（作用于整个视觉块，不改变三层相对参数） =====
+         1.03 而非 1.04：焦点时视觉块上下各溢出约 7dp，正好落在列表 8dp
+         padding 内，配合选中态与周边海报的高度差 < 1%，肉眼无差。 -->
+    <item name="stack_focus_scale" type="dimen" format="float">1.03</item>
+    <integer name="stack_focus_duration">180</integer>
+    <dimen name="stack_focus_lift">6dp</dimen>
+    <dimen name="stack_focus_ring_width">3dp</dimen>
+    <dimen name="stack_focus_ring_radius">20dp</dimen>
+
+    <!-- ===== 页面 5% overscan（按 960 x 540dp 基准换算） ===== -->
+    <dimen name="stack_overscan_horizontal">48dp</dimen>
+    <dimen name="stack_overscan_vertical">27dp</dimen>
+
+    <!-- ===== 示例页尺寸：卡片 300x399 时视觉块 315x431，item 315x487 ===== -->
+    <dimen name="stack_demo_width">315dp</dimen>
+    <dimen name="stack_demo_height">487dp</dimen>
+
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 焦点高亮描边 / 光晕：只在获得焦点的状态绘制，与三层的相对层级参数无关。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="@dimen/stack_focus_ring_width"
+        android:color="@color/stack_focus_glow" />
+    <corners android:radius="@dimen/stack_focus_ring_radius" />
+
+</shape>

@@ -18,6 +18,7 @@ import androidx.core.os.HandlerCompat;
 
 import com.fongmi.android.tv.receiver.RuntimeReceiver;
 import com.fongmi.android.tv.ui.dialog.SpiderDialog;
+import com.fongmi.android.tv.utils.ColdTrace;
 import com.fongmi.android.tv.utils.NoticePolicy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.RuntimeInstaller;
@@ -39,6 +40,7 @@ public class App extends Application implements Application.ActivityLifecycleCal
     private volatile Activity activity;
 
     public App() {
+        ColdTrace.mark("app.ctor");
         instance = this;
         gson = new Gson();
         time = System.currentTimeMillis();
@@ -92,11 +94,15 @@ public class App extends Application implements Application.ActivityLifecycleCal
     @Override
     public void onCreate() {
         super.onCreate();
+        ColdTrace.mark("app.onCreate.start");
         initRuntime();
+        ColdTrace.mark("app.initRuntime.end");
         // 站源本地代理会直连系统 Toast，应用内提示出口拦不到；在框架层入队前补一层判定
         ToastGuard.install();
+        ColdTrace.mark("app.toastGuard.end");
         Notify.createChannel();
         registerActivityLifecycleCallbacks(this);
+        ColdTrace.mark("app.onCreate.end");
     }
 
     private void initRuntime() {

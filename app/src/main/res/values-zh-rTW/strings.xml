@@ -595,12 +595,10 @@
 
     <!-- TMDB 刮削（設定 → TMDB 設定） -->
     <string name="setting_tmdb">影片刮削設定</string>
-    <string name="tmdb_scrape_tmdb">啟用TMDB刮削</string>
-    <string name="tmdb_site_url_hint">站點位址，如 https://example.com</string>
+    <string name="tmdb_site_url_hint">自訂反代位址，如 https://example.com</string>
     <string name="tmdb_site_key_hint">API 金鑰（選填）</string>
     <string name="tmdb_site_delete">刪除</string>
     <string name="tmdb_site_invalid">位址需以 http:// 或 https:// 開頭</string>
-    <string name="tmdb_error_toast">刮削失敗提示</string>
     <string name="tmdb_fetch_failed">TMDB 刮削失敗：%1$s</string>
     <string name="tmdb_retry">TMDB刮削</string>
     <string name="tmdb_retry_start">正在重新刮削 TMDB…</string>
@@ -611,9 +609,10 @@
     <string name="tmdb_connection_hint">選擇 TMDB 資料的存取方式，該位址將用於應用程式內所有 TMDB 圖片與資料請求</string>
     <string name="tmdb_mode">TMDB連線方式</string>
     <string name="tmdb_mode_proxy">預設反代</string>
-    <string name="tmdb_mode_official">官方API</string>
+    <string name="tmdb_mode_official">TMDB官方直連</string>
     <string name="tmdb_mode_custom">自訂反代</string>
-    <string name="tmdb_site_custom">TMDB API 站台</string>
+    <string name="tmdb_site_custom">自訂TMDB反代位址</string>
+    <string name="tmdb_site_unset">未設定</string>
     <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>
     <string name="tmdb_attribution_title">Data provided by TMDB</string>
     <string name="setting_notice">提示（Toast）過濾設定</string>

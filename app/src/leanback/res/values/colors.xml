@@ -5,4 +5,19 @@
     <color name="control_scrubber_halo">#4DE97022</color>
     <color name="control_track_played">#CCFFFFFF</color>
     <color name="control_track_unplayed">#33FFFFFF</color>
+
+    <!-- 「海报卡片堆叠」按钮配色（规范设计稿） -->
+    <color name="stack_page_bg">#0E0E13</color>
+    <color name="stack_card_bg">#17171F</color>
+    <color name="stack_text_primary">#F6F5F8</color>
+    <color name="stack_text_secondary">#A3A1AE</color>
+    <color name="stack_accent_coral">#FF6B6B</color>
+    <color name="stack_accent_gold">#FFD166</color>
+    <color name="stack_accent_teal">#6FD3CE</color>
+    <!-- 1px 内描边 rgba(255,255,255,0.14) -->
+    <color name="stack_inner_stroke">#24FFFFFF</color>
+    <color name="stack_highlight_start">#1AFFFFFF</color>
+    <color name="stack_highlight_end">#00FFFFFF</color>
+    <!-- 焦点描边 / 光晕 -->
+    <color name="stack_focus_glow">#FFFFD166</color>
 </resources>

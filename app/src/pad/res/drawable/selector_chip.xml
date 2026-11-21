@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 控制条胶囊：按下 30% 白底，选中沿用既有实底，无描边。 -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/shape_touch_pressed" android:state_pressed="true" />
-    <item android:drawable="@drawable/shape_chip_activated" android:state_selected="true" />
-    <item android:drawable="@drawable/shape_chip_normal" />
-</selector>

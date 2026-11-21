@@ -12,6 +12,7 @@ import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.db.BackupFiles;
 import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.utils.DoubanHot;
+import com.fongmi.android.tv.utils.HomeBoard;
 import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.github.catvod.utils.Prefers;
@@ -146,6 +147,7 @@ public class Backup {
         TmdbApi.resetState();
         DoubanHot.reset();
         RankLatest.reset();
+        HomeBoard.reset();
         // 素材队列、豆瓣榜单缓存与失败冷却都放在 tmdb/ 目录里，恢复后一并失效。
         ArtSource.reset();
     }

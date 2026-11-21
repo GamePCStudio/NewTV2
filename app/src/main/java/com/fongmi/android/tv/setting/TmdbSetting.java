@@ -3,6 +3,7 @@ package com.fongmi.android.tv.setting;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.TmdbApi;
 import com.fongmi.android.tv.utils.RankLatest;
 import com.github.catvod.utils.Prefers;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * TMDB 刮削配置：全局连接方式 + 单一 API 站点 + 刮削开关与失败提示。
+ * TMDB 刮削配置：全局连接方式 + 自定义反代地址（含可选密钥）。
  *
  * <p>连接方式决定所有 TMDB 请求的基地址：默认反代、官方 API、自定义反代。
  * 项目内不再有其它数据源，所有图片与元数据拉取都经由这里给出的地址。</p>
@@ -33,7 +34,7 @@ public final class TmdbSetting {
     /** 自定义反代：地址与密钥由用户提供。 */
     public static final int MODE_CUSTOM = 2;
 
-    public static final String PROXY_API_URL = "https://1.tmdbapi.cc.cd";
+    public static final String PROXY_API_URL = "https://t.tmdbapi.cc.cd";
     public static final String OFFICIAL_API_URL = "https://api.themoviedb.org";
 
     private static final String KEY_MODE = "tmdb_mode";
@@ -41,8 +42,6 @@ public final class TmdbSetting {
     private static final String KEY_LEGACY_SITES = "tmdb_sites";
     private static final String KEY_LEGACY_URL = "tmdb_api_url";
     private static final String KEY_LEGACY_KEY = "tmdb_api_key";
-    private static final String KEY_TMDB_SCRAPE = "tmdb_scrape_tmdb";
-    private static final String KEY_ERROR_TOAST = "tmdb_error_toast";
 
     /** 轮换游标保留给 API 层的统一请求入口；当前只有一个全局站点。 */
     private static final AtomicInteger CURSOR = new AtomicInteger();
@@ -119,32 +118,31 @@ public final class TmdbSetting {
         CURSOR.set(0);
     }
 
+    /**
+     * 连接方式对应的文案资源。
+     *
+     * <p>设置页摘要与选择弹窗共用同一份映射，避免两处顺序/文案不一致。</p>
+     */
+    public static int getModeLabelRes() {
+        int mode = getMode();
+        if (mode == MODE_OFFICIAL) return R.string.tmdb_mode_official;
+        if (mode == MODE_CUSTOM) return R.string.tmdb_mode_custom;
+        return R.string.tmdb_mode_proxy;
+    }
+
     public static int nextSiteIndex(int size) {
         if (size <= 1) return 0;
         return (CURSOR.getAndIncrement() & 0x7FFFFFFF) % size;
     }
 
-    /** TMDB 刮削开关；连接方式只决定地址，不再受任何上级总开关控制。 */
-    public static boolean isTmdbScrapeEnabled() {
-        return Prefers.getBoolean(KEY_TMDB_SCRAPE, true);
-    }
-
-    public static void putTmdbScrape(boolean value) {
-        Prefers.put(KEY_TMDB_SCRAPE, value);
-        TmdbApi.onConfigChanged();
-    }
-
+    /**
+     * 是否参与刮削。
+     *
+     * <p>「启用刮削」总开关已移除：TMDB 是唯一数据源，只要连接方式给出可用地址就一直启用，
+     * 没有地址（自定义反代未填）时自然停用。保留这个方法名给调用方复用。</p>
+     */
     public static boolean isEnabled() {
-        return isTmdbScrapeEnabled();
-    }
-
-    /** 刮削失败时是否用 Toast 提示。 */
-    public static boolean isErrorToast() {
-        return Prefers.getBoolean(KEY_ERROR_TOAST, false);
-    }
-
-    public static void putErrorToast(boolean value) {
-        Prefers.put(KEY_ERROR_TOAST, value);
+        return isConfigured();
     }
 
     private static TmdbSite migrate() {

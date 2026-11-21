@@ -21,7 +21,7 @@ import java.util.List;
  * <p><b>顺序</b>：2 剧集 → 2 电影 交替，循环到 12 条；某一段不足时由另一段补位，
  * 两段都取完则提前结束。去重按归一化片名，避免电影榜里重复出现同一部。</p>
  *
- * <p><b>缓存</b>：完全交给 {@link RankLatest}（内存 + 磁盘，TTL 30 分钟，失败回退旧数据）。
+ * <p><b>缓存</b>：完全交给 {@link RankLatest}（内存 + 磁盘，TTL 12 小时，失败回退旧数据）。
  * 本类只做模型转换，不再单独落盘。</p>
  */
 public final class DoubanHot {
