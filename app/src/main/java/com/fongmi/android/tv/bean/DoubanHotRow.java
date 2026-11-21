@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 首页主视觉的一屏数据：固定 10 部，顺序由 {@link com.fongmi.android.tv.utils.DoubanHot}
- * 在合榜时排定（2 剧集 → 2 电影 → 2 剧集 → 2 电影 → 2 综艺）。
+ * 在合榜时排定（2 剧集 → 2 电影 交替，共 12 条）。
  *
  * <p>单独包一层而不是直接往 adapter 里塞 {@code List}，是因为 {@code CustomSelector} 按
  * {@code item.getClass()} 选 Presenter：用一个专属类型才能和「最近观看」的 {@code ListRow}、

@@ -30,7 +30,7 @@ import java.util.Set;
  *
  * <pre>
  *   ① 统一入口：{@link #fetch} 处理单条（详情页、最近观看、主视觉），
- *      {@link #enqueue} 处理网格批量（首页与三个频道页），两者走同一套判定与落库
+ *      {@link #enqueue} 处理网格批量（首页），两者走同一套判定与落库
  *   ② 单一全局队列：所有页面共用一个按进入顺序处理的队列，不区分页面优先级
  *   ③ 匀速排队：相邻两次抓取至少间隔 {@link #INTERVAL_MS}，避免一次进页面打满接口
  *   ④ 优先 TMDB：已完整缓存直接跳过；只有「无匹配」「素材不全」「TMDB 未启用」才转Douban Bridge，
@@ -39,13 +39,17 @@ import java.util.Set;
  *   ⑥ 失败分级：只有「两个数据源都正常返回、但确实没有这部片」才进 {@link ArtBlacklist}，
  *      网络错误 / 限流 / 素材缺失等临时问题只做 {@link ArtCooldown} 的短时冷却
  *   ⑦ 统一出口：{@link #card(String)} 与 {@link #apply(Vod)} 走同一份索引、同一套评分格式，
- *      首页站源卡片与三个频道页的热榜卡片因此表现完全一致
+ *      首页站源卡片与最近观看因此表现完全一致
  * </pre>
  */
 public final class ArtSource {
 
-    /** 首页是电影 / 剧集 / 综艺混合，Douban Bridge需要同时查多类榜单。 */
+    /** 不限定类目：Douban Bridge 同时查电影与剧集榜单。 */
     public static final int CAT_AUTO = 0;
+    /** 只查电影榜单。 */
+    public static final int CAT_MOVIE = 2;
+    /** 只查剧集榜单。 */
+    public static final int CAT_TV = 3;
     /** 卡片评分备注前缀：兼容旧缓存，新数据统一走 Vod.artScore。 */
     public static final String SCORE_PREFIX = "评分：";
 
@@ -127,7 +131,7 @@ public final class ArtSource {
     /**
      * 把索引里的海报与评分就地应用到一张卡片，返回是否有变化。
      * 首页的站源 Vod 会保留片名、播放地址与站源备注，只覆盖图片并写入独立评分字段；
-     * 频道页的纯片名卡片则用它拿到全部素材。两者走的是同一份索引与同一套格式。
+     * 纯片名卡片（最近观看）则用它拿到全部素材。两者走的是同一份索引与同一套格式。
      */
     public static boolean apply(Vod vod) {
         if (vod == null || TextUtils.isEmpty(vod.getName())) return false;
@@ -189,7 +193,7 @@ public final class ArtSource {
      * @param keyword  主关键字
      * @param fallback 备用片名（可空）
      * @param aliases  额外别名（可空）
-     * @param category {@link #CAT_AUTO} 或 {@link HotRank#MOVIE} / {@link HotRank#TV} / {@link HotRank#VARIETY}
+     * @param category {@link #CAT_AUTO} / {@link #CAT_MOVIE} / {@link #CAT_TV}
      * @param force    true 表示用户手动重试：跳过缓存与冷却，两个数据源都重新试一次
      */
     public static void fetch(String keyword, String fallback, List<String> aliases, int category, boolean force, Callback callback) {
@@ -292,7 +296,7 @@ public final class ArtSource {
         TmdbApi.ensureMeta(title);
     }
 
-    /** 首页等混合内容页面：不指定类目，Douban Bridge同时查电影、剧集与综艺榜。 */
+    /** 首页等混合内容页面：不指定类目，Douban Bridge 同时查电影与剧集榜。 */
     public static void enqueue(Collection<String> titles) {
         enqueue(titles, CAT_AUTO);
     }

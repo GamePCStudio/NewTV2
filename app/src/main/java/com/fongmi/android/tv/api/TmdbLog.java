@@ -45,7 +45,7 @@ public final class TmdbLog {
     public static final String STAGE_SEARCH = "搜索";
     public static final String STAGE_IMAGES = "图集";
     public static final String STAGE_BACKDROP = "背景图";
-    /** 竖版海报：频道页热榜卡片用，缺失时回退背景图。 */
+    /** 竖版海报：卡片图用，缺失时回退背景图。 */
     public static final String STAGE_POSTER = "海报";
     public static final String STAGE_LOGO = "Logo";
     public static final String STAGE_DONE = "完成";

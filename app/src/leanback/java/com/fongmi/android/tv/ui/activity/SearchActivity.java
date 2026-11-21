@@ -19,7 +19,6 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Word;
 import com.fongmi.android.tv.databinding.ActivitySearchBinding;
 import com.fongmi.android.tv.impl.Callback;
-import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.RecordAdapter;
 import com.fongmi.android.tv.ui.adapter.WordAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
@@ -27,10 +26,9 @@ import com.fongmi.android.tv.ui.custom.CustomKeyboard;
 import com.fongmi.android.tv.ui.custom.CustomTextListener;
 import com.fongmi.android.tv.ui.dialog.LocalConnectDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
-import com.fongmi.android.tv.utils.HotRank;
 import com.fongmi.android.tv.utils.KeyUtil;
+import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.SearchSuggest;
-import com.fongmi.android.tv.utils.TouchUi;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.utils.ZhuToPin;
 import com.github.catvod.net.OkHttp;
@@ -53,7 +51,6 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     private WordAdapter mWordAdapter;
     private WordAdapter mMovieAdapter;
     private WordAdapter mTvAdapter;
-    private WordAdapter mVarietyAdapter;
 
     /** 联想词序号：双源并发返回，用序号丢弃过期响应，避免旧结果覆盖新结果。 */
     private int mSuggestSeq;
@@ -70,11 +67,6 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
      * 按需求一律清空搜索框，让页面回到「热词」初始态，而不是接着上次的词继续。</p>
      */
     private boolean mResumed;
-
-    private interface HotSaver {
-
-        void save(String result);
-    }
 
     public static void start(Activity activity) {
         activity.startActivity(new Intent(activity, SearchActivity.class));
@@ -143,10 +135,6 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
         mBinding.tvWordRecycler.setHasFixedSize(false);
         mBinding.tvWordRecycler.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
         mBinding.tvWordRecycler.setAdapter(mTvAdapter = new WordAdapter(this));
-        mBinding.varietyWordRecycler.setItemAnimator(null);
-        mBinding.varietyWordRecycler.setHasFixedSize(false);
-        mBinding.varietyWordRecycler.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
-        mBinding.varietyWordRecycler.setAdapter(mVarietyAdapter = new WordAdapter(this));
         mBinding.recordRecycler.setHasFixedSize(false);
         mBinding.recordRecycler.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
         mBinding.recordRecycler.setAdapter(mRecordAdapter = new RecordAdapter(this));
@@ -168,63 +156,37 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     }
 
     /**
-     * 热词三分类：电影 / 剧集 / 综艺来自 {@link HotRank} 的四平台聚合榜
-     * （优酷 / 爱奇艺 / 腾讯视频 / 芒果TV 公开榜单，交替排名去重）。
+     * 热播剧集 / 热播电影：同一份 {@link RankLatest} 榜单的两段。
      *
-     * <p>先渲染缓存，缓存过期才刷新。榜单是低频数据，没必要每次进搜索页都打三次请求。
-     * 任一请求失败都静默降级为已有缓存，不弹提示、不清空展示。
-     *
-     * <p>回退保护：豆瓣数据源写下的缓存带 {@code "source":"douban"} 标记，换回 HotRank 后
-     * 不能再拿来渲染（否则热词仍是豆瓣的），也不能只靠 {@code isHotExpired()} 判定刷新 ——
-     * 豆瓣时代刚刷过缓存时它可能是 false，会让三组一直空白。这里检测到旧缓存就丢弃并强制刷新一次。
+     * <p>数据源 {@code rank/latest} 一份响应里就带 {@code categories.series} 与
+     * {@code categories.movie}，服务端已用 TMDB 富化，因此这里只发一次请求、分别填充两组。
+     * 缓存（内存 + 磁盘，30 分钟）由 {@code RankLatest} 统一管理：命中时回调几乎是同步的，
+     * 过期才后台刷新；请求失败保留旧数据，不弹提示、不清空展示。</p>
      */
     private void getHot() {
         mSuggestSeq++;
         mBinding.word.setVisibility(View.GONE);
         mBinding.wordRecycler.setVisibility(View.GONE);
-
-        String movieCache = Setting.getHotMovie();
-        String tvCache = Setting.getHotTv();
-        String varietyCache = Setting.getHotVariety();
-        boolean legacy = isLegacyHot(movieCache) || isLegacyHot(tvCache) || isLegacyHot(varietyCache);
-        String empty = "";
-        bindHot(mMovieAdapter, mBinding.movieWordRecycler, mBinding.movieWord, legacy ? empty : movieCache);
-        bindHot(mTvAdapter, mBinding.tvWordRecycler, mBinding.tvWord, legacy ? empty : tvCache);
-        bindHot(mVarietyAdapter, mBinding.varietyWordRecycler, mBinding.varietyWord, legacy ? empty : varietyCache);
-        if (!legacy && !Setting.isHotExpired()) return;
-        requestRank(HotRank.MOVIE, mMovieAdapter, mBinding.movieWordRecycler, mBinding.movieWord, Setting::putHotMovie);
-        requestRank(HotRank.TV, mTvAdapter, mBinding.tvWordRecycler, mBinding.tvWord, Setting::putHotTv);
-        requestRank(HotRank.VARIETY, mVarietyAdapter, mBinding.varietyWordRecycler, mBinding.varietyWord, Setting::putHotVariety);
+        RankLatest.load(data -> {
+            // 回调回来时用户可能已经开始输入：热词组必须让位给联想词，不能盖回去。
+            if (!empty()) return;
+            bindRank(mMovieAdapter, mBinding.movieWordRecycler, mBinding.movieWord, data.getMovie());
+            bindRank(mTvAdapter, mBinding.tvWordRecycler, mBinding.tvWord, data.getSeries());
+        });
     }
 
-    /** 旧豆瓣数据源的缓存标记；{@code Word.objectFrom()} 会忽略多余字段，必须在这里主动拦掉。 */
-    private static boolean isLegacyHot(String json) {
-        return json != null && json.contains("\"source\":\"douban\"");
-    }
-
-    private void bindHot(WordAdapter adapter, RecyclerView list, TextView label, String json) {
-        List<Word.Data> data = limit(Word.objectFrom(json).getData());
+    /** 把榜单条目转成热词胶囊：只取片名，最多 {@link #HOT_LIMIT} 条。 */
+    private void bindRank(WordAdapter adapter, RecyclerView list, TextView label, List<RankLatest.RankItem> source) {
+        List<Word.Data> data = new ArrayList<>(Math.min(source.size(), HOT_LIMIT));
+        for (RankLatest.RankItem item : source) {
+            if (item == null || TextUtils.isEmpty(item.getTitle())) continue;
+            data.add(Word.Data.create(item.getTitle()));
+            if (data.size() >= HOT_LIMIT) break;
+        }
         adapter.setItems(data);
         boolean show = !data.isEmpty();
         label.setVisibility(show ? View.VISIBLE : View.GONE);
         list.setVisibility(show ? View.VISIBLE : View.GONE);
-    }
-
-    private List<Word.Data> limit(List<Word.Data> data) {
-        return new ArrayList<>(data.subList(0, Math.min(data.size(), HOT_LIMIT)));
-    }
-
-    /** 四平台聚合榜：回调在后台线程，切回主线程后再写缓存、刷新列表。 */
-    private void requestRank(int cat, WordAdapter adapter, RecyclerView list, TextView label, HotSaver saver) {
-        HotRank.fetch(cat, result -> {
-            if (TextUtils.isEmpty(result)) return;
-            App.post(() -> {
-                if (!empty()) return;
-                Setting.putHotTime();
-                saver.save(result);
-                bindHot(adapter, list, label, result);
-            });
-        });
     }
 
     /**
@@ -280,8 +242,6 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
         mBinding.movieWordRecycler.setVisibility(View.GONE);
         mBinding.tvWord.setVisibility(View.GONE);
         mBinding.tvWordRecycler.setVisibility(View.GONE);
-        mBinding.varietyWord.setVisibility(View.GONE);
-        mBinding.varietyWordRecycler.setVisibility(View.GONE);
     }
 
     @Override
@@ -482,7 +442,7 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     @Override
     protected void onResume() {
         super.onResume();
-        if (!TouchUi.isTouch(this)) mBinding.mic.setFocusable(true);
+        mBinding.mic.setFocusable(true);
         // 从任意页面返回搜索页：清空搜索框内的全部字符；首次进入时保留 start(keyword) 带来的词。
         if (mResumed) clearKeyword();
         else mResumed = true;

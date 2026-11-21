@@ -64,7 +64,7 @@ import okhttp3.Response;
 public final class TmdbApi {
 
     public static final String BACKDROP_SIZE = "w1280";
-    /** 竖版海报：频道页热榜卡片用；比 w1280 背景图小，不额外增加明显带宽。 */
+    /** 竖版海报：卡片图用；比 w1280 背景图小，不额外增加明显带宽。 */
     public static final String POSTER_SIZE = "w500";
     /**
      * logo 取原图：w500 在 1080p 电视上放大到 200dp（400px）后会发虚、边缘出锯齿。
@@ -228,8 +228,8 @@ public final class TmdbApi {
      * 而 {@link #fetch} 遇到 cached 会直接短路，这几个字段永远补不回来。
      *
      * <p>只发一次 {@code search/multi}，<b>不重新下载任何图片、不写 miss</b>；
-     * 写入索引后通知首页刷新简介与 meta 行。首页主视觉改用 HotRank 供数后，
-     * 评分 / 年份 / 题材全靠这里从 TMDB 补齐。</p>
+     * 写入索引后通知首页刷新简介与 meta 行。主视觉已改用榜单富化数据，不再依赖
+     * 这里补字段；该方法仍服务于最近观看与详情页的老索引。</p>
      *
      * <p>同一片名在一次进程内只尝试一次，TMDB 未启用 / 无匹配 / 还没刮削过时静默跳过，
      * 不影响主链路，也不会产生额外日志噪音。</p>
@@ -607,7 +607,7 @@ public final class TmdbApi {
                         "横版剧照下载失败，尝试竖版海报：" + error, false);
             }
         }
-        // 竖版海报：频道页卡片用；只有剧照时允许缺失，卡片会回退剧照。
+        // 竖版海报：卡片用；只有剧照时允许缺失，卡片会回退剧照。
         if (!TextUtils.isEmpty(poster)) {
             try {
                 byte[] bytes = downloadRotating("/t/p/" + POSTER_SIZE + poster, keyword, TmdbLog.STAGE_POSTER);
@@ -1007,7 +1007,7 @@ public final class TmdbApi {
         String originalName;
         @SerializedName("backdrop_path")
         String backdropPath;
-        /** 竖版海报路径；频道页热榜卡片用，旧索引没有该字段时回退背景图。 */
+        /** 竖版海报路径；卡片图用，旧索引没有该字段时回退背景图。 */
         @SerializedName("poster_path")
         String posterPath;
         /** search/multi 的搜索结果自带 overview，无需再单独请求详情接口。 */

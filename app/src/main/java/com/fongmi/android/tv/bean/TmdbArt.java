@@ -203,7 +203,7 @@ public class TmdbArt {
         return getLogo().isEmpty() ? null : new File(TmdbStore.dir(), getLogo());
     }
 
-    /** 频道页卡片图：优先竖版海报，老索引只有横版剧照时回退它。 */
+    /** 卡片图：优先竖版海报，老索引只有横版剧照时回退它。 */
     public File getCardFile() {
         File poster = getPosterFile();
         if (poster != null && poster.exists() && poster.length() > 0) return poster;

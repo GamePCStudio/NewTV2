@@ -72,7 +72,6 @@ import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.HeroInset;
 import com.fongmi.android.tv.ui.custom.HeroTransition;
-import com.fongmi.android.tv.ui.custom.ToolbarEntries;
 import com.fongmi.android.tv.ui.presenter.DoubanHotPresenter;
 import com.fongmi.android.tv.ui.presenter.HeaderPresenter;
 import com.fongmi.android.tv.ui.presenter.HistoryPresenter;
@@ -158,7 +157,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private String mHeroSignature = "";
     /** 最近一次热榜结果（已去黑名单）：剧照晚到时用它重新核算主视觉，不必重打榜单接口。 */
     private List<DoubanHotItem> mHeroItems = new ArrayList<>();
-    /** 海报网格素材落库后就地刷新，与三个频道页共用同一套解析与展示逻辑。 */
+    /** 海报网格素材落库后就地刷新，与首页其它行共用同一套解析与展示逻辑。 */
     private final ArtSource.Listener mArtListener = this::refreshArt;
 
     /**
@@ -326,13 +325,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /**
      * 顶部工具栏：单行、行高 64dp；导航与站源名 16sp 加粗，时钟 18sp（全局统一字号）。
-     * 自左至右为：搜索圆钮（放大镜）→ 6 个导航 → 站源入口 → 时钟。
+     * 自左至右为：搜索圆钮（放大镜）→ 3 个导航 → 站源入口 → 时钟。
      *
-     * <p>导航文字按钮按序为「首页 / 电影 / 剧集 / 综艺 / 片库 / 我的」共 <b>6</b> 项：
-     * 「首页」刷新首页内容并回到列表顶部；「片库」进 VodActivity；「我的」进设置页
-     * （原右侧齿轮图标已移除，设置入口并入导航）；电影 / 剧集 / 综艺 分别进各自的
-     * 热榜频道页（带上首页分类结果，保证频道页「片库」入口可用）。左右走位未写死 nextFocusLeft/Right，
-     * 完全由布局顺序决定；「首页」仍是 index 0 且带 focusedByDefault，
+     * <p>导航文字按钮按序为「首页 / 片库 / 我的」共 <b>3</b> 项：
+     * 「首页」刷新首页内容并回到列表顶部；「片库」进 VodActivity；「我的」进设置页。
+     * 左右走位未写死 nextFocusLeft/Right，完全由布局顺序决定；「首页」仍是 index 0，
      * 启动 / setFocus() / 返回「回首页」都指向它。</p>
      *
      * <p>选中态：导航项统一使用 36dp 高胶囊（selector_nav_button）。聚焦 = 纯白底 + 黑字；
@@ -342,9 +339,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      */
     private void setToolbar() {
         mToolbar.navHome.setOnClickListener(v -> refreshHome());
-        mToolbar.navMovie.setOnClickListener(v -> MovieActivity.start(this, mResult));
-        mToolbar.navSeries.setOnClickListener(v -> SeriesActivity.start(this, mResult));
-        mToolbar.navVariety.setOnClickListener(v -> VarietyActivity.start(this, mResult));
         mToolbar.navVod.setOnClickListener(v -> VodActivity.start(this, mResult));
         mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this));
         mToolbar.siteEntry.setOnClickListener(v -> showSiteSheet());
@@ -358,14 +352,12 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         // 当前所在页 = 首页：常亮 50% 黑胶囊 + 白字（焦点离开后仍保留）。
         mToolbar.navHome.setSelected(true);
         // 记住最后聚焦的导航按钮：内容区 / 右侧动作区按返回时焦点回到它。
-        // 这里的顺序即导航索引顺序，必须与 view_home_toolbar.xml 的 navButtons 子项顺序一致（6 项）。
+        // 这里的顺序即导航索引顺序，必须与 view_home_toolbar.xml 的 navButtons 子项顺序一致（3 项）。
         // 注意 mLastNav 存的是 View 引用而非下标，增删项不会留下错位索引。
-        View[] navs = {mToolbar.navHome, mToolbar.navMovie, mToolbar.navSeries, mToolbar.navVariety, mToolbar.navVod, mToolbar.navMine};
+        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.navMine};
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) mLastNav = view;
         });
-        // 影片刮削关闭或两个数据源都不可用时，电影 / 剧集 / 综艺没有内容可看，入口一并隐藏。
-        ToolbarEntries.apply(mToolbar);
     }
 
     /**
@@ -759,9 +751,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         List<String> items = Arrays.asList(getHome().getName(), getConfig().getName(), getString(R.string.app_name));
         Optional<String> optional = items.stream().filter(s -> !TextUtils.isEmpty(s)).findFirst();
         optional.ifPresent(s -> mToolbar.siteName.setText(clampSiteName(s)));
-        // 换站源后「来自 · 站源名」跟着变；刮削配置变化时三个频道入口的可见性也在这里重算。
+        // 换站源后「来自 · 站源名」跟着变。
         updateRecommendHeader();
-        ToolbarEntries.apply(mToolbar);
     }
 
     /**
@@ -861,7 +852,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 ArtSource.apply(vod);
                 if (!vod.getName().isEmpty()) names.add(vod.getName());
             }
-            // 首页混合电影 / 剧集 / 综艺，让豆瓣同时查两类榜单；与频道页共用同一套解析。
+            // 首页混合电影 / 剧集，让豆瓣同时查两类榜单；与最近观看共用同一套解析。
             ArtSource.enqueue(names, ArtSource.CAT_AUTO);
         }
         if (items.isEmpty()) {
@@ -1079,7 +1070,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mAdapter.removeItems(start, mAdapter.size() - start);
     }
 
-    /** 加载主视觉（HotRank 聚合热榜 + TMDB 刮削）：命中 30 分钟缓存立即渲染，过期后台刷新。 */
+    /** 加载主视觉（rank/latest 富化榜单）：命中 30 分钟缓存立即渲染，过期后台刷新。 */
     private void loadDoubanHot() {
         DoubanHot.load(this::applyHero);
     }
@@ -1087,14 +1078,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     /**
      * 主视觉的唯一出口（幂等 + 自适配）。
      *
-     * <p><b>「有内容」的判据是「有可渲染的横版剧照」</b>，不是「榜单有片名」：
-     * 轮播 Presenter 只接受已落盘的剧照，只有片名没有图时它会把整块文字层隐藏，
+     * <p><b>「有内容」的判据是「榜单给了横版剧照路径」</b>，不是「榜单有片名」：
+     * 轮播 Presenter 只接受能加载出剧照的条目，只有片名没有图时它会把整块文字层隐藏，
      * 留下一块 440dp 的同色底——那正是首页顶部的空档。所以这里先按
-     * {@link TmdbArt#hasBackdrop()} 过滤，一张图都没有就整行收起。</p>
+     * {@link DoubanHotItem#hasBackdrop()} 过滤，一张图都没有就整行收起。</p>
      *
      * <pre>
-     *   无可渲染条目 → 收掉整行，下方栏目上移；候选片名交给统一刮削队列补图，
-     *                  图落库后 ArtSource 广播会回到这里重新挂上
+     *   无可渲染条目 → 收掉整行，下方栏目上移（数据源一次给全，不需要另起刮削补图）
      *   行已存在     → 内容变了就地 replace；内容没变直接返回，重复回调不闪
      *   从无到有     → 先记可视锚点再插入，已进入内容区时保持原行不动
      * </pre>
@@ -1108,17 +1098,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         }
         mHeroItems = shown;
         List<DoubanHotItem> renderable = new ArrayList<>();
-        List<String> missing = new ArrayList<>();
         for (DoubanHotItem item : shown) {
-            TmdbArt art = TmdbStore.find(item.getTitle());
-            if (art != null && art.hasBackdrop()) renderable.add(item);
-            else missing.add(item.getTitle());
+            // 榜单已带横版剧照相对路径：有路径就能直接加载，不再查本地素材、也不触发刮削。
+            if (item.hasBackdrop()) renderable.add(item);
         }
         int index = indexOfHero();
         if (renderable.isEmpty()) {
             collapseHero(index);
-            // 没有一张剧照：交给统一刮削队列补图，图到了广播会重新走这里。
-            if (!missing.isEmpty()) ArtSource.enqueue(missing, ArtSource.CAT_AUTO);
             return;
         }
         String signature = heroSignature(renderable);
@@ -1405,8 +1391,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     protected void onResume() {
         super.onResume();
-        // 从设置页返回时刮削配置可能已变，频道入口的显隐要重新收敛。
-        ToolbarEntries.apply(mToolbar);
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();

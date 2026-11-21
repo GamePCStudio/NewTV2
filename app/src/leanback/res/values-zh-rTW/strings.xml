@@ -15,9 +15,6 @@
     <string name="hot_rank_mgtv">芒果TV·熱搜榜</string>
     <string name="hot_rank_empty">暫無熱榜資料，請稍後重試</string>
     <string name="home_nav_home">首頁</string>
-    <string name="home_nav_movie">電影</string>
-    <string name="home_nav_series">劇集</string>
-    <string name="home_nav_variety">綜藝</string>
     <string name="home_nav_mine">我的</string>
     <string name="back_exit_hint">再按一次返回鍵退出</string>
     <string name="home_more">更多</string>
@@ -30,7 +27,6 @@
     <string name="site_switch_empty">暫無歷史點播地址</string>
     <string name="douban_hot_type_tv">劇集</string>
     <string name="douban_hot_type_movie">電影</string>
-    <string name="douban_hot_type_variety">綜藝</string>
 
     <!-- Collect -->
     <string name="collect_result">「<xliff:g name="name">%s</xliff:g>」的搜尋結果</string>

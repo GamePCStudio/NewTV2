@@ -349,7 +349,6 @@
     <string name="search_hot">Hot</string>
     <string name="search_hot_movie">Popular movies</string>
     <string name="search_hot_tv">Popular series</string>
-    <string name="search_hot_variety">Popular shows</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">Edit</string>

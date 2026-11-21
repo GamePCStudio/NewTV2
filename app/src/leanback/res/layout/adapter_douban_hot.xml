@@ -130,7 +130,7 @@
                 android:maxLines="1"
                 android:textColor="#CCFFFFFF"
                 android:textSize="18sp"
-                tools:text="8.7 分 · 2026 · 综艺" />
+                tools:text="8.7 分 · 2026 · 剧集" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

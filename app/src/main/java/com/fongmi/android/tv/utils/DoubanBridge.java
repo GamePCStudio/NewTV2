@@ -43,7 +43,7 @@ import okhttp3.Response;
  * <p>此前直连豆瓣网页的联想与榜单接口，反爬越来越重、命中率不稳定，
  * 现在全部改走自建或公共的Douban Bridge服务。桥提供的能力有限但稳定：</p>
  * <pre>
- *   GET /v1/catalog/{collectionId}  —— 豆瓣榜单（热门电影 / 热门剧集 / 综艺 / Top250 …）
+ *   GET /v1/catalog/{collectionId}  —— 豆瓣榜单（热门电影 / 热门剧集 / Top250 …）
  *   GET /v1/meta/{doubanId}         —— 单个条目详情（完整简介、海报、剧照、logo）
  * </pre>
  *
@@ -188,25 +188,22 @@ public final class DoubanBridge {
         return save(job.title, hit, meta);
     }
 
-    /** 类目 → 依次尝试的Douban Bridge榜单；首页混合内容同时覆盖电影、剧集与综艺。 */
+    /** 类目 → 依次尝试的Douban Bridge榜单；不限定类目时同时覆盖电影与剧集。 */
     private static String[] catalogs(int category) {
-        if (category == HotRank.MOVIE) {
+        if (category == ArtSource.CAT_MOVIE) {
             return new String[]{"movie_hot_gaia", "movie_real_time_hotest", "movie_showing", "movie_weekly_best", "movie_top250"};
         }
-        if (category == HotRank.TV) {
+        if (category == ArtSource.CAT_TV) {
             return new String[]{"tv_hot", "tv_real_time_hotest", "tv_chinese_best_weekly", "tv_global_best_weekly"};
         }
-        if (category == HotRank.VARIETY) {
-            return new String[]{"show_hot", "show_chinese_best_weekly", "show_global_best_weekly"};
-        }
-        return new String[]{"movie_hot_gaia", "movie_real_time_hotest", "tv_hot", "tv_real_time_hotest", "show_hot"};
+        return new String[]{"movie_hot_gaia", "movie_real_time_hotest", "tv_hot", "tv_real_time_hotest"};
     }
 
     // ---------------------------------------------------------------- 榜单缓存
 
     /** 热门榜比长尾榜多取一页，既扩大命中面又不会把请求数放大太多。 */
     private static int pages(String id) {
-        return "movie_hot_gaia".equals(id) || "tv_hot".equals(id) || "show_hot".equals(id) ? 2 : 1;
+        return "movie_hot_gaia".equals(id) || "tv_hot".equals(id) ? 2 : 1;
     }
 
     private static Pool pool(String id) {
@@ -413,8 +410,8 @@ public final class DoubanBridge {
     }
 
     private static boolean compatible(Item item, int category) {
-        if (category == HotRank.MOVIE) return "movie".equals(item.mediaType);
-        if (category == HotRank.TV || category == HotRank.VARIETY) return "tv".equals(item.mediaType);
+        if (category == ArtSource.CAT_MOVIE) return "movie".equals(item.mediaType);
+        if (category == ArtSource.CAT_TV) return "tv".equals(item.mediaType);
         return true;
     }
 

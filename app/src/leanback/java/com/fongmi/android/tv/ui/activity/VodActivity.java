@@ -44,7 +44,6 @@ import com.fongmi.android.tv.ui.adapter.ConfigMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.SiteMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
-import com.fongmi.android.tv.ui.custom.ToolbarEntries;
 import com.fongmi.android.tv.ui.fragment.FolderFragment;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -181,13 +180,11 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     /**
      * 顶栏接线：站点切换下拉 / 四个功能图标 / 导航按钮的聚焦记忆。
      * 结构与首页 {@code HomeActivity.setToolbar()} 一一对应，差别只在两个导航按钮的去向：
-     * 「首页」回到首页、「片库」回到第一个分类（本页即片库首页）。
+     * 「首页」回到首页、「片库」回到第一个分类（本页即片库首页）。顶栏只有
+     * 「首页 / 片库 / 我的」三项。
      */
     private void setToolbar() {
         mToolbar.navHome.setOnClickListener(v -> exitToHome());
-        mToolbar.navMovie.setOnClickListener(v -> MovieActivity.start(this, getResult()));
-        mToolbar.navSeries.setOnClickListener(v -> SeriesActivity.start(this, getResult()));
-        mToolbar.navVariety.setOnClickListener(v -> VarietyActivity.start(this, getResult()));
         mToolbar.navVod.setOnClickListener(v -> {
             // 已在片库：回到第一个分类，并让分类胶囊保持焦点。
             clearPendingPoster();
@@ -203,12 +200,10 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this));
         // 当前所在页 = 片库：50% 透明黑胶囊 + 白字（焦点离开后仍保留）。
         mToolbar.navVod.setSelected(true);
-        View[] navs = {mToolbar.navHome, mToolbar.navMovie, mToolbar.navSeries, mToolbar.navVariety, mToolbar.navVod, mToolbar.navMine};
+        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.navMine};
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
             if (hasFocus) mLastNav = view;
         });
-        // 影片刮削关闭 / 未配置时，三个频道入口一并隐藏（与首页、频道页同一套判定）。
-        ToolbarEntries.apply(mToolbar);
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(focusGuard);
     }
 
@@ -653,8 +648,6 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     @Override
     protected void onResume() {
         super.onResume();
-        // 从设置页返回时刮削配置可能已变，频道入口的显隐要重新收敛。
-        ToolbarEntries.apply(mToolbar);
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();

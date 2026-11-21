@@ -9,7 +9,7 @@
     - 宿主必须存在 id 为 recycler 的可聚焦列表，工具栏各控件的 nextFocusDown 指向它。
 
   结构（单行，行高 64dp）：
-    搜索圆钮（放大镜）→ 6 个导航按钮（首页 / 电影 / 剧集 / 综艺 / 片库 / 我的）
+    搜索圆钮（放大镜）→ 3 个导航按钮（首页 / 片库 / 我的）
     → 弹性空白 → 站源下拉入口 → 时钟。
 
   <b>尺寸口径</b>：导航与站源名 16sp 加粗，时钟 18sp；
@@ -62,16 +62,14 @@
         android:tint="@color/selector_logo_tint" />
 
     <!--
-      频道导航：6 个文字按钮，16sp 加粗。
+      频道导航：3 个文字按钮，16sp 加粗。
       顺序即焦点顺序（未写 nextFocusLeft/Right，交给布局顺序自动串联）：
-      首页 → 电影 → 剧集 → 综艺 → 片库 → 我的。
+      首页 → 片库 → 我的。
       「首页」是 index 0，启动 / setFocus() / 返回「回首页」都指向它。
       <b>不写 focusedByDefault</b>：默认焦点会让新页面先亮一下「首页」再跳到
       「片库」，视觉上像焦点从旧位置飞过来；改由各页在首次布局完成、绘制之前
       显式投放焦点（见 HomeActivity / VodActivity 的 installInitialFocus）。
-      「片库」进 VodActivity；「我的」在最后，作为设置入口（SettingActivity）；
-      电影 / 剧集 / 综艺 分别进入对应的热榜频道页（MovieActivity / SeriesActivity /
-      VarietyActivity），三页共用 HotCategoryActivity 模板与同一份顶栏。
+      「片库」进 VodActivity；「我的」在最后，作为设置入口（SettingActivity）。
 
       尺寸统一：固定 36dp 高（与搜索圆钮、站源入口同高）、
       最小宽 64dp（2 个汉字 16sp = 32dp + 左右各 16dp 内边距）、间距 8dp、圆角 18dp（半高）。
@@ -106,65 +104,8 @@
             android:textSize="16sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/navMovie"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/selector_nav_button"
-            android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:gravity="center"
-            android:maxLines="1"
-            android:minWidth="64dp"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="@string/home_nav_movie"
-            android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
-            android:textStyle="bold" />
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/navSeries"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/selector_nav_button"
-            android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:gravity="center"
-            android:maxLines="1"
-            android:minWidth="64dp"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="@string/home_nav_series"
-            android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
-            android:textStyle="bold" />
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/navVariety"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/selector_nav_button"
-            android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:gravity="center"
-            android:maxLines="1"
-            android:minWidth="64dp"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="@string/home_nav_variety"
-            android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
-            android:textStyle="bold" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/navVod"

@@ -15,9 +15,6 @@
     <string name="hot_rank_mgtv">Mango TV · Hot Search</string>
     <string name="hot_rank_empty">No hot search data, please try again later</string>
     <string name="home_nav_home">Home</string>
-    <string name="home_nav_movie">Movies</string>
-    <string name="home_nav_series">Series</string>
-    <string name="home_nav_variety">Variety</string>
     <string name="home_nav_mine">Mine</string>
     <string name="back_exit_hint">Press back again to exit</string>
     <string name="home_more">More</string>
@@ -30,7 +27,6 @@
     <string name="site_switch_empty">No saved addresses yet</string>
     <string name="douban_hot_type_tv">Series</string>
     <string name="douban_hot_type_movie">Movie</string>
-    <string name="douban_hot_type_variety">Variety</string>
 
     <!-- Collect -->
     <string name="collect_result">Search results for <xliff:g name="name">%s</xliff:g></string>

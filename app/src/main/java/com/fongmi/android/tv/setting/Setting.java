@@ -7,7 +7,6 @@ import com.github.catvod.utils.Prefers;
 public class Setting {
 
     /** 热词榜最小刷新间隔：15 分钟。榜单是低频数据，没必要每次进搜索页都打三次请求。 */
-    private static final long HOT_TTL_MS = 15 * 60 * 1000L;
 
     private static final int MIN_SITE_MODE = 0;
     private static final int MAX_SITE_MODE = 1;
@@ -44,7 +43,8 @@ public class Setting {
 
     /**
      * 旧版单列表热词缓存，仅供 mobile 变体使用。
-     * TV 搜索页已改为「电影 / 电视剧 / 综艺」三分类，见下面的 getHotMovie 等方法。
+     * TV 搜索页的热播剧集 / 热播电影已改为由 {@code RankLatest} 统一供数与缓存，
+     * 不再把榜单写进偏好。
      */
     public static String getHot() {
         return Prefers.getString("hot");
@@ -52,39 +52,6 @@ public class Setting {
 
     public static void putHot(String hot) {
         Prefers.put("hot", hot);
-    }
-
-    public static String getHotMovie() {
-        return Prefers.getString("hot_movie");
-    }
-
-    public static void putHotMovie(String hot) {
-        Prefers.put("hot_movie", hot);
-    }
-
-    public static String getHotTv() {
-        return Prefers.getString("hot_tv");
-    }
-
-    public static void putHotTv(String hot) {
-        Prefers.put("hot_tv", hot);
-    }
-
-    public static String getHotVariety() {
-        return Prefers.getString("hot_variety");
-    }
-
-    public static void putHotVariety(String hot) {
-        Prefers.put("hot_variety", hot);
-    }
-
-    /** 上次成功拉取热词的时间，用于节流。 */
-    public static boolean isHotExpired() {
-        return System.currentTimeMillis() - Prefers.getLong("hot_time") > HOT_TTL_MS;
-    }
-
-    public static void putHotTime() {
-        Prefers.put("hot_time", System.currentTimeMillis());
     }
 
     public static int getThemeColor() {

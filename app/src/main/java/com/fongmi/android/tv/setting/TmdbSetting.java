@@ -194,18 +194,6 @@ public final class TmdbSetting {
         return isMasterEnabled() && isBridgeScrapeEnabled() && isBridgeConfigured();
     }
 
-    /**
-     * 电影 / 剧集 / 综艺三个频道入口是否可用。
-     *
-     * <p>三个频道页的内容全部依赖刮削素材，判定口径与抓取一致：
-     * 总开关关闭 → 不可用；TMDB 二级开着但<b>一个站点都没配</b>，且 Douban Bridge 也不可用 → 不可用。
-     * 满足任一数据源可用即返回 true，入口保留。</p>
-     */
-    public static boolean isChannelAvailable() {
-        if (!isMasterEnabled()) return false;
-        if (isTmdbScrapeEnabled() && !getSites().isEmpty()) return true;
-        return isBridgeScrapeEnabled() && isBridgeConfigured();
-    }
 
     /** 保存Douban Bridge配置；传入空地址表示停用。只在值真正变化时写一条配置日志。 */
     public static void putBridge(String url, String key) {
