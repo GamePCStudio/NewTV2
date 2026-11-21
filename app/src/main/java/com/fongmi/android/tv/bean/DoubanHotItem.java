@@ -41,6 +41,15 @@ public class DoubanHotItem {
     /** 横版剧照相对路径；为空表示该条目没有可用剧照。 */
     @SerializedName("backdrop")
     private String backdrop;
+    /**
+     * 片名 logo 相对路径（透明 PNG）。
+     *
+     * <p>服务端富化时只有部分条目能匹配到 logo：缺失时为空串，展示层按
+     * 「本地缓存 → 文字片名」逐级回落。字段名保持不变以兼容旧磁盘缓存
+     * （旧缓存没有该字段时 Gson 解析为 null，getter 兜空串）。</p>
+     */
+    @SerializedName("logo")
+    private String logo;
     @SerializedName("id")
     private String id;
 
@@ -108,7 +117,19 @@ public class DoubanHotItem {
         this.id = id;
     }
 
+    public String getLogo() {
+        return logo == null ? "" : logo;
+    }
+
+    public void setLogo(String logo) {
+        this.logo = logo;
+    }
+
     public boolean hasBackdrop() {
         return !TextUtils.isEmpty(getBackdrop());
+    }
+
+    public boolean hasLogo() {
+        return !TextUtils.isEmpty(getLogo());
     }
 }

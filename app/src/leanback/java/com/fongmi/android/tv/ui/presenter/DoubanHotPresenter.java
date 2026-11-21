@@ -169,6 +169,8 @@ public class DoubanHotPresenter extends Presenter {
         private int index;
         /** 每次切换自增：晚到的 Glide 回调据此丢弃，避免旧图覆盖新图。 */
         private int generation;
+        /** logo 单独一套序号：网络 logo 是异步的，晚到回调不能盖住下一条的片名层。 */
+        private int logoGeneration;
         private final Runnable rotate;
         private Holder(@NonNull AdapterDoubanHotBinding binding, OnClickListener listener) {
             super(binding.getRoot());
@@ -293,6 +295,7 @@ public class DoubanHotPresenter extends Presenter {
 
         /** 一条都没有：整块文字层隐藏，只留同色底，不显示占位图也不闪残留文字。 */
         private void clearContent() {
+            logoGeneration++;
             binding.name.setText("");
             binding.name.setVisibility(View.INVISIBLE);
             binding.logo.setImageDrawable(null);
@@ -442,19 +445,91 @@ public class DoubanHotPresenter extends Presenter {
          * 文字片名态则完全不限制宽度，容器与 TextView 都回到 wrap_content。</p>
          */
         private void bindTitle(DoubanHotItem item) {
+            int gen = ++logoGeneration;
             binding.name.setText("");
             binding.name.setVisibility(View.INVISIBLE);
             binding.logo.setImageDrawable(null);
             binding.logo.setVisibility(View.INVISIBLE);
             applyTextSize();
             binding.name.setText(item.getTitle());
+            if (item.hasLogo()) {
+                loadLogo(item, gen, false);
+                return;
+            }
+            // 榜单没给 logo（旧缓存 / 该条目未匹配到）：直接退本地缓存，再退文字。
+            bindLocalLogo(item, gen);
+        }
+
+        /**
+         * 加载榜单给的片名 logo。
+         *
+         * <p>与主视觉剧照同一套地址规则：优先用设置里配置的站点，加载失败且地址与官方不同时
+         * 换官方再试一次；两次都失败才回落到本地缓存 / 文字片名，避免片名层空着。</p>
+         */
+        private void loadLogo(DoubanHotItem item, int gen, boolean official) {
+            RequestManager manager = glide(binding.logo);
+            if (manager == null) return;
+            String url = official ? RankLatest.officialLogoUrl(item.getLogo()) : RankLatest.logoUrl(item.getLogo());
+            if (TextUtils.isEmpty(url)) {
+                bindLocalLogo(item, gen);
+                return;
+            }
+            manager.load(url)
+                    // logo 是透明 PNG、体积不大；按原图解码，避免按当前容器尺寸下采样后放大发虚。
+                    .override(Target.SIZE_ORIGINAL)
+                    .dontAnimate()
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, @NonNull Target<Drawable> t, boolean first) {
+                            if (gen != logoGeneration) return true;
+                            String fallback = RankLatest.officialLogoUrl(item.getLogo());
+                            if (!official && !TextUtils.isEmpty(fallback) && !fallback.equals(model)) {
+                                loadLogo(item, gen, true);
+                                return true;
+                            }
+                            bindLocalLogo(item, gen);
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> t, @NonNull DataSource source, boolean first) {
+                            // 已手动按图片比例设置尺寸与可见性，阻止 Glide 再套一次默认 fitCenter。
+                            if (gen != logoGeneration) return true;
+                            showLogo(resource, item, gen);
+                            return true;
+                        }
+                    })
+                    .into(binding.logo);
+        }
+
+        /** logo 就位：按图片比例定容器尺寸后显示，文字片名隐藏。 */
+        private void showLogo(Drawable drawable, DoubanHotItem item, int gen) {
+            if (gen != logoGeneration) return;
+            int width = drawable.getIntrinsicWidth();
+            int height = drawable.getIntrinsicHeight();
+            if (width <= 0 || height <= 0) {
+                bindLocalLogo(item, gen);
+                return;
+            }
+            applyLogoSize(width, height);
+            binding.logo.setImageDrawable(drawable);
+            binding.logo.setVisibility(View.VISIBLE);
+            binding.name.setVisibility(View.INVISIBLE);
+        }
+
+        /**
+         * 本地兜底：读 {@link TmdbStore} 已缓存的 logo（不联网、不触发抓取）。
+         * 没有缓存就用文字片名，保证片名层永远有内容。
+         */
+        private void bindLocalLogo(DoubanHotItem item, int gen) {
+            if (gen != logoGeneration) return;
             TmdbArt art = TmdbStore.find(item.getTitle());
             Bitmap bitmap = art == null ? null : TmdbStore.logoBitmap(art.getLogo());
             if (bitmap == null || bitmap.isRecycled()) {
                 binding.name.setVisibility(View.VISIBLE);
                 return;
             }
-            applyLogoSize(bitmap);
+            applyLogoSize(bitmap.getWidth(), bitmap.getHeight());
             binding.logo.setImageBitmap(bitmap);
             binding.logo.setVisibility(View.VISIBLE);
             binding.name.setVisibility(View.INVISIBLE);
@@ -465,9 +540,7 @@ public class DoubanHotPresenter extends Presenter {
          * 宽/高 &lt; 1/1.6 → 竖版 200dp；&le; 1/1 → 类正方形 120dp；其余横版 → 80dp。
          * 宽度按图片比例自适应，硬上限 300dp；触顶时按宽度反算高度保持等比。
          */
-        private void applyLogoSize(Bitmap bitmap) {
-            int w = bitmap.getWidth();
-            int h = bitmap.getHeight();
+        private void applyLogoSize(int w, int h) {
             float ratio = w > 0 && h > 0 ? (float) w / h : 1.6f;
             int heightDp;
             if (ratio < 1f / 1.6f) heightDp = 200;
@@ -657,6 +730,8 @@ public class DoubanHotPresenter extends Presenter {
             if (imageA != null) imageA.clear(binding.backdrop.getImageA());
             RequestManager imageB = glide(binding.backdrop.getImageB());
             if (imageB != null) imageB.clear(binding.backdrop.getImageB());
+            RequestManager logo = glide(binding.logo);
+            if (logo != null) logo.clear(binding.logo);
         }
     }
 }

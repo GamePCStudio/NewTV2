@@ -100,16 +100,23 @@ public final class RankLatest {
     /** 读取榜单：缓存新鲜则立即回调，否则后台刷新；回调只会触发一次。 */
     public static void load(Callback callback) {
         Data cache = memory;
-        if (cache != null && !cache.isEmpty() && System.currentTimeMillis() - memoryTime < TTL) {
+        // 「新鲜」还要「带 logo」：结构升级前写下的缓存没有 logoPath，
+        // 若直接命中，主视觉在 TTL 内会一直没有片名 logo。宁可多拉一次。
+        if (cache != null && !cache.isEmpty() && cache.hasAnyLogo() && System.currentTimeMillis() - memoryTime < TTL) {
             App.post(() -> callback.onResult(cache));
             return;
         }
         Disk disk = read();
-        if (disk != null && !disk.data.isEmpty() && System.currentTimeMillis() - disk.time < TTL) {
+        if (disk != null && !disk.data.isEmpty() && disk.data.hasAnyLogo() && System.currentTimeMillis() - disk.time < TTL) {
             memory = disk.data;
             memoryTime = disk.time;
             App.post(() -> callback.onResult(disk.data));
             return;
+        }
+        // 旧缓存（无 logo）不直接返回，但在刷新失败时仍然作为兜底展示。
+        if (disk != null && !disk.data.isEmpty()) {
+            memory = disk.data;
+            memoryTime = disk.time;
         }
         Data stale = disk != null && !disk.data.isEmpty() ? disk.data : cache;
         EXECUTOR.execute(() -> {
@@ -182,14 +189,27 @@ public final class RankLatest {
         item.originalTitle = optString(json, "originalTitle");
         item.description = optString(json, "description");
         item.releaseDate = optString(json, "releaseDate");
+        item.logoPath = optString(json, "logoPath");
         item.backdropPath = optString(json, "backdropPath");
         item.posterPath = optString(json, "posterPath");
         item.mediaType = optString(json, "mediaType");
         item.genreTitle = optString(json, "genreTitle");
+        if (TextUtils.isEmpty(item.genreTitle)) item.genreTitle = firstGenre(json);
         item.voteCount = optInt(json, "voteCount");
         item.rank = optInt(json, "rank");
         item.rating = optDouble(json, "rating");
         return item;
+    }
+
+    /** {@code genreItems} 第一个标题：老数据没有 {@code genreTitle} 时的兜底。 */
+    private static String firstGenre(JsonObject json) {
+        if (json == null || !json.has("genreItems") || !json.get("genreItems").isJsonArray()) return "";
+        for (JsonElement element : json.getAsJsonArray("genreItems")) {
+            if (element == null || !element.isJsonObject()) continue;
+            String title = optString(element.getAsJsonObject(), "title");
+            if (!TextUtils.isEmpty(title)) return title;
+        }
+        return "";
     }
 
     private static String optString(JsonObject json, String key) {
@@ -226,12 +246,27 @@ public final class RankLatest {
 
     /** 拼完整剧照地址：配置了刮削站点就用它，否则用官方地址。 */
     public static String imageUrl(String path) {
-        return imageUrl(imageBase(), path);
+        return imageUrl(imageBase(), TmdbApi.BACKDROP_SIZE, path);
     }
 
     /** 官方地址版本：配置的站点不支持图片时由展示层回落重试。 */
     public static String officialImageUrl(String path) {
-        return imageUrl(DEFAULT_IMAGE_BASE, path);
+        return imageUrl(DEFAULT_IMAGE_BASE, TmdbApi.BACKDROP_SIZE, path);
+    }
+
+    /**
+     * 片名 logo 地址：走 {@link TmdbApi#LOGO_SIZE}（原图）。
+     *
+     * <p>logo 是透明 PNG，尺寸不大；w500 在 1080p 电视上按 200dp 高度渲染会发虚，
+     * 因此与刮削链路保持一致取原图。</p>
+     */
+    public static String logoUrl(String path) {
+        return imageUrl(imageBase(), TmdbApi.LOGO_SIZE, path);
+    }
+
+    /** logo 的官方地址版本：配置站点不支持图片路径时由展示层回落。 */
+    public static String officialLogoUrl(String path) {
+        return imageUrl(DEFAULT_IMAGE_BASE, TmdbApi.LOGO_SIZE, path);
     }
 
     /** 图片基地址：设置里第一个有效站点，未配置时官方默认地址。 */
@@ -242,12 +277,12 @@ public final class RankLatest {
         return DEFAULT_IMAGE_BASE;
     }
 
-    private static String imageUrl(String base, String path) {
+    private static String imageUrl(String base, String size, String path) {
         if (TextUtils.isEmpty(path)) return "";
         if (path.startsWith("http://") || path.startsWith("https://")) return path;
         String file = path.startsWith("/") ? path : "/" + path;
         if (file.startsWith("/t/p/")) return base + file;
-        return base + "/t/p/" + TmdbApi.BACKDROP_SIZE + file;
+        return base + "/t/p/" + size + file;
     }
 
     /* ------------------------------------------------------------- 磁盘缓存 */
@@ -337,6 +372,19 @@ public final class RankLatest {
         }
 
         /**
+         * 是否至少有一条 logo 数据。
+         *
+         * <p>用来识别「结构升级前写下的旧磁盘缓存」：旧缓存没有 {@code logoPath} 字段，
+         * 解析后全为空；此时即使还在 TTL 内也触发一次后台刷新，避免主视觉长期没有 logo。
+         * 新数据结构里 logo 覆盖率很高，不会导致缓存永远命中不了。</p>
+         */
+        public boolean hasAnyLogo() {
+            for (RankItem item : series) if (item != null && item.hasLogo()) return true;
+            for (RankItem item : movie) if (item != null && item.hasLogo()) return true;
+            return false;
+        }
+
+        /**
          * 主视觉顺序：2 剧集 → 2 电影 交替，循环到 {@code limit} 条。
          *
          * <p>某一段条数不足时由另一段继续补位；两段都取完就提前结束。
@@ -391,6 +439,8 @@ public final class RankLatest {
         private String originalTitle = "";
         private String description = "";
         private String releaseDate = "";
+        /** 片名 logo 相对路径（透明 PNG）；服务端富化缺失时为空串。 */
+        private String logoPath = "";
         private String backdropPath = "";
         private String posterPath = "";
         private String mediaType = "";
@@ -416,6 +466,15 @@ public final class RankLatest {
             String value = releaseDate == null ? "" : releaseDate.trim();
             if (value.length() >= 4 && Character.isDigit(value.charAt(0))) return value.substring(0, 4);
             return "";
+        }
+
+        /** 片名 logo 相对路径；为空表示该条目没有 logo，展示层应回落本地缓存或文字片名。 */
+        public String getLogo() {
+            return logoPath == null ? "" : logoPath;
+        }
+
+        public boolean hasLogo() {
+            return !TextUtils.isEmpty(getLogo());
         }
 
         public String getBackdrop() {
