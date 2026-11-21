@@ -4,6 +4,7 @@ import android.content.Context;
 import android.text.TextUtils;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.Priority;
 import com.fongmi.android.tv.bean.DoubanHotItem;
 
 import java.util.Collections;
@@ -17,6 +18,10 @@ import java.util.Map;
  * <p><b>为什么需要</b>：主视觉每 7 秒切一张，原实现只在 {@code show(index)} 时才按当前条目
  * 发起请求，第 12 张要等 77 秒才第一次联网。用户翻到那一张时看到的是空背景 + 文字片名，
  * 网络稍差就是明显闪烁。预热把「等切到再下载」变成「启动就下载」。</p>
+ *
+ * <p><b>首条不进预热队列</b>：第一条由展示层用 {@code Priority.IMMEDIATE} 直接加载，
+ * 它是首帧唯一必须立刻到位的资源。若也塞进这里，同一张图会被重复请求、还会和首条抢带宽。
+ * 其余 11 条用 {@code Priority.LOW} 预热，排在当前展示请求之后，不拖慢首帧与切图。</p>
  *
  * <p><b>为什么用 {@code asFile().preload()}</b>：它只把源文件写入磁盘缓存，不产生 Bitmap。
  * 后续 ImageView 请求（剧照按屏幕宽度解码、logo 按原图解码）命中同一份 {@code DataCacheKey}，
@@ -51,9 +56,22 @@ public final class HeroPreload {
         if (context == null || items == null || items.isEmpty()) return;
         Context app = context.getApplicationContext();
         if (app == null) app = context;
+        // 第一个「有剧照」的条目就是视觉首条：交给 Presenter 以最高优先级加载，这里跳过。
+        DoubanHotItem first = null;
+        for (DoubanHotItem item : items) {
+            if (item != null && item.hasBackdrop()) {
+                first = item;
+                break;
+            }
+        }
+        if (first == null) return;
         // 先剧照后 logo：剧照决定首帧观感，logo 体积小、晚一点无所谓。
-        for (DoubanHotItem item : items) preload(app, item, true);
-        for (DoubanHotItem item : items) preload(app, item, false);
+        for (DoubanHotItem item : items) {
+            if (item != first) preload(app, item, true);
+        }
+        for (DoubanHotItem item : items) {
+            if (item != first) preload(app, item, false);
+        }
     }
 
     private static void preload(Context context, DoubanHotItem item, boolean backdrop) {
@@ -63,7 +81,7 @@ public final class HeroPreload {
         else url = item.hasLogo() ? RankLatest.logoUrl(item.getLogo()) : "";
         if (TextUtils.isEmpty(url) || !mark(url)) return;
         try {
-            Glide.with(context).asFile().load(url).preload();
+            Glide.with(context).asFile().load(url).priority(Priority.LOW).preload();
         } catch (Exception ignored) {
             // 预热失败不影响正常展示：真正播放到该条时还会按原有链路重新请求并处理失败。
         }

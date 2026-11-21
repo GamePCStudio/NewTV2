@@ -22,6 +22,7 @@ import androidx.annotation.Nullable;
 import androidx.leanback.widget.Presenter;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.Priority;
 import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.GlideException;
@@ -363,6 +364,8 @@ public class DoubanHotPresenter extends Presenter {
             RequestManager manager = glide(target);
             if (manager == null) return;
             manager.load(model)
+                    // 首条用最高优先级：它是首帧唯一必须立刻到位的资源，不能被预热请求挤在后面。
+                    .priority(priority())
                     // 不走 Glide 的 centerCrop/fitCenter：两者都会改 ImageView 的 scaleType，
                     // 破坏「宽度铺满 + 顶部贴齐」自算的 MATRIX。保留原图尺寸，矩阵自己算。
                     .dontTransform()
@@ -475,6 +478,7 @@ public class DoubanHotPresenter extends Presenter {
                 return;
             }
             manager.load(url)
+                    .priority(priority())
                     // logo 是透明 PNG、体积不大；按原图解码，避免按当前容器尺寸下采样后放大发虚。
                     .override(Target.SIZE_ORIGINAL)
                     .dontAnimate()
@@ -689,6 +693,16 @@ public class DoubanHotPresenter extends Presenter {
                 if (activity.isFinishing() || activity.isDestroyed()) return null;
             }
             return Glide.with(view);
+        }
+
+        /**
+         * 请求优先级：首条 IMMEDIATE，其余 NORMAL。
+         *
+         * <p>Glide 的调度队列按优先级排序，IMMEDIATE 会插到所有预热请求之前；
+         * 轮播到后续条目时它们已在磁盘缓存里，NORMAL 足够。</p>
+         */
+        private Priority priority() {
+            return index == 0 ? Priority.IMMEDIATE : Priority.NORMAL;
         }
 
         private DoubanHotItem current() {
