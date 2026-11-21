@@ -45,8 +45,10 @@ import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -63,8 +65,9 @@ import java.util.concurrent.TimeUnit;
  *       {@link RankLatest#imageUrl(String)} 拼出完整地址交给 Glide；
  *       图片基地址取设置里已配置的站点，未配置时用官方 {@code image.tmdb.org}，
  *       站点不支持图片路径时自动回落官方地址重试一次；</li>
- *   <li><b>顺序预取</b>：绑定后立即从列表第一条开始，按榜单顺序串行下载横版剧照（最高优先级），
- *       logo 用与展示完全相同的 Glide key 异步预热，不阻塞串行链、也不重复下载；</li>
+ *   <li><b>分批预取</b>：绑定后先单独下载首条横版剧照（最高优先级），随后每批 2 条并发预热；
+ *       logo 用与展示完全相同的 Glide key 异步预热，不阻塞取图链、也不重复下载；
+ *       结果按榜单序号提交到轮播池，不会因为并发而打乱顺序；</li>
  *   <li><b>就绪才展示</b>：只有剧照真正下载成功的条目才进入轮播池，下载中与下载失败的
  *       一律不显示（不占位、不闪空白）；全都没就绪时主视觉区保持底色；</li>
  *   <li><b>自动轮播</b>：7 秒一张，页面失去窗口焦点（退到后台）时暂停；</li>
@@ -96,12 +99,13 @@ public class DoubanHotPresenter extends Presenter {
     private static final long BACKDROP_TIMEOUT_MS = 15_000L;
     private static final long LOGO_TIMEOUT_MS = 6_000L;
     /**
-     * 主视觉预取线程：严格串行。
+     * 主视觉预取线程池：固定 2 线程，支持每批 2 条并发。
      *
-     * <p>一屏最多 12 条 × 2 个资源，若并发下发会在启动瞬间打十几个请求，
-     * 电视端带宽和内存都会抖；串行还能保证「先就绪的先展示」的顺序与榜单一致。</p>
+     * <p>首条仍是单条最高优先级，之后每批只放两条，既不一次性打满十几个请求，
+     * 也把剩余条目的预热耗时压到接近原来的一半。展示顺序由主线程按榜单序号提交，
+     * 与下载完成先后无关。</p>
      */
-    private static final ExecutorService PRELOAD = Executors.newSingleThreadExecutor(task -> {
+    private static final ExecutorService PRELOAD = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "HeroPrefetch");
         thread.setDaemon(true);
         return thread;
@@ -202,6 +206,14 @@ public class DoubanHotPresenter extends Presenter {
         /** 预取批次号：重新绑定 / 离屏后，旧批次的结果不再入池。 */
         private int prefetchGeneration;
         private boolean prefetching;
+        /** 当前批剩余条数，减到 0 才提交下一批。 */
+        private int batchRemaining;
+        /** 首条是否已单独下发过；首条失败后也按每批 2 条继续，避免退化成全串行。 */
+        private boolean initialPrefetchIssued;
+        /** 已下发条目的榜单顺序与结果，乱序完成时按这里顺序入池。 */
+        private final List<DoubanHotItem> prefetchOrder = new ArrayList<>();
+        private final Map<Integer, Boolean> prefetchResults = new HashMap<>();
+        private int nextPrefetchSeq;
         /** 是否已经显示过第一条：首条剧照到位前，主视觉区保持空白。 */
         private boolean shownOnce;
         private final Runnable rotate;
@@ -288,6 +300,11 @@ public class DoubanHotPresenter extends Presenter {
             items.clear();
             blocked.clear();
             queue.clear();
+            prefetchOrder.clear();
+            prefetchResults.clear();
+            nextPrefetchSeq = 0;
+            batchRemaining = 0;
+            initialPrefetchIssued = false;
             for (DoubanHotItem item : candidates) {
                 if (item == null || !item.hasBackdrop()) continue;
                 queue.add(item);
@@ -308,36 +325,59 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         /**
-         * 按列表顺序逐个预取「横版剧照 + logo」。
+         * 按榜单顺序分批预取：首条单独最高优先级，之后每批 2 条并发。
          *
-         * <p>每条必须等剧照真正落盘后才加入轮播池：下载中的条目一律不显示，
-         * 失败的直接隐藏，避免主视觉出现空白帧或半张图。logo 是装饰，失败不阻塞展示，
-         * 片名层会退到本地缓存或文字。</p>
+         * <p>每条仍要等剧照真正落盘才入轮播池；但同一批的两条可以同时下载。
+         * 完成顺序可能不同，结果先按序号缓存，再由主线程按榜单顺序提交，
+         * 所以用户看到的轮播顺序始终与榜单一致。logo 异步预热，不阻塞取图。</p>
          */
         private void prefetchNext() {
-            if (prefetching) return;
-            DoubanHotItem item = queue.poll();
-            if (item == null) return;
+            if (prefetching || queue.isEmpty()) return;
+            // 首条必须独占一批；它失败后也继续按每批 2 条推进，不退化成全串行。
+            boolean initial = !initialPrefetchIssued;
+            initialPrefetchIssued = true;
+            int count = Math.min(initial ? 1 : 2, queue.size());
+            List<DoubanHotItem> batch = new ArrayList<>(count);
+            List<Integer> seqs = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                DoubanHotItem item = queue.poll();
+                batch.add(item);
+                seqs.add(prefetchOrder.size());
+                prefetchOrder.add(item);
+            }
             prefetching = true;
+            batchRemaining = batch.size();
             int gen = prefetchGeneration;
-            // 首条判断必须在提交前的主线程读取，避免与主线程上的 shownOnce 产生可见性问题。
-            boolean first = !shownOnce;
-            PRELOAD.execute(() -> {
-                if (gen != prefetchGeneration) return;
-                // logo 与剧照并行预热，但不占用串行链：首条给高优先级，其余低优先级。
-                // 用与 loadLogo() 相同的 key，展示时直接命中缓存，不会二次请求。
-                if (item.hasLogo()) preloadLogo(item, first);
-                boolean backdrop = download(item.getBackdrop(), true);
-                // 剧照一就绪就交给主线程入池，不等 logo（logo 只是装饰，失败也不阻塞展示）。
-                App.post(() -> {
-                    if (gen != prefetchGeneration) return;
-                    if (backdrop) onPrefetched(item);
-                    else blocked.add(item.getTitle());
-                    prefetching = false;
-                    // 首屏关键资源就绪后立刻推进下一条，中间不加额外等待。
-                    prefetchNext();
-                });
-            });
+            for (int i = 0; i < batch.size(); i++) {
+                final DoubanHotItem item = batch.get(i);
+                final int seq = seqs.get(i);
+                PRELOAD.execute(() -> prefetchOne(item, seq, initial, gen));
+            }
+        }
+
+        /** 单条预取：先异步预热 logo，再阻塞下载剧照到磁盘缓存。 */
+        private void prefetchOne(DoubanHotItem item, int seq, boolean initial, int gen) {
+            if (gen != prefetchGeneration) return;
+            // logo 与剧照并行预热，但不占用取图链：首条给高优先级，其余低优先级。
+            // 用与 loadLogo() 相同的 key，展示时直接命中缓存，不会二次请求。
+            if (item.hasLogo()) preloadLogo(item, initial);
+            boolean backdrop = download(item.getBackdrop(), true);
+            App.post(() -> finishPrefetch(seq, backdrop, gen));
+        }
+
+        /** 单条完成：先按榜单顺序提交已就绪结果，再决定是否提交下一批。 */
+        private void finishPrefetch(int seq, boolean backdrop, int gen) {
+            if (gen != prefetchGeneration) return;
+            prefetchResults.put(seq, backdrop);
+            while (prefetchResults.containsKey(nextPrefetchSeq)) {
+                DoubanHotItem ordered = prefetchOrder.get(nextPrefetchSeq);
+                if (prefetchResults.remove(nextPrefetchSeq)) onPrefetched(ordered);
+                else blocked.add(ordered.getTitle());
+                nextPrefetchSeq++;
+            }
+            if (--batchRemaining > 0) return;
+            prefetching = false;
+            prefetchNext();
         }
 
         /**
@@ -856,7 +896,12 @@ public class DoubanHotPresenter extends Presenter {
             generation++;
             prefetchGeneration++;
             prefetching = false;
+            batchRemaining = 0;
+            initialPrefetchIssued = false;
             queue.clear();
+            prefetchOrder.clear();
+            prefetchResults.clear();
+            nextPrefetchSeq = 0;
             items.clear();
             candidates.clear();
             blocked.clear();
