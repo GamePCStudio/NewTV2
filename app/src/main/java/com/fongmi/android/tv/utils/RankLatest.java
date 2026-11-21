@@ -11,6 +11,7 @@ import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.setting.TmdbSite;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
+import com.github.catvod.utils.Prefers;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -39,13 +40,14 @@ import java.util.concurrent.Executors;
  * 横版剧照相对路径、评分、类型、题材、票数等。搜索页的「热播剧集 / 热播电影」
  * 与首页主视觉共用这一份数据，不再走四平台热榜，也不再为了补图去请求 TMDB 接口。</p>
  *
- * <p><b>图片地址</b>：服务端只给 {@code backdropPath}（如 {@code /k0BY....jpg}），
- * 展示时拼成 {@code {base}/t/p/w1280/{path}}。{@code base} 优先取「设置 → 影片刮削设置」
- * 里已配置的第一个站点地址；一个都没配时回落到官方 {@code https://image.tmdb.org}。
- * 整条链路<b>不需要 API 密钥</b>，站点密钥只服务于刮削接口。</p>
+ * <p><b>图片地址</b>：服务端只给 {@code backdropPath} / {@code logoPath}，
+ * 展示时拼成 {@code {base}/t/p/{size}/{path}}。{@code base} 由全局 TMDB 连接方式决定：
+ * 默认反代与自定义反代理用 API 地址，官方模式固定用 {@code https://image.tmdb.org}；
+ * 地址不支持图片时按地址持久化降级标记并回落官方图片域名。整条链路<b>不需要 API 密钥</b>。</p>
  *
- * <p><b>缓存</b>：内存 + {@code files/rank_latest.json} 双层，TTL 30 分钟。命中直接回调、
- * 不联网；过期后后台刷新，刷新失败继续用旧数据，栏目不会因一次网络抖动而消失。
+ * <p><b>缓存</b>：内存 + {@code files/rank_latest.json} 双层，TTL 12 小时。命中直接回调、
+ * 不联网；过期时旧数据<b>立即回调先展示</b>，后台再刷新并回调一次新数据，因此重启后不必等
+ * 完整 HTTP 往返才出主视觉。刷新失败继续用旧数据，栏目不会因一次网络抖动而消失。
  * 磁盘文件的时间戳就是写入时间，不额外包一层缓存对象。</p>
  *
  * <p><b>解析</b>：逐字段手工读取，不用 {@code gson.fromJson(json, Data.class)}。
@@ -61,7 +63,7 @@ public final class RankLatest {
     /** 首页主视觉条数：2 剧集 + 2 电影 交替，共 12 条。 */
     public static final int HERO_LIMIT = 12;
 
-    private static final long TTL = 30L * 60 * 1000;
+    private static final long TTL = 12L * 60 * 60 * 1000;
     private static final String CACHE_NAME = "rank_latest.json";
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(task -> {
@@ -74,6 +76,10 @@ public final class RankLatest {
     private static volatile long memoryTime;
     /** 配置站点不提供 /t/p/ 图片时置位：后续剧照与 logo 都直接走官方，避免重复 404。 */
     private static volatile boolean baseImageBlocked;
+    /** 图片站点不可用按地址持久化，避免每次冷启动都对同一个站点白发一次 404。 */
+    private static final String KEY_IMAGE_BLOCKED = "rank_image_blocked_";
+    /** 设置里改过 TMDB 连接方式 / 站点后置位，首页回到前台时重建已挂主视觉。 */
+    private static volatile boolean configChanged;
     /** 正在等待同一次刷新的调用者；并发 load 共用一次 HTTP，避免重复下载整份榜单。 */
     private static final List<Callback> PENDING = new ArrayList<>();
     private static boolean fetching;
@@ -83,7 +89,7 @@ public final class RankLatest {
 
     public interface Callback {
 
-        /** 结果一定切回主线程；失败时若存在旧数据则回传旧数据，否则回传空数据。 */
+        /** 结果一定切回主线程；旧缓存可能先回传一次，后台刷新成功后再回传一次新数据。 */
         void onResult(@NonNull Data data);
     }
 
@@ -94,6 +100,8 @@ public final class RankLatest {
         memory = null;
         memoryTime = 0;
         cacheFile().delete();
+        Prefers.remove(KEY_IMAGE_BLOCKED + configuredImageBase());
+        baseImageBlocked = false;
     }
 
     /** 备份恢复后调用：磁盘文件已被整体替换，只丢内存副本，不删文件。 */
@@ -118,10 +126,12 @@ public final class RankLatest {
             App.post(() -> callback.onResult(disk.data));
             return;
         }
-        // 旧缓存（无 logo）不直接返回，但在刷新失败时仍然作为兜底展示。
+        // 旧缓存先交给展示层，主视觉/热词不必等后台 HTTP；刷新成功后再回调一次新数据。
         if (disk != null && !disk.data.isEmpty()) {
             memory = disk.data;
             memoryTime = disk.time;
+            final Data staleData = disk.data;
+            App.post(() -> callback.onResult(staleData));
         }
         Data stale = disk != null && !disk.data.isEmpty() ? disk.data : cache;
         synchronized (RankLatest.class) {
@@ -302,27 +312,51 @@ public final class RankLatest {
         return imageUrl(DEFAULT_IMAGE_BASE, TmdbApi.LOGO_SIZE, path);
     }
 
+    /** 设置页改过全局连接方式或站点：首页回前台时据此重建已挂主视觉。 */
+    public static void markConfigChanged() {
+        // 用户刚确认过配置：清掉当前地址的不可用判定，让新配置真正生效。
+        Prefers.remove(KEY_IMAGE_BLOCKED + configuredImageBase());
+        baseImageBlocked = false;
+        configChanged = true;
+    }
+
+    public static boolean consumeConfigChanged() {
+        boolean changed = configChanged;
+        configChanged = false;
+        return changed;
+    }
+
     /**
      * 标记配置站点不提供图片：首屏任一资源在配置地址上失败时调用。
-     * 之后所有图片地址直接走官方，预热也不会再向该站点发无效请求。
+     * 判定按地址持久化，冷启动后也不会对同一站点反复白发 404。
      */
     public static void markBaseImageUnavailable() {
         baseImageBlocked = true;
+        Prefers.put(KEY_IMAGE_BLOCKED + configuredImageBase(), true);
     }
 
-    /** 进入页面时重置：用户可能刚在设置里换过站点，应重新给新地址一次机会。 */
+    /** 进入页面时按当前地址重载判定：用户换站点后给新地址一次机会。 */
     public static void resetBaseImage() {
-        baseImageBlocked = false;
+        baseImageBlocked = Prefers.getBoolean(KEY_IMAGE_BLOCKED + configuredImageBase(), false);
     }
 
-    /** 图片基地址：设置里第一个有效站点，未配置或已判定不可用时用官方默认地址。 */
-    public static String imageBase() {
-        if (!baseImageBlocked) {
-            for (TmdbSite site : TmdbSetting.getSites()) {
-                if (site != null && site.isValid()) return site.base();
-            }
+    /**
+     * 原始图片基地址（不含失败降级）：官方 API 模式用独立的图片域名，
+     * 其余模式沿用全局 API 地址；不可用时由 {@link #imageBase()} 回落到官方图片域名。
+     */
+    private static String configuredImageBase() {
+        // api.themoviedb.org 只服务 /3/ 接口，图片必须走 image.tmdb.org。
+        if (TmdbSetting.getMode() == TmdbSetting.MODE_OFFICIAL) return DEFAULT_IMAGE_BASE;
+        for (TmdbSite site : TmdbSetting.getSites()) {
+            if (site != null && site.isValid()) return site.base();
         }
         return DEFAULT_IMAGE_BASE;
+    }
+
+    /** 图片基地址：当前连接方式的图片地址，已判定不可用时回落官方默认地址。 */
+    public static String imageBase() {
+        String base = configuredImageBase();
+        return baseImageBlocked && !TextUtils.equals(base, DEFAULT_IMAGE_BASE) ? DEFAULT_IMAGE_BASE : base;
     }
 
     private static String imageUrl(String base, String size, String path) {

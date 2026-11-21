@@ -84,6 +84,7 @@ import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
+import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.net.OkHttp;
@@ -478,7 +479,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /**
      * 「首页」按钮：刷新推荐内容、最近观看与首页主视觉，并把列表滚回顶部。
-     * 主视觉仍走 DoubanHot 的 30 分钟缓存（命中即立即重绘，不重复打接口）。
+     * 主视觉仍走 DoubanHot 的 12 小时缓存（命中即立即重绘，不重复打接口）。
      */
     private void refreshHome() {
         // 内容整块重建，之前记下的海报 View 即将失效。
@@ -1070,7 +1071,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mAdapter.removeItems(start, mAdapter.size() - start);
     }
 
-    /** 加载主视觉（rank/latest 富化榜单）：命中 30 分钟缓存立即渲染，过期后台刷新。 */
+    /** 加载主视觉（rank/latest 富化榜单）：命中 12 小时缓存立即渲染，过期后台刷新。 */
     private void loadDoubanHot() {
         DoubanHot.load(this::applyHero);
     }
@@ -1391,6 +1392,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     protected void onResume() {
         super.onResume();
+        // 设置页改过 TMDB 连接方式/站点：旧主视觉行内容没变但图片地址已失效，清签名强制重建。
+        if (RankLatest.consumeConfigChanged()) {
+            mHeroSignature = "";
+            loadDoubanHot();
+        }
         if (mClock != null) mClock.stop();
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();

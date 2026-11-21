@@ -599,16 +599,12 @@ public class DoubanHotPresenter extends Presenter {
         /**
          * 片名层：logo 与文字片名二选一，共用 titleBox 容器。
          *
-         * <p>logo 用 {@link TmdbStore#logoBitmap(String)} 取<b>未经下采样的原始 Bitmap</b>，
-         * 同步解码、同帧显示。早期版本走 Glide 的 {@code fitCenter()}：Glide 会按当时
-         * 120dp 的 ImageView 尺寸把图降采样，容器随后被放大到 200dp，等于把小图拉大，
-         * 于是出现锯齿和细微马赛克。</p>
+         * <p>本地已有 logo 时用 {@link TmdbStore#logoBitmap(String)} 同步解码、同帧显示；
+         * 只有榜单给了 logoPath 且本地没有时才异步加载网络图。logo 按原尺寸解码，避免
+         * Glide 的 fitCenter 按小 ImageView 下采样后放大发虚。</p>
          *
-         * <p>这里<b>只读本地已有缓存</b>，不联网、不触发抓取：排行榜富化数据不含 logo，
-         * 主视觉不能为了片名图再去请求 TMDB。缓存里有就用图片，没有就用文字片名。</p>
-         *
-         * <p>进入时<b>先清空文字并隐藏两者</b>，取到 bitmap 才显示 logo，取不到才显示文字，
-         * 因此加载前不会闪过残留文字。</p>
+         * <p>网络 logo 加载期间<b>先显示文字片名占位</b>，成功后由 {@link #showLogo} 用图片替换，
+         * 两次失败才回落本地缓存 / 保留文字。进入时先清空文字并隐藏两者，避免闪过上一部的残留片名。</p>
          *
          * <p>容器高度按 logo 宽高比动态分三档：宽/高 &lt; 1/1.6（竖版）200dp、
          * &le; 1/1（类正方形）120dp、其余（横版）80dp；文字片名用 120dp。
@@ -623,11 +619,15 @@ public class DoubanHotPresenter extends Presenter {
             binding.logo.setVisibility(View.INVISIBLE);
             applyTextSize();
             binding.name.setText(item.getTitle());
+            // 本地已有 logo：同帧显示，避免先闪一下文字再换图。
+            if (applyLocalLogo(item, gen)) return;
             if (item.hasLogo()) {
+                // 网络 logo 期间先留文字片名占位，成功后再由 showLogo() 替换。
+                binding.name.setVisibility(View.VISIBLE);
                 loadLogo(item, gen, false);
                 return;
             }
-            // 榜单没给 logo（旧缓存 / 该条目未匹配到）：直接退本地缓存，再退文字。
+            // 榜单没给 logo（旧缓存 / 该条目未匹配到）：退本地缓存，没有就用文字。
             bindLocalLogo(item, gen);
         }
 
@@ -697,16 +697,20 @@ public class DoubanHotPresenter extends Presenter {
          */
         private void bindLocalLogo(DoubanHotItem item, int gen) {
             if (gen != logoGeneration) return;
+            if (!applyLocalLogo(item, gen)) binding.name.setVisibility(View.VISIBLE);
+        }
+
+        /** 尝试用本地已缓存的 logo；返回是否成功显示。不联网、不触发抓取。 */
+        private boolean applyLocalLogo(DoubanHotItem item, int gen) {
+            if (gen != logoGeneration) return false;
             TmdbArt art = TmdbStore.find(item.getTitle());
             Bitmap bitmap = art == null ? null : TmdbStore.logoBitmap(art.getLogo());
-            if (bitmap == null || bitmap.isRecycled()) {
-                binding.name.setVisibility(View.VISIBLE);
-                return;
-            }
+            if (bitmap == null || bitmap.isRecycled()) return false;
             applyLogoSize(bitmap.getWidth(), bitmap.getHeight());
             binding.logo.setImageBitmap(bitmap);
             binding.logo.setVisibility(View.VISIBLE);
             binding.name.setVisibility(View.INVISIBLE);
+            return true;
         }
 
         /**

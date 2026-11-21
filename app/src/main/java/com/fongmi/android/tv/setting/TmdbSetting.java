@@ -4,6 +4,7 @@ import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.TmdbApi;
+import com.fongmi.android.tv.utils.RankLatest;
 import com.github.catvod.utils.Prefers;
 
 import java.util.ArrayList;
@@ -61,6 +62,7 @@ public final class TmdbSetting {
         Prefers.put(KEY_MODE, mode);
         CURSOR.set(0);
         TmdbApi.onConfigChanged();
+        RankLatest.markConfigChanged();
     }
 
     /** 用户保存的站点记录；固定连接方式下地址字段不参与请求，但密钥仍从这里读。 */
@@ -80,6 +82,7 @@ public final class TmdbSetting {
         cache = value;
         CURSOR.set(0);
         TmdbApi.onConfigChanged();
+        RankLatest.markConfigChanged();
     }
 
     /**
