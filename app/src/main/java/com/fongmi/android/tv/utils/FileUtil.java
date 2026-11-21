@@ -71,6 +71,7 @@ public class FileUtil {
                 TmdbApi.clearCache();
                 DoubanHot.clearCache();
                 RankLatest.clearCache();
+                HeroPreload.reset();
                 // tmdb/ 目录里的榜单缓存与失败记录已随 clearCache 删除，这里同步清掉内存状态与待抓队列。
                 ArtSource.reset();
                 App.post(callback::success);
