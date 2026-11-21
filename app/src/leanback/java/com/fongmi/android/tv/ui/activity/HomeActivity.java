@@ -80,7 +80,6 @@ import com.fongmi.android.tv.ui.presenter.VodPresenter;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.ArtBlacklist;
 import com.fongmi.android.tv.utils.DoubanHot;
-import com.fongmi.android.tv.utils.HeroPreload;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
@@ -1098,13 +1097,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             shown.add(item);
         }
         mHeroItems = shown;
-        // 数据一到就把剧照与 logo 的原图拉进 Glide 磁盘缓存：主视觉 7 秒切一张，
-        // 不预热的话第 12 张要等 77 秒才第一次联网，切过去就是空背景。
-        // 延后一帧：先让主视觉行完成 bind、把首条请求以最高优先级发出去，再排队预热其余条目。
-        mBinding.recycler.post(() -> {
-            if (isFinishing() || isDestroyed()) return;
-            HeroPreload.start(this, shown);
-        });
         List<DoubanHotItem> renderable = new ArrayList<>();
         for (DoubanHotItem item : shown) {
             // 榜单已带横版剧照相对路径：有路径就能直接加载，不再查本地素材、也不触发刮削。
