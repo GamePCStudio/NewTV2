@@ -23,12 +23,12 @@ import androidx.leanback.widget.Presenter;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
-import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.DataSource;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.FutureTarget;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.TmdbStore;
 import com.fongmi.android.tv.bean.DoubanHotItem;
@@ -39,10 +39,16 @@ import com.fongmi.android.tv.ui.custom.BackdropStyle;
 import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.ResUtil;
 
+import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 首页主视觉：一条占满整行的横版剧照 + 片名（logo 优先）+ 评分 + 「查看详情」按钮。
@@ -55,8 +61,10 @@ import java.util.Set;
  *       {@link RankLatest#imageUrl(String)} 拼出完整地址交给 Glide；
  *       图片基地址取设置里已配置的站点，未配置时用官方 {@code image.tmdb.org}，
  *       站点不支持图片路径时自动回落官方地址重试一次；</li>
- *   <li><b>不漏条目</b>：只要服务端给了剧照路径就参与轮播；确实没有剧照的条目直接跳过，
- *       不铺占位海报；</li>
+ *   <li><b>顺序预取</b>：绑定后立即从列表第一条开始，按榜单顺序串行下载「横版剧照 + logo」，
+ *       不等到切换才拉图；</li>
+ *   <li><b>就绪才展示</b>：只有剧照真正下载成功的条目才进入轮播池，下载中与下载失败的
+ *       一律不显示（不占位、不闪空白）；全都没就绪时主视觉区保持底色；</li>
  *   <li><b>自动轮播</b>：7 秒一张，页面失去窗口焦点（退到后台）时暂停；</li>
  *   <li><b>交叉淡入</b>：两层 ImageView 交替，600ms 淡入淡出；</li>
  *   <li><b>聚焦反馈</b>：整体放大已取消，仅「查看详情」按钮切换底色与字色
@@ -75,10 +83,6 @@ public class DoubanHotPresenter extends Presenter {
 
     private static final long AUTO_DELAY = 7_000;
     private static final long IMAGE_FADE = 600;
-    /** 首屏剧照就绪后隔多久开始预热后续条目，避免与首屏争抢带宽。 */
-    private static final long PREWARM_DELAY_MS = 250;
-    /** 预热相邻两条之间的间隔：按列表顺序串行推进，不一次性打满连接数。 */
-    private static final long PREWARM_INTERVAL_MS = 350;
     /** ic_tmdb 的 viewport 宽高比：图标高度对齐文字后，宽度按此比例等比缩放，避免拉扁 logo。 */
     private static final float TMDB_ICON_RATIO = 185.04f / 133.4f;
     /**
@@ -86,6 +90,20 @@ public class DoubanHotPresenter extends Presenter {
      * 淡入淡出的终值也用这个值，而不是 1f —— 否则每切一张图就闪一下满亮度。
      */
     private static final float IMAGE_ALPHA = BackdropStyle.IMAGE_ALPHA;
+    /** 预取超时：剧照给足 15s（w1280），logo 只是片名图，6s 足够。 */
+    private static final long BACKDROP_TIMEOUT_MS = 15_000L;
+    private static final long LOGO_TIMEOUT_MS = 6_000L;
+    /**
+     * 主视觉预取线程：严格串行。
+     *
+     * <p>一屏最多 12 条 × 2 个资源，若并发下发会在启动瞬间打十几个请求，
+     * 电视端带宽和内存都会抖；串行还能保证「先就绪的先展示」的顺序与榜单一致。</p>
+     */
+    private static final ExecutorService PRELOAD = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "HeroPrefetch");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private final OnClickListener listener;
 
@@ -177,12 +195,13 @@ public class DoubanHotPresenter extends Presenter {
         private int generation;
         /** logo 单独一套序号：网络 logo 是异步的，晚到回调不能盖住下一条的片名层。 */
         private int logoGeneration;
-        /** 已提交过请求的 URL（含首屏）：预热与显示共用，避免同一资源被重复下载。 */
-        private final Set<String> requestedUrls = new HashSet<>();
-        /** 按列表顺序预热剩余条目的任务，首屏剧照就绪后才启动。 */
-        private final Runnable prewarm = this::prewarmNext;
-        private int prewarmIndex;
-        private boolean prewarmStarted;
+        /** 待预取的条目，严格按榜单顺序；剧照下载成功才进入 items。 */
+        private final Deque<DoubanHotItem> queue = new ArrayDeque<>();
+        /** 预取批次号：重新绑定 / 离屏后，旧批次的结果不再入池。 */
+        private int prefetchGeneration;
+        private boolean prefetching;
+        /** 是否已经显示过第一条：首条剧照到位前，主视觉区保持空白。 */
+        private boolean shownOnce;
         private final Runnable rotate;
         private Holder(@NonNull AdapterDoubanHotBinding binding, OnClickListener listener) {
             super(binding.getRoot());
@@ -266,38 +285,104 @@ public class DoubanHotPresenter extends Presenter {
             candidates.addAll(row.getItems());
             items.clear();
             blocked.clear();
-            requestedUrls.clear();
-            RankLatest.resetBaseImage();
-            stopPrewarm();
-            prewarmIndex = 1;
-            prewarmStarted = false;
+            queue.clear();
+            for (DoubanHotItem item : candidates) {
+                if (item == null || !item.hasBackdrop()) continue;
+                queue.add(item);
+            }
             index = 0;
             generation++;
+            logoGeneration++;
+            // 用户可能刚在设置里换过图片站点，重新给新地址一次机会。
+            RankLatest.resetBaseImage();
+            prefetchGeneration++;
+            prefetching = false;
+            shownOnce = false;
             resetLayers();
-            syncItems();
-            bindDots(items.size());
-            if (items.isEmpty()) {
-                clearContent();
-                return;
-            }
-            show(0, false);
-            restart();
+            // 先清干净再预取：首条剧照真正下载成功之前，主视觉区不展示任何一部影片。
+            clearContent();
+            bindDots(0);
+            if (!queue.isEmpty()) prefetchNext();
         }
 
         /**
-         * 按候选顺序重建可显示列表，返回内容是否发生变化。
+         * 按列表顺序逐个预取「横版剧照 + logo」。
          *
-         * <p>只认榜单给出的剧照路径（{@link DoubanHotItem#hasBackdrop()}）：
-         * 富化数据一次给全，没有路径的条目直接跳过，不再回落到刮削缓存。</p>
+         * <p>每条必须等剧照真正落盘后才加入轮播池：下载中的条目一律不显示，
+         * 失败的直接隐藏，避免主视觉出现空白帧或半张图。logo 是装饰，失败不阻塞展示，
+         * 片名层会退到本地缓存或文字。</p>
          */
-        private boolean syncItems() {
-            List<DoubanHotItem> before = new ArrayList<>(items);
-            items.clear();
-            for (DoubanHotItem item : candidates) {
-                if (blocked.contains(item.getTitle())) continue;
-                if (item.hasBackdrop()) items.add(item);
+        private void prefetchNext() {
+            if (prefetching) return;
+            DoubanHotItem item = queue.poll();
+            if (item == null) return;
+            prefetching = true;
+            int gen = prefetchGeneration;
+            PRELOAD.execute(() -> {
+                boolean backdrop = download(item.getBackdrop(), true);
+                // 剧照一就绪就交给主线程入池：首条不必等 logo（logo 下载慢时会拖慢首屏）。
+                App.post(() -> {
+                    if (gen != prefetchGeneration) return;
+                    if (backdrop) onPrefetched(item);
+                    else blocked.add(item.getTitle());
+                });
+                if (backdrop && item.hasLogo()) download(item.getLogo(), false);
+                App.post(() -> {
+                    if (gen != prefetchGeneration) return;
+                    prefetching = false;
+                    prefetchNext();
+                });
+            });
+        }
+
+        /** 一部影片预取完成：加入轮播池；第一条到位才真正显示主视觉。 */
+        private void onPrefetched(DoubanHotItem item) {
+            if (items.contains(item)) return;
+            items.add(item);
+            bindDots(items.size());
+            if (!shownOnce) {
+                shownOnce = true;
+                show(0, false);
             }
-            return !before.equals(items);
+            // 首条时池里只有 1 条，schedule() 不会启动轮播；到第 2 条才补上一次调度。
+            // 之后不再 restart：否则预取期间每来一条都会重置 7 秒计时，主视觉会长时间停在第一条。
+            if (items.size() == 2) restart();
+        }
+
+        /** 下载一个资源：先配置站点，失败再官方地址；两者相同只试一次。 */
+        private boolean download(String path, boolean backdrop) {
+            if (TextUtils.isEmpty(path)) return false;
+            String primary = backdrop ? RankLatest.imageUrl(path) : RankLatest.logoUrl(path);
+            if (fetch(primary, backdrop)) return true;
+            if (backdrop) RankLatest.markBaseImageUnavailable();
+            String official = backdrop ? RankLatest.officialImageUrl(path) : RankLatest.officialLogoUrl(path);
+            return !TextUtils.isEmpty(official) && !official.equals(primary) && fetch(official, backdrop);
+        }
+
+        /**
+         * 同步下载到 Glide 的 DATA 缓存（不绑定 ImageView、不解码）。
+         *
+         * <p>用 Application Context 走 Glide 单例：预取不受页面生命周期影响，
+         * 不会在 Activity 销毁后抛「cannot start a load for a destroyed activity」。
+         * 之后 {@code show()} 里的 into() 命中同一份磁盘缓存，不再发网络请求。</p>
+         */
+        private boolean fetch(String url, boolean backdrop) {
+            if (TextUtils.isEmpty(url)) return false;
+            FutureTarget<File> target = null;
+            try {
+                target = Glide.with(App.get()).asFile().load(url).submit();
+                File file = target.get(backdrop ? BACKDROP_TIMEOUT_MS : LOGO_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                return file != null && file.exists() && file.length() > 0;
+            } catch (Exception e) {
+                return false;
+            } finally {
+                if (target != null) {
+                    try {
+                        Glide.with(App.get()).clear(target);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
         }
 
         private void resetLayers() {
@@ -361,7 +446,7 @@ public class DoubanHotPresenter extends Presenter {
          * 加载一张主视觉。
          *
          * <p>用榜单给的相对路径拼网络地址（{@link RankLatest#imageUrl(String)}），
-         * 没有路径的条目会被 {@link #syncItems()} 提前滤掉，走不到这里。
+         * 没有路径的条目在 {@link #bind(DoubanHotRow)} 阶段就不会进入预取队列，走不到这里。
          * 解码失败时：若用的是「设置里配置的站点」且该地址与官方不同，自动改用官方地址
          * 重试一次（配置站点未必代理 {@code /t/p/} 图片），仍失败才移出轮播。</p>
          */
@@ -373,16 +458,13 @@ public class DoubanHotPresenter extends Presenter {
                 dropCurrent();
                 return;
             }
-            requestedUrls.add(model);
-            startLoad(item, model, false, target, old, animate, gen, true);
+            startLoad(item, model, false, target, old, animate, gen);
         }
 
-        private void startLoad(DoubanHotItem item, String model, boolean official, ImageView target, ImageView old, boolean animate, int gen, boolean foreground) {
+        private void startLoad(DoubanHotItem item, String model, boolean official, ImageView target, ImageView old, boolean animate, int gen) {
             RequestManager manager = glide(target);
             if (manager == null) return;
             manager.load(model)
-                    // 正在展示的剧照优先于预热任务：首屏用 IMMEDIATE，轮播切换同样保持最高档。
-                    .priority(foreground ? Priority.IMMEDIATE : Priority.NORMAL)
                     // 不走 Glide 的 centerCrop/fitCenter：两者都会改 ImageView 的 scaleType，
                     // 破坏「宽度铺满 + 顶部贴齐」自算的 MATRIX。保留原图尺寸，矩阵自己算。
                     .dontTransform()
@@ -392,13 +474,10 @@ public class DoubanHotPresenter extends Presenter {
                             if (gen != generation) return true;
                             String fallback = RankLatest.officialImageUrl(item.getBackdrop());
                             if (!official && !TextUtils.isEmpty(fallback) && !fallback.equals(model)) {
-                                // 配置站点连剧照都拿不到：整批图片改走官方，预热不再白发无效请求。
-                                RankLatest.markBaseImageUnavailable();
-                                startLoad(item, fallback, true, target, old, animate, gen, foreground);
+                                startLoad(item, fallback, true, target, old, animate, gen);
                                 return true;
                             }
                             blocked.add(item.getTitle());
-                            startPrewarmDelayed();
                             dropCurrent();
                             return true;
                         }
@@ -409,8 +488,6 @@ public class DoubanHotPresenter extends Presenter {
                             // drawable 已就位，先按新图尺寸重算矩阵再淡入，避免第一帧错位
                             binding.backdrop.applyMatrices();
                             reveal(target, old, animate);
-                            // 首屏剧照到手后才开始预热后续条目，不跟首屏抢带宽。
-                            if (foreground) startPrewarmDelayed();
                             return false;
                         }
                     })
@@ -419,7 +496,11 @@ public class DoubanHotPresenter extends Presenter {
 
         /** 剧照不可用时把当前条目从轮播中摘掉，并跳到下一部（没有下一部就清空文字层）。 */
         private void dropCurrent() {
-            syncItems();
+            DoubanHotItem current = current();
+            if (current != null) {
+                blocked.add(current.getTitle());
+                items.remove(current);
+            }
             if (index >= items.size()) index = 0;
             bindDots(items.size());
             if (items.isEmpty()) clearContent();
@@ -499,10 +580,7 @@ public class DoubanHotPresenter extends Presenter {
                 bindLocalLogo(item, gen);
                 return;
             }
-            requestedUrls.add(url);
             manager.load(url)
-                    // 片名 logo 属于当前可见内容，优先级高于后台预热。
-                    .priority(Priority.HIGH)
                     // logo 是透明 PNG、体积不大；按原图解码，避免按当前容器尺寸下采样后放大发虚。
                     .override(Target.SIZE_ORIGINAL)
                     .dontAnimate()
@@ -512,14 +590,10 @@ public class DoubanHotPresenter extends Presenter {
                             if (gen != logoGeneration) return true;
                             String fallback = RankLatest.officialLogoUrl(item.getLogo());
                             if (!official && !TextUtils.isEmpty(fallback) && !fallback.equals(model)) {
-                                // logo 单条失败只回落官方这一张，不据此判定整个站点不可用：
-                                // 剧照能加载说明站点支持 /t/p/，可能只是这条 logo 服务端路径无效。
-                                requestedUrls.add(fallback);
                                 loadLogo(item, gen, true);
                                 return true;
                             }
                             bindLocalLogo(item, gen);
-                            startPrewarmDelayed();
                             return true;
                         }
 
@@ -705,52 +779,6 @@ public class DoubanHotPresenter extends Presenter {
             }
         }
 
-        /* ------------------------------------------------------------ 后台预热 */
-
-        /** 首屏剧照就绪后启动预热；轮播每次成功加载都调，靠标志保证只启动一次。 */
-        private void startPrewarmDelayed() {
-            if (prewarmStarted) return;
-            prewarmStarted = true;
-            handler.postDelayed(prewarm, PREWARM_DELAY_MS);
-        }
-
-        /** 按列表顺序逐条预热，两条之间留间隔，避免一次发出二十多个请求。 */
-        private void prewarmNext() {
-            if (prewarmIndex >= items.size()) return;
-            DoubanHotItem item = items.get(prewarmIndex++);
-            prewarmItem(item);
-            handler.postDelayed(prewarm, PREWARM_INTERVAL_MS);
-        }
-
-        /**
-         * 预热一条的剧照与 logo：写进内存和磁盘缓存，用户切到该条时直接命中，不再发 HTTP。
-         *
-         * <p>地址与展示链路完全一致（含配置站点优先），URL 通过 {@link #requestedUrls}
-         * 去重；首屏已经请求过的资源会在这里跳过，因此不会产生重复下载。</p>
-         */
-        private void prewarmItem(DoubanHotItem item) {
-            if (item == null) return;
-            String backdrop = RankLatest.imageUrl(item.getBackdrop());
-            if (!TextUtils.isEmpty(backdrop) && requestedUrls.add(backdrop)) preload(backdrop);
-            if (item.hasLogo()) {
-                String logo = RankLatest.logoUrl(item.getLogo());
-                if (!TextUtils.isEmpty(logo) && requestedUrls.add(logo)) preload(logo);
-            }
-        }
-
-        private void preload(String url) {
-            RequestManager manager = glide(binding.getRoot());
-            if (manager == null) return;
-            manager.load(url)
-                    .priority(Priority.LOW)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .preload();
-        }
-
-        private void stopPrewarm() {
-            handler.removeCallbacks(prewarm);
-        }
-
         /**
          * 取 Glide 的 RequestManager，Activity 已销毁时返回 {@code null}（本次放弃加载）。
          *
@@ -775,16 +803,10 @@ public class DoubanHotPresenter extends Presenter {
 
         private void attach() {
             restart();
-            // 离屏期间暂停的预热在回到前台后从断点继续。
-            if (prewarmStarted && prewarmIndex < items.size()) {
-                handler.removeCallbacks(prewarm);
-                handler.postDelayed(prewarm, PREWARM_INTERVAL_MS);
-            }
         }
 
         private void detach() {
             stop();
-            stopPrewarm();
         }
 
         private void restart() {
@@ -803,10 +825,10 @@ public class DoubanHotPresenter extends Presenter {
 
         private void unbind() {
             detach();
-            stopPrewarm();
-            requestedUrls.clear();
-            prewarmStarted = false;
             generation++;
+            prefetchGeneration++;
+            prefetching = false;
+            queue.clear();
             items.clear();
             candidates.clear();
             blocked.clear();
