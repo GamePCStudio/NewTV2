@@ -27,6 +27,8 @@
     <string name="douban_hot_action">查看詳情</string>
     <string name="douban_hot_no_rating">暫無評分</string>
     <string name="douban_hot_rating">%1$s 分</string>
+    <string name="douban_hot_director">導演：%1$s</string>
+    <string name="douban_hot_actors">主演：%1$s</string>
     <string name="history_played">已播:%1$s</string>
     <string name="site_switch_config">點播地址切換</string>
     <string name="site_switch_empty">暫無歷史點播地址</string>

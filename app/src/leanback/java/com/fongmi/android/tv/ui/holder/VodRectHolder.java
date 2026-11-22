@@ -5,6 +5,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 
 import com.bumptech.glide.Glide;
+import com.fongmi.android.tv.utils.ArtRating;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterVodRectBinding;
@@ -50,6 +51,8 @@ public class VodRectHolder extends BaseVodHolder {
             score = ArtSource.score(item.getRemarks());
             fromRemarks = !score.isEmpty();
         }
+        // 展示层再归一一次：整数评分（如 9）统一补足一位小数（9.0），兼容所有数据来源。
+        score = ArtRating.normalize(score);
         boolean remarkIsScore = !ArtSource.score(item.getRemarks()).isEmpty();
         if (score.isEmpty()) {
             binding.score.setVisibility(View.GONE);

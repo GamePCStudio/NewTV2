@@ -256,6 +256,9 @@ public final class RankLatest {
         item.mediaType = optString(json, "mediaType");
         item.genreTitle = optString(json, "genreTitle");
         if (TextUtils.isEmpty(item.genreTitle)) item.genreTitle = firstGenre(json);
+        // 主视觉元信息行的导演 / 主演：服务端已带数组，这里只取姓名；主演最多 3 名。
+        item.directors = personNames(json, "directors", 5);
+        item.actors = personNames(json, "actors", 3);
         item.voteCount = optInt(json, "voteCount");
         item.rank = optInt(json, "rank");
         item.rating = optDouble(json, "rating");
@@ -271,6 +274,25 @@ public final class RankLatest {
             if (!TextUtils.isEmpty(title)) return title;
         }
         return "";
+    }
+
+    /**
+     * 从 {@code directors} / {@code actors} 数组里取姓名拼成一串。
+     *
+     * <p>主演最多取 3 名（需求上限），导演取前 5 名防止异常数据撑爆元信息行；
+     * 按姓名去重、空姓名跳过。老榜单没有该字段时返回空串，展示层据此隐藏对应片段。</p>
+     */
+    private static String personNames(JsonObject json, String key, int limit) {
+        if (json == null || !json.has(key) || !json.get(key).isJsonArray() || limit <= 0) return "";
+        List<String> names = new ArrayList<>();
+        for (JsonElement element : json.getAsJsonArray(key)) {
+            if (element == null || !element.isJsonObject()) continue;
+            String name = optString(element.getAsJsonObject(), "name").trim();
+            if (TextUtils.isEmpty(name) || names.contains(name)) continue;
+            names.add(name);
+            if (names.size() >= limit) break;
+        }
+        return TextUtils.join("、", names);
     }
 
     private static String optString(JsonObject json, String key) {
@@ -553,6 +575,10 @@ public final class RankLatest {
         private String posterPath = "";
         private String mediaType = "";
         private String genreTitle = "";
+        /** 导演姓名串，多个用「、」连接；老榜单没有该字段时为空串。 */
+        private String directors = "";
+        /** 主演姓名串，最多 3 名，多个用「、」连接。 */
+        private String actors = "";
         private int voteCount;
         private int rank;
         private double rating;
@@ -600,6 +626,16 @@ public final class RankLatest {
         /** 题材：优先取 {@code genreTitle}，缺失时取 {@code genreItems} 的第一个标题。 */
         public String getGenre() {
             return genreTitle == null ? "" : genreTitle;
+        }
+
+        /** 导演姓名串（可能为空）。 */
+        public String getDirectors() {
+            return directors == null ? "" : directors;
+        }
+
+        /** 主演姓名串，最多 3 名（可能为空）。 */
+        public String getActors() {
+            return actors == null ? "" : actors;
         }
 
         public int getVoteCount() {

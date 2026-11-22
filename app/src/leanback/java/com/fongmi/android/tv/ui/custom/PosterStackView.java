@@ -124,8 +124,11 @@ public class PosterStackView extends FrameLayout {
         label = new TextView(context);
         label.setText(labelText);
         label.setTextColor(ContextCompat.getColor(context, R.color.stack_text_primary));
-        label.setTextSize(TypedValue.COMPLEX_UNIT_PX,
-                context.getResources().getDimensionPixelSize(R.dimen.stack_label_size));
+        // 字号以 sp 设置：从 dimen 的 14sp 反解出 sp 数值再按 COMPLEX_UNIT_SP 应用，
+        // 使其随系统字体缩放（此前先转 px 再按 PX 设置，等于写死像素、不响应字体缩放）。
+        float labelSp = context.getResources().getDimension(R.dimen.stack_label_size)
+                / context.getResources().getDisplayMetrics().scaledDensity;
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, labelSp);
         label.setAlpha(readFloatResource(context.getResources(), R.dimen.stack_label_alpha, 0.7f));
         label.setGravity(Gravity.CENTER);
         label.setTypeface(Typeface.DEFAULT_BOLD);

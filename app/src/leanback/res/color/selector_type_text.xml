@@ -3,7 +3,7 @@
   分类导航条 / 筛选子项 / 筛选图标共用的文字与图标色（TV）。
   与 @drawable/selector_type 的状态顺序严格一一对应：
 
-    禁用                  → 40% 透明白（white_40）；
+    禁用                  → 50% 透明白（white_50，约 5.5:1，TV 远距仍可辨）；
     当前页 + 聚焦/悬停    → 纯黑（纯白底上最强对比）；
     当前页 + 未聚焦       → 纯黑（60% 透明白底上仍可读）；
     非当前页 + 聚焦/悬停  → 纯白（black_40 + 白描边上保持可读）；
@@ -16,7 +16,7 @@
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <item android:color="@color/white_40" android:state_enabled="false" />
+    <item android:color="@color/white_50" android:state_enabled="false" />
     <item android:color="@color/black" android:state_focused="true" android:state_selected="true" />
     <item android:color="@color/black" android:state_hovered="true" android:state_selected="true" />
     <item android:color="@color/black" android:state_selected="true" />

@@ -57,7 +57,7 @@
             android:paddingBottom="2dp"
             android:singleLine="true"
             android:textColor="@color/white"
-            android:textSize="12sp"
+            android:textSize="@dimen/text_meta"
             android:textStyle="bold"
             android:visibility="gone"
             tools:text="8.7"
@@ -75,7 +75,7 @@
         android:includeFontPadding="false"
         android:singleLine="true"
         android:textColor="@color/selector_vod_title"
-        android:textSize="16sp"
+        android:textSize="@dimen/text_body"
         tools:text="蜘蛛人" />
 
     <!--
@@ -109,7 +109,7 @@
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="@color/white_60"
-            android:textSize="12sp"
+            android:textSize="@dimen/text_meta"
             android:visibility="gone"
             tools:text="2022"
             tools:visibility="visible" />
@@ -125,7 +125,7 @@
             android:includeFontPadding="false"
             android:singleLine="true"
             android:textColor="@color/white_60"
-            android:textSize="12sp"
+            android:textSize="@dimen/text_meta"
             tools:text="更新至第 12 集" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -138,7 +138,7 @@
             android:maxWidth="64dp"
             android:singleLine="true"
             android:textColor="@color/white_60"
-            android:textSize="12sp"
+            android:textSize="@dimen/text_meta"
             android:visibility="gone"
             tools:text="泥巴"
             tools:visibility="visible" />

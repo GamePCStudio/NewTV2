@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  站源下拉入口的细线 chevron（参照系统设置下拉控件的下拉箭头样式）：
+  与实心三角（ic_site_arrow）区分——实心三角仍用于下拉列表内的二级面板指向；
+  顶栏入口改用描边 chevron，线宽约 1.6dp，视觉重量与 14sp 站源名文字协调。
+  viewBox 与显示尺寸一致（14×8dp），无需换算：线宽 1.6 viewport 单位 = 实际 1.6dp。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="14dp"
+    android:height="8dp"
+    android:viewportWidth="14"
+    android:viewportHeight="8">
+
+    <path
+        android:pathData="M3,2.2 L7,6 L11,2.2"
+        android:strokeColor="@android:color/white"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.6" />
+
+</vector>

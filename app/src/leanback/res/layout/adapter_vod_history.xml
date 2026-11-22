@@ -69,7 +69,7 @@
         android:includeFontPadding="false"
         android:singleLine="true"
         android:textColor="@color/selector_vod_title"
-        android:textSize="16sp"
+        android:textSize="@dimen/text_body"
         tools:text="第三起凶案" />
 
     <!-- 「集数·已播:百分比」：常显（最近观看需要一直看到哪一集、看了多少）。 -->
@@ -83,7 +83,7 @@
         android:includeFontPadding="false"
         android:singleLine="true"
         android:textColor="@color/white_60"
-        android:textSize="12sp"
+        android:textSize="@dimen/text_meta"
         tools:text="第7集·已播:45%" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

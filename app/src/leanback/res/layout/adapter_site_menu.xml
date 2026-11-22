@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 站源下拉项：字号与工具栏一致，统一 12sp -->
+<!-- 站源下拉项：14sp 常规，与顶栏站源名及「点播地址切换」项同一口径 -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -20,7 +20,7 @@
         android:maxLines="1"
         android:singleLine="true"
         android:textColor="@color/white_70"
-        android:textSize="12sp"
+        android:textSize="@dimen/text_label"
         tools:text="配置|中心" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

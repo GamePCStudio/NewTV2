@@ -12,8 +12,10 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Config;
+import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.ActivitySettingBinding;
+import com.fongmi.android.tv.databinding.ViewHomeToolbarBinding;
 import com.fongmi.android.tv.db.BackupManager;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
@@ -30,6 +32,7 @@ import com.fongmi.android.tv.ui.dialog.DohDialog;
 import com.fongmi.android.tv.ui.dialog.HistoryDialog;
 import com.fongmi.android.tv.ui.dialog.RestoreDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
+import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.HistoryEpisode;
 import com.fongmi.android.tv.utils.Notify;
@@ -47,10 +50,20 @@ import java.util.List;
 public class SettingActivity extends BaseActivity implements ConfigListener, SiteListener, DohDialog.Listener {
 
     private ActivitySettingBinding mBinding;
+    private ViewHomeToolbarBinding mToolbar;
+    private Clock mClock;
+    private Result mResult;
     private String[] size;
 
     public static void start(Activity activity) {
-        activity.startActivity(new Intent(activity, SettingActivity.class));
+        start(activity, null);
+    }
+
+    /** 从首页进设置时带上榜单结果，供「片库」导航项直接切页用。 */
+    public static void start(Activity activity, Result result) {
+        Intent intent = new Intent(activity, SettingActivity.class);
+        if (result != null) intent.putExtra("result", result);
+        activity.startActivity(intent);
     }
 
     private int getDohIndex() {
@@ -65,16 +78,52 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
 
     @Override
     protected ViewBinding getBinding() {
-        return mBinding = ActivitySettingBinding.inflate(getLayoutInflater());
+        mBinding = ActivitySettingBinding.inflate(getLayoutInflater());
+        mToolbar = mBinding.homeToolbar;
+        return mBinding;
     }
 
     @Override
     protected void initView(Bundle savedInstanceState) {
-        mBinding.vod.requestFocus();
+        mResult = getIntent().getParcelableExtra("result");
+        setToolbar();
+        mToolbar.navMine.requestFocus();
         mBinding.vodUrl.setText(VodConfig.getDesc());
         mBinding.versionText.setText(BuildConfig.VERSION_NAME);
         setCacheText();
         setOtherText();
+    }
+
+    /**
+     * 顶部导航栏（与首页 / 片库共用同一份布局）：三个导航胶囊 + 搜索圆钮 + 时钟。
+     *
+     * <p>「我的」是当前页，点击只把设置内容滚回顶部；「首页」用 CLEAR_TOP 回首页栈，
+     * 「片库」优先复用从首页带进来的榜单结果，没有结果（从片库进设置）时直接回退。
+     * 设置页不提供站点选择，站源入口整块隐藏，不与设置内的站点配置入口重复。</p>
+     */
+    private void setToolbar() {
+        mToolbar.navHome.setOnClickListener(v -> gotoHome());
+        mToolbar.navVod.setOnClickListener(v -> gotoVod());
+        mToolbar.navMine.setOnClickListener(v -> mBinding.scrollView.scrollTo(0, 0));
+        mToolbar.brandEntry.setOnClickListener(v -> SearchActivity.start(this));
+        mToolbar.siteEntry.setVisibility(View.GONE);
+        // 导航 ↓ 直接进设置内容首行（工具栏布局里的 nextFocusDown 指向首页的 recycler，本页没有）。
+        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.navMine};
+        for (View nav : navs) nav.setNextFocusDownId(R.id.vod);
+        mToolbar.brandEntry.setNextFocusDownId(R.id.vod);
+        mToolbar.navMine.setSelected(true);
+    }
+
+    private void gotoHome() {
+        Intent intent = new Intent(this, HomeActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
+    }
+
+    private void gotoVod() {
+        if (mResult != null && !mResult.getTypes().isEmpty()) VodActivity.start(this, mResult);
+        else finish(); // 从片库进设置：栈里已有片库，回退即可
     }
 
     private void setOtherText() {
@@ -103,11 +152,20 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     @Override
     protected void onResume() {
         super.onResume();
+        if (mClock != null) mClock.stop();
+        mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
+        mClock.start();
         // 从子设置页返回时开关状态可能已变，回来就刷新这两行摘要
         if (mBinding != null) {
             setTmdbText();
             setNoticeText();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mClock != null) mClock.stop();
     }
 
     private void setCacheText() {

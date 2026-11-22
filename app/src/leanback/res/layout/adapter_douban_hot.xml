@@ -85,9 +85,11 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|start"
                 android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:lineSpacingMultiplier="1.15"
                 android:maxLines="2"
                 android:textColor="@color/white"
-                android:textSize="44sp"
+                android:textSize="@dimen/text_display"
                 android:textStyle="bold"
                 android:visibility="invisible"
                 tools:text="后会友期" />
@@ -95,14 +97,13 @@
         </FrameLayout>
 
         <!--
-          meta 行「评分 · 年份 · 类型 · 题材」。TMDB 图标（ic_tmdb）放在评分最左侧，
-          仅在确有评分时显示，用于标注该评分来自 TMDB。整行字号 18sp。
+          meta 行「评分 · 年份 · 类型 · 题材 · 导演 · 主演」。TMDB 图标（ic_tmdb）放在评分最左侧，
+          仅在确有评分时显示，用于标注该评分来自 TMDB。整行字号 12sp 常规。
           外层的横向 LinearLayout 把图标与文字并排居中对齐；缺内容时整行 GONE。
 
-          图标高度与评分行文字高度一致：XML 给 18dp×25dp 作为静态兜底（18sp 字号 ≈ 18dp，
-          25dp = 18dp × ic_tmdb 的 viewport 宽高比 185.04/133.4），运行时再由
-          DoubanHotPresenter.initTextWidths() 按 meta.getTextSize() 精确重算，
-          跟随系统字体缩放且保持原始比例，不会被拉扁。
+          图标高度与该行文字的 FontMetrics 行高一致（上下平齐）、垂直居中，宽度按 ic_tmdb 的
+          viewport 宽高比 185.04/133.4 等比缩放；XML 给 12dp×17dp 作静态兜底，运行时再由
+          DoubanHotPresenter.initTextWidths() 按 Paint 精确重算，跟随系统字体缩放且不被拉扁。
         -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/metaRow"
@@ -114,9 +115,9 @@
 
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/tmdbIcon"
-                android:layout_width="25dp"
-                android:layout_height="18dp"
-                android:layout_marginEnd="6dp"
+                android:layout_width="17dp"
+                android:layout_height="12dp"
+                android:layout_marginEnd="4dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_tmdb"
                 android:visibility="gone"
@@ -127,10 +128,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
+                android:includeFontPadding="false"
                 android:maxLines="1"
-                android:textColor="#CCFFFFFF"
-                android:textSize="18sp"
-                tools:text="8.7 分 · 2026 · 剧集" />
+                android:textColor="@color/white_80"
+                android:textSize="@dimen/text_meta"
+                tools:text="8.7 分 · 2026 · 剧集 · 剧情 · 导演：猫的树 · 主演：杨超越、董思成" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -151,8 +153,8 @@
             android:layout_marginTop="6dp"
             android:ellipsize="end"
             android:maxLines="2"
-            android:textColor="#CCFFFFFF"
-            android:textSize="16sp"
+            android:textColor="@color/white_80"
+            android:textSize="@dimen/text_body"
             android:lineSpacingMultiplier="1.2"
             android:visibility="gone"
             tools:text="一位失忆的摄影师在旧胶片里发现了被抹去的夏天，于是沿着海岸线重新走了一遍那年没走完的路。" />
@@ -181,7 +183,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/douban_hot_action"
                 android:textColor="@color/white"
-                android:textSize="14sp"
+                android:textSize="@dimen/text_label"
                 android:textStyle="bold" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>

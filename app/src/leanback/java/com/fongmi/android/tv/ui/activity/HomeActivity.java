@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
+import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 
@@ -130,6 +131,9 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      */
     private ViewHomeToolbarBinding mToolbar;
     private ViewSiteSheetBinding mSheet;
+    /** 收起动画进行中：焦点守卫让位，且允许被下一次展开抢占（此时面板仍是 VISIBLE）。 */
+    private boolean sheetClosing;
+    private boolean configClosing;
     private ArrayObjectAdapter mHistoryAdapter;
     private ArrayObjectAdapter mAdapter;
     private SiteMenuAdapter mSiteMenuAdapter;
@@ -192,7 +196,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 原品牌功能 sheet 已移除，现在只剩这一个可展开的浮层。
      */
     private final ViewTreeObserver.OnGlobalFocusChangeListener focusGuard = (oldFocus, newFocus) -> {
-        if (mBinding == null || !isVisible(mSheet.getRoot())) return;
+        if (mBinding == null || sheetClosing || !isVisible(mSheet.getRoot())) return;
         if (isInside(newFocus, mSheet.getRoot())) return;
         focusSheetCurrent();
     };
@@ -385,7 +389,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private void setToolbar() {
         mToolbar.navHome.setOnClickListener(v -> refreshHome());
         mToolbar.navVod.setOnClickListener(v -> VodActivity.start(this, mResult));
-        mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this));
+        mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this, mResult));
         mToolbar.siteEntry.setOnClickListener(v -> showSiteSheet());
         mSheet.siteScrim.setOnClickListener(v -> hideSiteSheet());
         mSheet.siteList.setLayoutManager(new LinearLayoutManager(this));
@@ -549,6 +553,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 展开下拉 sheet：刷新站源列表、定位面板、把焦点落到当前站源项，并播放弹出渐变动画。 */
     private void showSiteSheet() {
+        // 收起动画期间面板仍是 VISIBLE：先强制收尾，让这次展开能从干净状态起步。
+        if (sheetClosing) finishSheetClose();
         if (isVisible(mSheet.getRoot())) return;
         showToolbarImmediate();
         List<Site> sites = VodConfig.get().getSites().stream().filter(site -> !site.isHide()).toList();
@@ -567,7 +573,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mSheet.siteList.setAdapter(mSiteMenuAdapter);
         // 二级面板随新一次展开复位：上一轮留下的动画与可见性都清掉。
         mSheet.configPanel.animate().cancel();
-        mSheet.configPanel.setVisibility(View.GONE);
+        finishConfigClose();
         mSheet.getRoot().setVisibility(View.VISIBLE);
         // 先置透明，避免「定位那一帧」把静态画面闪出来；post 里定位完再启动动画。
         mSheet.sitePanel.setAlpha(0f);
@@ -577,7 +583,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mSheet.getRoot().bringToFront();
         mToolbar.siteArrow.setRotation(180f);
         mToolbar.siteEntry.post(() -> {
-            if (!isVisible(mSheet.getRoot())) return;
+            if (!isVisible(mSheet.getRoot()) || sheetClosing) return;
             positionSheet();
             // 先把焦点收进陷阱容器（afterDescendants 会优先给列表项），
             // 再由 scrollToPosition 落到当前站源项。
@@ -610,6 +616,41 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 .setDuration(SHEET_ANIM)
                 .setInterpolator(new DecelerateInterpolator())
                 .start();
+    }
+
+    /**
+     * 收起渐变：遮罩淡出 + 面板淡出、上移、纵向收拢，加速插值收尾。
+     * -{@code onEnd} 在动画自然结束后把 View 置 GONE；被下一次展开抢占时由调用方直接收尾。
+     */
+    private void animatePanelClose(View panel, View scrim, Runnable onEnd) {
+        panel.animate().cancel();
+        if (scrim != null) {
+            scrim.animate().cancel();
+            scrim.animate().alpha(0f).setDuration(SHEET_ANIM).start();
+        }
+        panel.setPivotY(0f);
+        panel.animate()
+                .alpha(0f)
+                .translationY(-ResUtil.dp2px(8))
+                .scaleY(0.96f)
+                .setDuration(SHEET_ANIM)
+                .setInterpolator(new AccelerateInterpolator())
+                .withEndAction(onEnd)
+                .start();
+    }
+
+    /** 主面板收起动画结束（或被展开抢占）时的统一收尾。 */
+    private void finishSheetClose() {
+        sheetClosing = false;
+        mSheet.sitePanel.animate().cancel();
+        mSheet.siteScrim.animate().cancel();
+        mSheet.getRoot().setVisibility(View.GONE);
+    }
+
+    /** 二级面板收起动画结束（或被展开抢占）时的统一收尾。 */
+    private void finishConfigClose() {
+        configClosing = false;
+        mSheet.configPanel.setVisibility(View.GONE);
     }
 
     /**
@@ -655,6 +696,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 显示期间焦点直接落进二级列表的当前配置项；再按返回先收回二级面板。
      */
     private void showConfigSheet() {
+        // 收起动画期间面板仍是 VISIBLE：先收尾，避免把「重新打开」误判为二次收起。
+        if (configClosing) finishConfigClose();
         if (isVisible(mSheet.configPanel)) {
             hideConfigSheet();
             return;
@@ -671,7 +714,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mSheet.configPanel.setVisibility(View.VISIBLE);
         mSheet.configPanel.setAlpha(0f);
         mSheet.configList.post(() -> {
-            if (!isVisible(mSheet.configPanel)) return;
+            if (!isVisible(mSheet.configPanel) || configClosing) return;
             positionConfigSheet();
             mSheet.configList.scrollToPosition(mConfigMenuAdapter.indexOfCurrent());
             // 焦点直接落进二级列表（当前配置项）：用户目的就是切地址，不用再按一次方向键
@@ -684,12 +727,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 收回二级面板，焦点回到「切换站点」入口（站源列表第 0 项），再按返回才是关整个 sheet。 */
     private void hideConfigSheet() {
-        if (!isVisible(mSheet.configPanel)) return;
-        mSheet.configPanel.animate().cancel();
-        mSheet.configPanel.setVisibility(View.GONE);
+        if (!isVisible(mSheet.configPanel) || configClosing) return;
+        configClosing = true;
+        // 先把焦点交回站源列表第 0 项，动画帧里二级面板不再参与焦点守卫。
         RecyclerView.ViewHolder holder = mSheet.siteList.findViewHolderForAdapterPosition(0);
         if (holder != null) holder.itemView.requestFocus();
         else mSheet.sitePanel.requestFocus();
+        animatePanelClose(mSheet.configPanel, null, this::finishConfigClose);
     }
 
     /**
@@ -719,18 +763,17 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         });
     }
 
-    /** 收起下拉 sheet，焦点回到触发它的入口（此时 sheet 已 GONE，焦点守卫不介入）。 */
+    /** 收起下拉 sheet：焦点回到触发它的入口，面板播放退出动画结束后再 GONE。 */
     private void hideSiteSheet() {
-        if (!isVisible(mSheet.getRoot())) return;
-        // 动画可能在 GONE 之后继续改 alpha / translation，先取消；
-        // 下次打开时 showSiteSheet() 会重新设置初始状态。
-        mSheet.sitePanel.animate().cancel();
-        mSheet.siteScrim.animate().cancel();
-        mSheet.configPanel.animate().cancel();
-        mSheet.configPanel.setVisibility(View.GONE);
-        mSheet.getRoot().setVisibility(View.GONE);
+        if (!isVisible(mSheet.getRoot()) || sheetClosing) return;
+        sheetClosing = true;
+        // 先把焦点和箭头撤出浮层：focusGuard 在收起期间让位，动画帧里不再抢焦点。
         mToolbar.siteArrow.setRotation(0f);
         mToolbar.siteEntry.requestFocus();
+        // 二级面板直接收尾，不与主面板叠加两级退出动画。
+        mSheet.configPanel.animate().cancel();
+        finishConfigClose();
+        animatePanelClose(mSheet.sitePanel, mSheet.siteScrim, this::finishSheetClose);
     }
 
     /** 判断 view 是否仍在 container 内部（含容器本身与任意层级的后代）。 */

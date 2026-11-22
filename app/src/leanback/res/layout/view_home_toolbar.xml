@@ -101,7 +101,7 @@
             android:paddingEnd="16dp"
             android:text="@string/home_nav_home"
             android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
+            android:textSize="@dimen/text_body"
             android:textStyle="bold" />
 
 
@@ -124,7 +124,7 @@
             android:paddingEnd="16dp"
             android:text="@string/home_vod"
             android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
+            android:textSize="@dimen/text_body"
             android:textStyle="bold" />
 
         <!-- 我的：导航组最后一项，设置入口；组内最后一项不再留右边距 -->
@@ -144,7 +144,7 @@
             android:paddingEnd="16dp"
             android:text="@string/home_nav_mine"
             android:textColor="@color/selector_nav_text"
-            android:textSize="16sp"
+            android:textSize="@dimen/text_body"
             android:textStyle="bold" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -185,23 +185,25 @@
             android:paddingStart="10dp"
             android:paddingEnd="10dp">
 
+            <!-- 站源名：与右侧时钟同一套字体样式（14sp 常规、关闭字体内边距），仅作状态入口不抢焦点 -->
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/siteName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:includeFontPadding="false"
                 android:maxLines="1"
                 android:singleLine="true"
                 android:textColor="@color/white"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:textSize="@dimen/text_label"
                 tools:text="配置|中心" />
 
+            <!-- 细线 chevron：与 14sp 站源名同高协调，间距 8dp；展开时旋转 180° 指向上 -->
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/siteArrow"
-                android:layout_width="16dp"
+                android:layout_width="14dp"
                 android:layout_height="8dp"
-                android:layout_marginStart="12dp"
-                android:src="@drawable/ic_site_arrow" />
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_site_chevron" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -210,8 +212,9 @@
             android:id="@+id/clock"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:includeFontPadding="false"
             android:textColor="@color/white"
-            android:textSize="18sp"
+            android:textSize="@dimen/text_heading"
             android:textStyle="bold"
             tools:text="21:36" />
 

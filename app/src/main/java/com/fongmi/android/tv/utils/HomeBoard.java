@@ -18,7 +18,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -236,9 +235,9 @@ public final class HomeBoard {
         return RankLatest.imageBase() + "/t/p/" + POSTER_SIZE + path;
     }
 
+    /** 评分统一走 ArtRating：10 分制固定一位小数（9 → 9.0），无效值返回空串不显示角标。 */
     private static String ratingText(double rating) {
-        if (rating <= 0d) return "";
-        return new DecimalFormat("0.#").format(rating);
+        return ArtRating.normalize(String.valueOf(rating));
     }
 
     private static String optString(JsonObject json, String key) {

@@ -7,7 +7,7 @@
   用来与下方的站源项区分开；聚焦底色只套在行上，不盖住分割线。
 
   文字必须用 android:text 写死（tools:text 只是设计预览，运行时为空），
-  否则这一项只会显示一个三角。
+  否则这一项只会显示一个三角。字号与下方站源项统一 14sp（@dimen/text_label）。
 -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -48,7 +48,7 @@
             android:singleLine="true"
             android:text="@string/site_switch_config"
             android:textColor="@color/white_70"
-            android:textSize="12sp"
+            android:textSize="@dimen/text_label"
             tools:text="切换站点" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>

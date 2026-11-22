@@ -35,6 +35,12 @@ public class DoubanHotItem {
     /** 题材（如「剧情」）。 */
     @SerializedName("genre")
     private String genre;
+    /** 导演姓名串，多个用「、」连接；老缓存没有该字段时为空串。 */
+    @SerializedName("director")
+    private String director;
+    /** 主演姓名串，最多 3 名，多个用「、」连接。 */
+    @SerializedName("actors")
+    private String actors;
     /** 剧情简介。 */
     @SerializedName("overview")
     private String overview;
@@ -91,6 +97,22 @@ public class DoubanHotItem {
 
     public void setGenre(String genre) {
         this.genre = genre;
+    }
+
+    public String getDirector() {
+        return director == null ? "" : director;
+    }
+
+    public void setDirector(String director) {
+        this.director = director;
+    }
+
+    public String getActors() {
+        return actors == null ? "" : actors;
+    }
+
+    public void setActors(String actors) {
+        this.actors = actors;
     }
 
     public String getOverview() {

@@ -27,6 +27,8 @@
     <string name="douban_hot_action">View details</string>
     <string name="douban_hot_no_rating">No rating</string>
     <string name="douban_hot_rating">%1$s pts</string>
+    <string name="douban_hot_director">Director: %1$s</string>
+    <string name="douban_hot_actors">Cast: %1$s</string>
     <string name="history_played">Watched: %1$s</string>
     <string name="site_switch_config">Switch Address</string>
     <string name="site_switch_empty">No saved addresses yet</string>

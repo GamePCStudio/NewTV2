@@ -50,9 +50,9 @@
                 android:nextFocusDown="@id/keyboard"
                 android:singleLine="true"
                 android:textColor="@color/white"
-                android:textColorHint="@color/white"
+                android:textColorHint="@color/white_50"
                 android:textCursorDrawable="@drawable/shape_cursor"
-                android:textSize="24sp" />
+                android:textSize="@dimen/text_title" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -95,9 +95,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="14dp"
+                    android:includeFontPadding="false"
                     android:text="@string/search_record"
                     android:textColor="@color/white"
-                    android:textSize="24sp" />
+                    android:textSize="@dimen/text_title_section"
+                    android:textStyle="bold" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recordRecycler"
@@ -118,9 +120,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="14dp"
+                android:includeFontPadding="false"
                 android:text="@string/search_suggest"
                 android:textColor="@color/white"
-                android:textSize="24sp"
+                android:textSize="@dimen/text_title_section"
+                android:textStyle="bold"
                 android:visibility="gone" />
 
             <androidx.recyclerview.widget.RecyclerView
@@ -142,9 +146,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="14dp"
+                android:includeFontPadding="false"
                 android:text="@string/search_hot_tv"
                 android:textColor="@color/white"
-                android:textSize="24sp"
+                android:textSize="@dimen/text_title_section"
+                android:textStyle="bold"
                 android:visibility="gone" />
 
             <androidx.recyclerview.widget.RecyclerView
@@ -166,9 +172,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="14dp"
+                android:includeFontPadding="false"
                 android:text="@string/search_hot_movie"
                 android:textColor="@color/white"
-                android:textSize="24sp"
+                android:textSize="@dimen/text_title_section"
+                android:textStyle="bold"
                 android:visibility="gone" />
 
             <androidx.recyclerview.widget.RecyclerView

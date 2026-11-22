@@ -63,6 +63,8 @@ public final class DoubanHot {
             item.setRating(rank.getRatingText());
             item.setYear(rank.getYear());
             item.setGenre(rank.getGenre());
+            item.setDirector(rank.getDirectors());
+            item.setActors(rank.getActors());
             item.setOverview(rank.getDescription());
             item.setBackdrop(rank.getBackdrop());
             item.setLogo(rank.getLogo());

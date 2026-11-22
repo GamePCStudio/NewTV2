@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  海报聚焦描边：3dp 纯白（与分类胶囊的聚焦描边同色系）+ 16dp 圆角，
+  海报聚焦描边：2dp 纯白 + 16dp 圆角，
   只套在海报图片容器上，不把下方片名 / 元数据行框进去。
 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
@@ -10,7 +10,7 @@
     <solid android:color="@android:color/transparent" />
 
     <stroke
-        android:width="3dp"
+        android:width="2dp"
         android:color="@color/white" />
 
 </shape>

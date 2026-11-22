@@ -22,7 +22,7 @@
         android:paddingBottom="12dp"
         android:singleLine="true"
         android:textColor="@color/white"
-        android:textSize="24sp"
+        android:textSize="@dimen/text_title"
         tools:text="TMDB·今日电影" />
 
     <com.fongmi.android.tv.ui.custom.ProgressLayout

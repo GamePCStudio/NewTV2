@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.presenter;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -24,6 +25,7 @@ import androidx.leanback.widget.Presenter;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.Priority;
+import com.bumptech.glide.RequestBuilder;
 import com.bumptech.glide.RequestManager;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -101,15 +103,15 @@ public class DoubanHotPresenter extends Presenter {
     private static final long BACKDROP_TIMEOUT_MS = 15_000L;
     private static final long LOGO_TIMEOUT_MS = 6_000L;
     /**
-     * 文字片名占位的延迟窗口。
+     * 文字片名占位看门狗。
      *
-     * <p>logo 命中 Glide 内存/磁盘缓存时，{@code into()} 仍要走一次异步回调，
-     * 但通常 1–3 帧内就能拿到 drawable。若像早期实现那样先把文字设为 VISIBLE，
-     * 切换海报时就会先亮一下文字再被 logo 顶掉——正是「已缓存仍闪文字」的来源。
-     * 这里先留出 200ms 窗口：缓存命中时文字全程不出现；只有真要联网下载的条目
-     * 才在窗口结束后落文字占位，不影响「加载期间有片名」的兜底语义。</p>
+     * <p>文字不是「定时器和 logo 赛跑」，而是只在 logo <b>明确失败</b>或
+     * <b>长时间未就位</b>时才落下来兜底：logo 命中缓存、或在窗口内联网成功
+     * （{@link #showLogo} 收到回调会撤销看门狗）时，文字全程不出现，切换海报
+     * 不会再先闪一下片名。窗口放宽到 1s，覆盖实测约 0.5s 的网络 logo，让
+     * 「在途成功」也走不到占位；真正的失败仍由 {@code onLoadFailed} 立即落文字。</p>
      */
-    private static final long TITLE_TEXT_DELAY_MS = 200L;
+    private static final long TITLE_TEXT_FALLBACK_MS = 1_000L;
     /**
      * 主视觉预取线程池：固定 2 线程，支持每批 2 条并发。
      *
@@ -213,6 +215,16 @@ public class DoubanHotPresenter extends Presenter {
         private int generation;
         /** logo 单独一套序号：网络 logo 是异步的，晚到回调不能盖住下一条的片名层。 */
         private int logoGeneration;
+        /** 文字片名兜底看门狗所针对的 logo 序号；序号变了旧看门狗自动失效。 */
+        private int textFallbackGen;
+        /** 当前 logo 请求/展示归属的条目；与剧照解耦后在 bind 阶段就提前发起。 */
+        private DoubanHotItem logoItem;
+        /** 提前解码好、尚未贴到视图的 logo drawable；show 时同帧贴出，杜绝闪文字。 */
+        private Drawable pendingLogo;
+        /** 当前条目的 logo（本地或网络）是否已就位。 */
+        private boolean logoReady;
+        /** 当前 logo 代是否已经发出网络请求，避免 show 时重复发起。 */
+        private boolean logoLoadIssued;
         /** 待预取的条目，严格按榜单顺序；剧照下载成功才进入 items。 */
         private final Deque<DoubanHotItem> queue = new ArrayDeque<>();
         /** 预取批次号：重新绑定 / 离屏后，旧批次的结果不再入池。 */
@@ -229,6 +241,8 @@ public class DoubanHotPresenter extends Presenter {
         /** 是否已经显示过第一条：首条剧照到位前，主视觉区保持空白。 */
         private boolean shownOnce;
         private final Runnable rotate;
+        /** logo 失败/超时才落文字：序号失配或 logo 已显示就放弃，避免闪一帧片名。 */
+        private final Runnable textFallback;
         private Holder(@NonNull AdapterDoubanHotBinding binding, OnClickListener listener) {
             super(binding.getRoot());
             this.binding = binding;
@@ -238,14 +252,21 @@ public class DoubanHotPresenter extends Presenter {
                 if (binding.getRoot().hasWindowFocus()) show(index + 1, true);
                 schedule();
             };
+            this.textFallback = () -> {
+                if (textFallbackGen != logoGeneration) return;
+                if (binding.logo.getVisibility() == View.VISIBLE) return;
+                binding.name.setVisibility(View.VISIBLE);
+            };
             setListeners();
             initTextWidths();
         }
 
         /**
          * 屏宽 / 字号相关的约束只能在运行时算：简介 = 屏宽 70%；
-         * TMDB 图标<b>高度 = 评分行文字高度</b>（取 {@code meta.getTextSize()}，随系统字体缩放），
-         * 宽度按 {@link #TMDB_ICON_RATIO} 等比缩放，保证 logo 不被拉扁。
+         * TMDB 图标<b>高度 = 元信息行的文字行高</b>（取 Paint 的 descent - ascent，
+         * 与 includeFontPadding=false 的 TextView 实际高度一致，因此上下平齐、
+         * 由父容器 gravity=center_vertical 保证垂直居中），宽度按
+         * {@link #TMDB_ICON_RATIO} 等比缩放；跟随系统字体缩放且不会被拉扁。
          * <b>文字片名不设 maxWidth</b> —— 只有 logo 态才按 300dp 上限收窄容器。
          */
         private void initTextWidths() {
@@ -254,7 +275,8 @@ public class DoubanHotPresenter extends Presenter {
             lp.width = (int) (screen * 0.70f);
             binding.overview.setLayoutParams(lp);
 
-            int iconHeight = Math.max(1, Math.round(binding.meta.getTextSize()));
+            Paint.FontMetrics metrics = binding.meta.getPaint().getFontMetrics();
+            int iconHeight = Math.max(1, Math.round(metrics.descent - metrics.ascent));
             ViewGroup.LayoutParams icon = binding.tmdbIcon.getLayoutParams();
             icon.height = iconHeight;
             icon.width = Math.max(1, Math.round(iconHeight * TMDB_ICON_RATIO));
@@ -334,6 +356,13 @@ public class DoubanHotPresenter extends Presenter {
             // 先清干净再预取：首条剧照真正下载成功之前，主视觉区不展示任何一部影片。
             clearContent();
             bindDots(0);
+            // 解耦：片名 logo 与剧照并行加载，不再串行等首条剧照下载完成。
+            // 这里先把首条的 logo 请求发出去并缓存结果（视图仍隐藏，剧照就绪后由 show 同帧贴出）。
+            DoubanHotItem first = null;
+            for (DoubanHotItem item : candidates) {
+                if (item != null && item.hasBackdrop()) { first = item; break; }
+            }
+            if (first != null) warmLogo(first);
             if (!queue.isEmpty()) prefetchNext();
         }
 
@@ -398,21 +427,45 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         /**
-         * 异步预热片名 logo。
-         *
-         * <p>用 Application Context 走 Glide 单例，不受 Activity 生命周期影响；参数和
-         * {@link #loadLogo} 完全一致（同 URL、同 {@code SIZE_ORIGINAL}、同
-         * {@link DiskCacheStrategy#ALL}），因此两条链路共用缓存与进行中的请求，
-         * 不会为同一张 logo 发出两次下载。</p>
+         * logo 请求参数的唯一来源：预热与展示必须逐字一致，否则 Glide 视为两个
+         * 不同的 key，命中不了同一份内存/磁盘缓存，也谈不上复用进行中的请求。
+         * 统一 URL、{@code SIZE_ORIGINAL}、{@link DiskCacheStrategy#ALL} 与
+         * {@code dontAnimate}；只有优先级按「首条高、其余低」区分（不影响 key）。
+         */
+        private RequestBuilder<Drawable> logoRequest(RequestManager manager, String url, Priority priority) {
+            return manager.load(url)
+                    .priority(priority)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .override(Target.SIZE_ORIGINAL)
+                    .dontAnimate();
+        }
+
+        /**
+         * 异步预热片名 logo（后台预取用 Application Context，不受 Activity 生命周期影响）。
+         * 与 {@link #warmLogo} / {@link #loadLogo} 共用 {@link #logoRequest} 保证同 key。
          */
         private void preloadLogo(DoubanHotItem item, boolean first) {
             String url = RankLatest.logoUrl(item.getLogo());
             if (TextUtils.isEmpty(url)) return;
-            Glide.with(App.get())
-                    .load(url)
-                    .priority(first ? Priority.HIGH : Priority.LOW)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+            logoRequest(Glide.with(App.get()), url, first ? Priority.HIGH : Priority.LOW)
                     .preload(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL);
+        }
+
+        /**
+         * 在剧照预取阶段就发起首条 logo 的<b>真实展示请求</b>（与剧照并行，不再串行等待）。
+         *
+         * <p>结果先存进 {@link #pendingLogo}、视图保持 INVISIBLE；等首条剧照就绪
+         * {@code show()} 时由 {@link #bindTitle} 同帧贴出。这样 logo 的网络耗时与剧照
+         * 下载重叠，且不会因为「先把文字设为 VISIBLE」而闪一帧片名。</p>
+         */
+        private void warmLogo(DoubanHotItem item) {
+            if (!item.hasLogo()) return;
+            int gen = ++logoGeneration;
+            logoItem = item;
+            logoReady = false;
+            pendingLogo = null;
+            logoLoadIssued = true;
+            loadLogo(item, gen, false);
         }
 
         /** 一部影片预取完成：加入轮播池；第一条到位才真正显示主视觉。 */
@@ -488,6 +541,11 @@ public class DoubanHotPresenter extends Presenter {
         /** 一条都没有：整块文字层隐藏，只留同色底，不显示占位图也不闪残留文字。 */
         private void clearContent() {
             logoGeneration++;
+            handler.removeCallbacks(textFallback);
+            logoItem = null;
+            pendingLogo = null;
+            logoReady = false;
+            logoLoadIssued = false;
             binding.name.setText("");
             binding.name.setVisibility(View.INVISIBLE);
             binding.logo.setImageDrawable(null);
@@ -575,7 +633,9 @@ public class DoubanHotPresenter extends Presenter {
 
                         @Override
                         public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> t, @NonNull DataSource source, boolean first) {
-                            if (gen != generation) return false;
+                            // 失效回调必须 return true 完全拦截：false 会让 Glide 仍把旧图 set 到
+                            // 当前 target（旧图盖住新片），这是快速切换偶发「图错乱」的确定漏洞。
+                            if (gen != generation) return true;
                             ColdTrace.mark("hero.painted", "title=" + item.getTitle() + ", source=" + source
                                     + ", animate=" + animate + ", size=" + resource.getIntrinsicWidth() + "x" + resource.getIntrinsicHeight());
                             // drawable 已就位，先按新图尺寸重算矩阵再淡入，避免第一帧错位
@@ -631,9 +691,10 @@ public class DoubanHotPresenter extends Presenter {
          * 只有榜单给了 logoPath 且本地没有时才异步加载网络图。logo 按原尺寸解码，避免
          * Glide 的 fitCenter 按小 ImageView 下采样后放大发虚。</p>
          *
-         * <p>网络 logo 在 {@link #TITLE_TEXT_DELAY_MS} 窗口内就位时<b>文字全程不出现</b>（缓存命中即此路径）；
-         * 超过窗口仍未拿到图才落文字片名占位，成功后由 {@link #showLogo} 用图片替换，
-         * 两次失败才回落本地缓存 / 保留文字。进入时先清空文字并隐藏两者，避免闪过上一部的残留片名。</p>
+         * <p>文字片名只在 logo <b>明确失败或超时</b>时才落下来兜底（见 {@link #textFallback}）；
+         * 命中预热缓存、或在窗口内联网成功（{@link #showLogo} 撤销看门狗）时文字全程不出现，
+         * 切换海报不会再先闪一帧片名。首条 logo 在 {@code bind()} 阶段已由 {@link #warmLogo}
+         * 与剧照并行发起，这里只负责把已解码结果在剧照就绪时同帧贴出。</p>
          *
          * <p>容器高度按 logo 宽高比动态分三档：宽/高 &lt; 1/1.6（竖版）200dp、
          * &le; 1/1（类正方形）120dp、其余（横版）80dp；文字片名用 120dp。
@@ -641,46 +702,73 @@ public class DoubanHotPresenter extends Presenter {
          * 文字片名态则完全不限制宽度，容器与 TextView 都回到 wrap_content。</p>
          */
         private void bindTitle(DoubanHotItem item) {
-            int gen = ++logoGeneration;
+            // 首条已 warm 的请求沿用原代号，否则 ++ 会作废它的回调；其余条目换代作废旧请求。
+            boolean warmed = (item == logoItem && logoLoadIssued);
+            int gen = warmed ? logoGeneration : ++logoGeneration;
             binding.name.setText("");
             binding.name.setVisibility(View.INVISIBLE);
-            binding.logo.setImageDrawable(null);
             binding.logo.setVisibility(View.INVISIBLE);
             applyTextSize();
             binding.name.setText(item.getTitle());
+
+            // 首条预热的结果若已解码，剧照就绪的这一帧直接贴出：不重发请求、不闪文字。
+            if (item == logoItem && logoReady && pendingLogo != null) {
+                applyPendingLogo(gen);
+                return;
+            }
             // 本地已有 logo：同帧显示，避免先闪一下文字再换图。
             if (applyLocalLogo(item, gen)) return;
             if (item.hasLogo()) {
-                // 已缓存的 logo 会在几帧内到位：先不显示文字，避免切换时闪一下片名；
-                // 只有超过窗口仍未拿到图（要联网）才把文字落下来做占位。
-                showTextLater(gen);
-                loadLogo(item, gen, false);
+                // 不在 bind 阶段预热的条目（轮播切换到的）在这里补发请求；已预热的不重复发。
+                if (item != logoItem || !logoLoadIssued) {
+                    logoItem = item;
+                    logoLoadIssued = true;
+                    pendingLogo = null;
+                    loadLogo(item, gen, false);
+                }
+                // 只有 logo 明确失败/超时才落文字：挂上看门狗，成功时 showLogo 撤销。
+                scheduleTextFallback(gen);
                 return;
             }
             // 榜单没给 logo（旧缓存 / 该条目未匹配到）：退本地缓存，没有就用文字。
             bindLocalLogo(item, gen);
         }
 
-        /**
-         * 延迟显示文字片名占位。
-         *
-         * <p>logo 命中缓存时不显示文字（{@link #showLogo} 已把 logo 设为可见，
-         * 这里看到可见就直接放弃）；加载失败走 {@link #bindLocalLogo}，那条路径会立即显示文字，
-         * 不必等这个窗口。{@code gen} 保证切换到下一部后旧任务自动失效。</p>
-         */
-        private void showTextLater(int gen) {
-            binding.name.postDelayed(() -> {
-                if (gen != logoGeneration) return;
-                if (binding.logo.getVisibility() == View.VISIBLE) return;
-                binding.name.setVisibility(View.VISIBLE);
-            }, TITLE_TEXT_DELAY_MS);
+        /** 挂上文字片名兜底看门狗：只有 logo 在窗口内既没成功也没失败，才落文字占位。 */
+        private void scheduleTextFallback(int gen) {
+            handler.removeCallbacks(textFallback);
+            textFallbackGen = gen;
+            handler.postDelayed(textFallback, TITLE_TEXT_FALLBACK_MS);
+        }
+
+        /** logo 已解码：先缓存结果并撤销文字看门狗；剧照未就绪（shownOnce=false）时不贴出，避免空背景上先亮片名。 */
+        private void showLogo(Drawable drawable, DoubanHotItem item, int gen) {
+            if (gen != logoGeneration) return;
+            int width = drawable.getIntrinsicWidth();
+            int height = drawable.getIntrinsicHeight();
+            if (width <= 0 || height <= 0) {
+                bindLocalLogo(item, gen);
+                return;
+            }
+            pendingLogo = drawable;
+            logoReady = true;
+            handler.removeCallbacks(textFallback);
+            if (shownOnce) applyPendingLogo(gen);
+        }
+
+        /** 把已解码的 logo 同帧贴到片名层：命中预热缓存时文字全程不出现。 */
+        private void applyPendingLogo(int gen) {
+            if (gen != logoGeneration || pendingLogo == null) return;
+            Drawable drawable = pendingLogo;
+            applyLogoSize(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+            binding.logo.setImageDrawable(drawable);
+            binding.logo.setVisibility(View.VISIBLE);
+            binding.name.setVisibility(View.INVISIBLE);
         }
 
         /**
-         * 加载榜单给的片名 logo。
-         *
-         * <p>与主视觉剧照同一套地址规则：优先用设置里配置的站点，加载失败且地址与官方不同时
-         * 换官方再试一次；两次都失败才回落到本地缓存 / 文字片名，避免片名层空着。</p>
+         * 加载榜单给的片名 logo，与主视觉剧照同一套地址规则：优先配置站点，
+         * 失败且地址与官方不同时换官方再试一次，两次失败才回落本地缓存 / 文字片名。
          */
         private void loadLogo(DoubanHotItem item, int gen, boolean official) {
             RequestManager manager = glide(binding.logo);
@@ -690,13 +778,7 @@ public class DoubanHotPresenter extends Presenter {
                 bindLocalLogo(item, gen);
                 return;
             }
-            manager.load(url)
-                    // 当前可见的片名 logo 优先于后台预热；缓存参数与 preloadLogo() 一致。
-                    .priority(Priority.HIGH)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    // logo 是透明 PNG、体积不大；按原图解码，避免按当前容器尺寸下采样后放大发虚。
-                    .override(Target.SIZE_ORIGINAL)
-                    .dontAnimate()
+            logoRequest(manager, url, Priority.HIGH)
                     .listener(new RequestListener<Drawable>() {
                         @Override
                         public boolean onLoadFailed(@Nullable GlideException e, Object model, @NonNull Target<Drawable> t, boolean first) {
@@ -712,7 +794,6 @@ public class DoubanHotPresenter extends Presenter {
 
                         @Override
                         public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> t, @NonNull DataSource source, boolean first) {
-                            // 已手动按图片比例设置尺寸与可见性，阻止 Glide 再套一次默认 fitCenter。
                             if (gen != logoGeneration) return true;
                             ColdTrace.mark("hero.logo.ready", "title=" + item.getTitle() + ", source=" + source);
                             showLogo(resource, item, gen);
@@ -720,21 +801,6 @@ public class DoubanHotPresenter extends Presenter {
                         }
                     })
                     .into(binding.logo);
-        }
-
-        /** logo 就位：按图片比例定容器尺寸后显示，文字片名隐藏。 */
-        private void showLogo(Drawable drawable, DoubanHotItem item, int gen) {
-            if (gen != logoGeneration) return;
-            int width = drawable.getIntrinsicWidth();
-            int height = drawable.getIntrinsicHeight();
-            if (width <= 0 || height <= 0) {
-                bindLocalLogo(item, gen);
-                return;
-            }
-            applyLogoSize(width, height);
-            binding.logo.setImageDrawable(drawable);
-            binding.logo.setVisibility(View.VISIBLE);
-            binding.name.setVisibility(View.INVISIBLE);
         }
 
         /**
@@ -810,13 +876,14 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         /**
-         * meta 行「评分 · 年份 · 类型 · 题材」。
+         * meta 行「评分 · 年份 · 类型 · 题材 · 导演 · 主演」。
          *
-         * <p>四项全部来自榜单富化数据（{@link DoubanHotItem}）：服务端已经通过 TMDB
-         * 把评分、上映年份与题材算好，展示层不再查本地素材、也不触发任何刮削。</p>
+         * <p>六项全部来自榜单富化数据（{@link DoubanHotItem}）：服务端已经通过 TMDB
+         * 把评分、上映年份、题材、导演与主演算好，展示层不再查本地素材、也不触发任何刮削。
+         * 主演在数据层已限制最多 3 名；导演 / 主演任一为空时整段不显示，不留下空标签。</p>
          */
         private void bindMeta(DoubanHotItem item) {
-            List<String> meta = new ArrayList<>(4);
+            List<String> meta = new ArrayList<>(6);
             String rating = item.getRating();
             // 0 分与「没有评分」在数据上是一回事，统一显示「暂无评分」。
             if (isNoRating(rating)) meta.add(binding.getRoot().getContext().getString(R.string.douban_hot_no_rating));
@@ -827,10 +894,18 @@ public class DoubanHotPresenter extends Presenter {
             if (!TextUtils.isEmpty(type)) meta.add(type);
             String genre = item.getGenre();
             if (!TextUtils.isEmpty(genre)) meta.add(genre);
+            String director = item.getDirector();
+            if (!TextUtils.isEmpty(director)) meta.add(binding.getRoot().getContext().getString(R.string.douban_hot_director, director));
+            String actors = item.getActors();
+            if (!TextUtils.isEmpty(actors)) meta.add(binding.getRoot().getContext().getString(R.string.douban_hot_actors, actors));
             // TMDB 图标只在「确有评分」时显示，用于标注评分口径来自 TMDB；无评分时不显示。
             boolean hasRating = !isNoRating(rating) && !TextUtils.isEmpty(rating);
             boolean empty = meta.isEmpty();
             binding.metaRow.setVisibility(empty ? View.GONE : View.VISIBLE);
+            // clearContent() 会把 meta 这个 TextView 一起设为 GONE，而本方法过去只恢复父容器
+            // metaRow、忘了恢复 meta 本身 —— 于是评分/年份/类型/题材文字永远不可见（数据其实
+            // 一直在）。简介 bindOverview 有对称的 setVisibility(VISIBLE)，唯独这里漏了，务必补上。
+            binding.meta.setVisibility(empty ? View.GONE : View.VISIBLE);
             binding.meta.setText(empty ? "" : TextUtils.join(" · ", meta));
             binding.tmdbIcon.setVisibility(empty || !hasRating ? View.GONE : View.VISIBLE);
         }
