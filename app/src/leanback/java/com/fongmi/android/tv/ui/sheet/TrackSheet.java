@@ -84,6 +84,7 @@ public final class TrackSheet {
     public void bindTrack(PlayerManager player, int type) {
         this.player = player;
         this.type = type;
+        binding.sheetTrackIcon.setImageResource(trackIcon(type));
         binding.sheetTrackTitle.setText(ResUtil.getStringArray(R.array.select_track)[type - 1]);
         boolean subtitle = type == C.TRACK_TYPE_TEXT;
         boolean actions = subtitle && player != null && player.isVod();
@@ -102,9 +103,19 @@ public final class TrackSheet {
         if (adapter.getItemCount() > 0) binding.sheetTrackRecycler.scrollToPosition(adapter.getSelected());
     }
 
+    /** 标题图标：复用控制栏的轨道图标，随类型切换。 */
+    private static int trackIcon(int type) {
+        return switch (type) {
+            case C.TRACK_TYPE_AUDIO -> R.drawable.ic_control_audio;
+            case C.TRACK_TYPE_VIDEO -> R.drawable.ic_control_video;
+            default -> R.drawable.ic_control_subtitle;
+        };
+    }
+
     /** 弹幕列表。 */
     public void bindDanmaku(PlayerManager player) {
         this.player = player;
+        binding.sheetTrackIcon.setImageResource(R.drawable.ic_control_danmaku_on);
         binding.sheetTrackTitle.setText(R.string.danmaku_select);
         binding.sheetTrackSearch.setVisibility(player == null || player.getMetadata() == null ? View.GONE : View.VISIBLE);
         // 放大镜是「弹幕搜索」的唯一入口：接口没配 / 地址非法时置灰，但保留可聚焦，

@@ -310,6 +310,7 @@
     <!-- Player -->
     <string name="player">播放核心</string>
     <string name="player_debug">偵錯</string>
+    <string name="player_file_info">檔案資訊</string>
     <string name="player_render">視訊輸出</string>
     <string name="player_libass">字幕特效</string>
     <string name="player_background">背景播放</string>

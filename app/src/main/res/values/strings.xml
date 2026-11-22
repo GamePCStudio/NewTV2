@@ -312,6 +312,7 @@
     <!-- Player -->
     <string name="player">Player</string>
     <string name="player_debug">Debug</string>
+    <string name="player_file_info">File info</string>
     <string name="player_render">Video output</string>
     <string name="player_libass">libass</string>
     <string name="player_background">Background play</string>

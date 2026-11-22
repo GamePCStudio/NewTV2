@@ -123,7 +123,14 @@ public interface VodPlaybackHost {
 
     void renderHistory(History history);
 
-    void renderUseParse(boolean useParse);
+    /**
+     * 是否在控制条展示「解析」入口。
+     *
+     * <p>leanback 播放页已移除该入口（解析只在自动链路里按配置生效），不再覆写本方法；
+     * mobile 仍保留手动切换解析源的按钮，所以钩子保留为默认空实现，由需要的宿主覆写。
+     */
+    default void renderUseParse(boolean useParse) {
+    }
 
     void renderArtwork(String url);
 

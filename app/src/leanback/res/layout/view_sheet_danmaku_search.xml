@@ -31,6 +31,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <!-- 标题图标：复用控制栏的弹幕图标 -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/icon"
+            style="@style/PlaybackSheetTitleIcon"
+            android:src="@drawable/ic_control_danmaku_on" />
+
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/title"
             style="@style/PlaybackSheetTitle"
@@ -61,6 +67,11 @@
             android:src="@drawable/ic_danmaku_setting" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <!-- 标题下方的分割线：与下方筛选区后的那条同款 -->
+    <View
+        style="@style/PlaybackSheetDivider"
+        android:layout_marginBottom="8dp" />
 
     <!-- 搜索行：输入框 + 搜索按钮（遥控器上比依赖输入法回车更可靠） -->
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -173,11 +184,8 @@
 
     <View
         android:id="@+id/divider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginHorizontal="12dp"
+        style="@style/PlaybackSheetDivider"
         android:layout_marginTop="8dp"
-        android:background="#1FFFFFFF"
         android:visibility="gone"
         tools:visibility="visible" />
 

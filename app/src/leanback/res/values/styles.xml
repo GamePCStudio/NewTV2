@@ -253,6 +253,19 @@
         <item name="android:includeFontPadding">false</item>
     </style>
 
+    <!--
+      浮层标题左侧的图标：直接复用播放控制栏的 24dp 矢量图标（选集 / 倍速 / 更多设置 /
+      字幕 / 音轨 / 视轨 / 弹幕），这里按标题字号缩到 20dp 并染成 70% 白，
+      与标题文字、行内图标处于同一视觉层级。
+    -->
+    <style name="PlaybackSheetTitleIcon">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:scaleType">centerInside</item>
+        <item name="android:tint">@color/white_70</item>
+    </style>
+
     <style name="PlaybackSheetTitleRow">
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
@@ -260,6 +273,20 @@
         <item name="android:paddingTop">6dp</item>
         <item name="android:paddingEnd">4dp</item>
         <item name="android:paddingBottom">8dp</item>
+    </style>
+
+    <!--
+      播放页所有浮层（选集 / 倍速 / 更多设置 / 字幕·音轨·视轨 / 弹幕 / 弹幕搜索）标题下方的分割线，
+      与弹幕搜索框内原有的那一条同款：1dp、`sheet_divider`（6% 白）、左右各 12dp。
+      浮层内容根在 view_video_sheet.xml 里已有 12dp 内边距，加这里的 12dp 后距玻璃边 24dp，
+      与标题文字的视觉左边距对齐。
+    -->
+    <style name="PlaybackSheetDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_marginStart">12dp</item>
+        <item name="android:layout_marginEnd">12dp</item>
+        <item name="android:background">@color/sheet_divider</item>
     </style>
 
 

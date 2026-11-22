@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  画面比例（原始）图标：显示框 + 左下 / 右下对角小方框，表达「按比例取景」。
+
+  与字幕（20.9x19.0dp）/ 音轨（21x19.5dp）/ 倍速（19x19dp）同一视觉高度与线宽：
+  外框 19.34 x 16.5dp、描边 1.55、圆角 2.2；内框 4.0 x 4.0dp、描边 1.4、圆角 0.8。
+  纯白，由 selector_sheet_icon_tint / selector_control_icon_tint 着色。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 显示框 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4.53,3.75 L19.47,3.75 A2.2,2.2 0 0 1 21.67,5.95 L21.67,18.05 A2.2,2.2 0 0 1 19.47,20.25 L4.53,20.25 A2.2,2.2 0 0 1 2.33,18.05 L2.33,5.95 A2.2,2.2 0 0 1 4.53,3.75 Z"
+        android:strokeColor="@android:color/white"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.55" />
+
+    <!-- 左上取景框 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M6.4,7.8 L8.8,7.8 A0.8,0.8 0 0 1 9.6,8.6 L9.6,11.0 A0.8,0.8 0 0 1 8.8,11.8 L6.4,11.8 A0.8,0.8 0 0 1 5.6,11.0 L5.6,8.6 A0.8,0.8 0 0 1 6.4,7.8 Z"
+        android:strokeColor="@android:color/white"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.4" />
+
+    <!-- 右下取景框 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M15.2,12.2 L17.6,12.2 A0.8,0.8 0 0 1 18.4,13.0 L18.4,15.4 A0.8,0.8 0 0 1 17.6,16.2 L15.2,16.2 A0.8,0.8 0 0 1 14.4,15.4 L14.4,13.0 A0.8,0.8 0 0 1 15.2,12.2 Z"
+        android:strokeColor="@android:color/white"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.4" />
+</vector>

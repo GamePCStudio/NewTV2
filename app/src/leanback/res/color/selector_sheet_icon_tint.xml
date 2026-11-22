@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  「播放设置」浮层内五个入口图标（字幕 / 音轨 / 文件信息 / 原始 / 视轨）的统一着色：
+  常态 70% 白（与同行的 selector_sheet_text 同档），聚焦或已开启（文件信息）时切换为品牌橙。
+
+  state_activated 用于表达「本项当前开着」：文件信息开着调试层时图标保持橙色，
+  与控制条上同名按钮的 selected 语义一致；禁用态沿用浮层文字的 40% 白。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/white_40" android:state_enabled="false" />
+    <item android:color="@color/control_scrubber" android:state_focused="true" />
+    <item android:color="@color/control_scrubber" android:state_activated="true" />
+    <item android:color="@color/white_70" />
+</selector>

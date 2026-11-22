@@ -1,7 +1,10 @@
+<!--
+  调试 / 文件信息（臭虫）图标。填充色本身为纯白，不再叠加 android:tint ——
+  否则「播放设置」浮层用 android:drawableTint 做聚焦 / 开启着色时会被图标自带 tint 覆盖。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:tint="@color/white"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path

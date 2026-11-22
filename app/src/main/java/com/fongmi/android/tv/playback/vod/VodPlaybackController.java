@@ -329,6 +329,12 @@ public class VodPlaybackController {
         requestPlayer(state.getFlag(), state.getEpisode(), position);
     }
 
+    /**
+     * 手动切换解析源并重播。
+     *
+     * <p>仅 mobile 播放页的「解析」弹窗会调用；leanback 播放页已移除该入口，
+     * 解析只在 {@code ParseJob} 里按配置自动生效，不再有手动选择路径。
+     */
     public void selectParse(Parse item) {
         VodConfig.get().setParse(item);
         refresh();

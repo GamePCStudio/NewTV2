@@ -55,7 +55,6 @@ import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.Flag;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Keep;
-import com.fongmi.android.tv.bean.Parse;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Sub;
@@ -103,7 +102,6 @@ import com.fongmi.android.tv.ui.dialog.ChapterDialog;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DecoderSettingDialog;
 import com.fongmi.android.tv.ui.dialog.EditionDialog;
-import com.fongmi.android.tv.ui.dialog.ParseDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerEngineDialog;
 import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.Clock;
@@ -128,7 +126,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, VodInput.Listener, ParseDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, Clock.Callback, DanmakuListener {
+public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, VodInput.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, Clock.Callback, DanmakuListener {
 
     /** 调试日志标签：定位详情页背景相关问题时用 {@code adb logcat -s TVDBG} 过滤。 */
     private static final String TAG_DEBUG = "TVDBG";
@@ -201,9 +199,12 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     private boolean fullscreen;
     private boolean webFullscreen;
     private boolean externalPlaybackCompleted;
-    private boolean useParse;
     /** 控制条是否处于「呼出」状态：以逻辑位为准，滑动动画期间不会误判。 */
     private boolean mControlShown;
+    /** 当前播放/暂停图标对应的 drawable 资源 id，用于去重（0 = 尚未设置）。 */
+    private int mPlayPauseRes;
+    /** 播放命令异步回传后的图标校正，挂在播放键上排队，避免每次按键新建对象。 */
+    private final Runnable mPlayPauseSync = this::syncPlayPause;
 
     /**
      * 等弹幕接口回传片名的上限：超过就按「取不到」处理，改用站源片名去刮 TMDB。
@@ -510,7 +511,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         mBinding.control.action.speed.setOnClickListener(view -> onSpeedSheet());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
         mBinding.control.action.replay.setOnClickListener(view -> onReplay());
-        mBinding.control.action.parse.setOnClickListener(view -> onParse());
         mBinding.control.action.player.setOnClickListener(view -> onPlayer());
         mBinding.control.action.decoder.setOnClickListener(view -> onDecoder());
         mBinding.control.action.ending.setOnClickListener(view -> onEnding());
@@ -616,18 +616,16 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     /** 控制条按钮聚焦反馈（辉光 / 放大），移植自 tv-latest。 */
     private void setControlFocus() {
+        // 只有播放 / 暂停保留辉光；其余按钮只做「品牌色 + 放大 + 抬升」，不再画光晕
         View[] glow = {
-                mBinding.control.action.playPause,
+                mBinding.control.action.playPause};
+        View[] scaleOnly = {
                 mBinding.control.action.prev,
                 mBinding.control.action.next,
                 mBinding.control.action.episodes,
                 mBinding.control.action.danmaku,
-                mBinding.control.action.text,
-                mBinding.control.action.audio,
                 mBinding.control.action.speed,
-                mBinding.control.action.debug,
-                mBinding.control.action.panelBtn};
-        View[] scaleOnly = {
+                mBinding.control.action.panelBtn,
                 mBinding.control.action.opening,
                 mBinding.control.action.ending};
         mControlFocusEffect = ControlFocusEffect.attach(mBinding.control.getRoot(), glow, scaleOnly);
@@ -635,8 +633,33 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     private void syncPlayPause() {
-        boolean playing = service() != null && isPlayingForControls();
-        mBinding.control.action.playPause.setImageResource(playing ? R.drawable.selector_control_pause : R.drawable.selector_control_play);
+        applyPlayPauseIcon(service() != null && isPlayingForControls());
+    }
+
+    /**
+     * 按「是否正在播放」切换播放/暂停图标。
+     *
+     * <p>去重是必要的：{@code setImageResource} 会重新解析一份带状态的 selector drawable，
+     * 反复调用会把图标上的聚焦 / activated 状态刷掉；而控制条每次呼出、播放态每次回调都会走到这里。
+     */
+    private void applyPlayPauseIcon(boolean playing) {
+        int res = playing ? R.drawable.selector_control_pause : R.drawable.selector_control_play;
+        if (res == mPlayPauseRes) return;
+        mPlayPauseRes = res;
+        mBinding.control.action.playPause.setImageResource(res);
+    }
+
+    /**
+     * 延后一帧用真实播放态校正图标。
+     *
+     * <p>{@code controller()} 是 MediaController，播放 / 暂停命令要跨进程下发，
+     * 回调里读到的状态在这一帧可能还是旧值 —— 控制条隐藏时按确认键切换尤其明显：
+     * 图标不刷新，直到下一次焦点或播放态事件才补上。这里先按意图立即换图，再下一帧对齐真实状态。
+     */
+    private void schedulePlayPauseSync() {
+        View button = mBinding.control.action.playPause;
+        button.removeCallbacks(mPlayPauseSync);
+        button.post(mPlayPauseSync);
     }
 
     private void syncDanmaku() {
@@ -1130,12 +1153,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     @Override
-    public void renderUseParse(boolean useParse) {
-        setUseParse(useParse);
-        mBinding.control.action.parse.setVisibility(isUseParse() ? View.VISIBLE : View.GONE);
-    }
-
-    @Override
     public void renderArtwork(String url) {
         setArtwork(url);
     }
@@ -1160,9 +1177,12 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     /**
-     * 弹幕标题：当前选中弹幕来自弹幕接口（非片源自带）且已成功获取时，
-     * 左上角改为两行结构 —— 主行「剧名 · 集数 分集标题」、副行「年份 · 类型 · 平台」，
-     * 与弹幕搜索结果的条目同构；片源自带弹幕 / 本地弹幕 / 尚未选中时，仍用原来的「片名：集数」单行。
+     * 弹幕标题（互斥替换）：当前选中弹幕来自弹幕接口且已拿到 meta 时，
+     * 主标题换成「剧名 · 集数 分集标题」（24sp 加粗，与片名/剧集标题同位置同字号），
+     * 年份 / 国别 / 平台作为副标题排在其下方；否则恢复原来的「片名：集数」单行。
+     *
+     * <p>两种形态互斥，任何时刻只显示一条主标题；切换只改两个容器的显隐，
+     * 不新建标题、不改字号、不改顶部起点与间距。触发时机沿用基类弹幕来源切换钩子。
      */
     @Override
     protected void renderDanmakuTitle() {
@@ -1177,6 +1197,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
             mBinding.widget.danmakuSubtitle.setVisibility(TextUtils.isEmpty(secondary) ? View.GONE : View.VISIBLE);
         }
         mBinding.widget.danmakuRow.setVisibility(danmaku ? View.VISIBLE : View.GONE);
+        // 互斥：弹幕标题生效时隐藏原片名/剧集标题，反之恢复；两者位置与字号完全一致。
         mBinding.widget.titleRow.setVisibility(danmaku ? View.GONE : View.VISIBLE);
     }
 
@@ -1326,10 +1347,18 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     private void setEpisodeAdapter(List<Episode> items) {
         mEpisodes.clear();
         mEpisodes.addAll(items);
+        // 只有一集（或还没拿到集数）时「选集」没有任何可选内容：隐藏并退出焦点链。
+        // 多集恢复显示，点击与上/下集长按的交互保持原样。
+        boolean selectable = items.size() > 1;
+        mBinding.control.action.episodes.setVisibility(selectable ? View.VISIBLE : View.GONE);
+        // 按钮恰好持有焦点时把焦点让给播放键，避免隐藏后焦点悬空
+        if (!selectable && mBinding.control.action.episodes.isFocused()) mBinding.control.action.playPause.requestFocus();
         setRowVisible(mBinding.episode, mBinding.labelEpisode, !items.isEmpty());
         mEpisodeAdapter.addAll(items);
         setArrayAdapter(items.size());
         setR2Callback();
+        // 可见性变了，左右焦点链按当前可见按钮重新串一次
+        relinkControlFocus();
     }
 
     @Override
@@ -1496,11 +1525,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     private void onReset() {
         onRefresh();
-    }
-
-    private void onParse() {
-        ParseDialog.create().show(this);
-        hideControl();
     }
 
     private void onReplay() {
@@ -2061,11 +2085,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         mVod.selectSource(item);
     }
 
-    @Override
-    public void onParse(Parse item) {
-        mVod.selectParse(item);
-    }
-
     private void onPaused() {
         mInput.cancelSeek();
         if (pauseWebPlayback()) return;
@@ -2105,14 +2124,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     private void setFullscreen(boolean fullscreen) {
         this.fullscreen = fullscreen;
-    }
-
-    public boolean isUseParse() {
-        return useParse;
-    }
-
-    public void setUseParse(boolean useParse) {
-        this.useParse = useParse;
     }
 
     private View getFocus1() {
@@ -2188,16 +2199,24 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
      *   <li>暂停中 → 播放：只恢复播放，不呼出控制条，也不改动控制条的显示状态；</li>
      *   <li>播放器为空（解析失败等）→ 沿用原有的重试逻辑。</li>
      * </ul>
+     *
+     * <p>无论走哪条分支，播放键图标都要跟着切换：控制条隐藏时看不见，但状态不能停在旧值，
+     * 否则下次呼出（或浮层关闭交还焦点）时图标与实际播放对不上。
      */
     @Override
     public void onKeyCenter() {
         if (isPlayingForControls()) {
             onPaused();
             showControl();
+            // showControl 内部的 syncPlayPause 可能仍读到 MediaController 回传前的旧状态，按意图再校正一次
+            applyPlayPauseIcon(false);
+            schedulePlayPauseSync();
         } else if (!isWebPlaybackActive() && player().isEmpty()) {
             onRefresh();
         } else {
             onPlay();
+            applyPlayPauseIcon(true);
+            schedulePlayPauseSync();
         }
     }
 
@@ -2365,9 +2384,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     /** 控制条上的播放/暂停按钮：只切换播放状态，控制条保持在屏。 */
     private void onPlayPause() {
-        if (isPlayingForControls()) onPaused();
-        else onPlay();
-        syncPlayPause();
+        if (isPlayingForControls()) {
+            onPaused();
+            applyPlayPauseIcon(false);
+        } else {
+            onPlay();
+            applyPlayPauseIcon(true);
+        }
+        // 命令经 MediaController 异步下发，下一帧再用真实状态校正一次
+        schedulePlayPauseSync();
         setR1Callback();
     }
 
@@ -2379,7 +2404,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         }
         int max = Math.max(0, mBinding.video.getWidth() - ResUtil.dp2px(16));
         mPanelSheet.bind(this::hideSheet);
-        int width = mPanelSheet.measureWidth(max) + ResUtil.dp2px(16);
+        // +12dp×2：浮层宿主（view_video_sheet）自身的左右内边距，否则内容区会比菜单窄 8dp
+        int width = mPanelSheet.measureWidth(max) + ResUtil.dp2px(24);
         mSheet.show(mBinding.control.action.panelBtn, mPanelSheet.getView(), width, mPanelSheet::focus);
     }
 
@@ -2451,7 +2477,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
             texts.add(item.getDesc().concat(item.getName()));
         }
         int current = selected;
-        mEpisodeList.setTitle(R.string.play_episodes);
+        mEpisodeList.setTitle(R.string.play_episodes, R.drawable.ic_control_episode);
         mEpisodeList.submit(texts, selected, selected, current, position -> {
             int index = mEpisodes.size() - 1 - position;
             hideSheet();
@@ -2465,7 +2491,9 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         int chars = Math.max(1, (int) Math.ceil(measureSheetText(texts) / sheetCharWidth()));
         int textWidth = measureSheetChars(Math.max(3, Math.min(15, chars)));
         int width = textWidth + ResUtil.dp2px(SHEET_ROW_CHROME_DP + SHEET_PLAYING_SLOT_DP);
-        mSheet.show(anchor == null ? mBinding.control.action.episodes : anchor, mEpisodeList.getView(), width, mEpisodeList::focus);
+        // 「选集」按钮只有一集时会隐藏，不能当锚点；这种情况统一挂到「更多设置」按钮上
+        View target = anchor == null || anchor.getVisibility() != View.VISIBLE ? mBinding.control.action.panelBtn : anchor;
+        mSheet.show(target, mEpisodeList.getView(), width, mEpisodeList::focus);
     }
 
     /** 倍速浮层：从下往上是 0.5 / 0.8 / 1.0 / 1.2 / 1.5 / 2.0 / 3.0 / 5.0。 */
@@ -2478,7 +2506,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         for (int i = SPEEDS.length - 1; i >= 0; i--) texts.add(SPEEDS[i] + "x");
         float current = service() == null ? 1.0f : player().getSpeed();
         int selected = SPEEDS.length - 1 - nearestSpeedIndex(current);
-        mSpeedList.setTitle(R.string.play_speed);
+        mSpeedList.setTitle(R.string.play_speed, R.drawable.ic_control_speed);
         mSpeedList.submit(texts, selected, selected, position -> {
             hideSheet();
             if (service() == null) return;
@@ -2497,11 +2525,9 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     private void onTrackSheet(int type) {
         if (mSheet.isShowing()) hideSheet();
         if (service() == null) return;
-        View anchor = switch (type) {
-            case C.TRACK_TYPE_AUDIO -> mBinding.control.action.audio;
-            case C.TRACK_TYPE_VIDEO -> mBinding.control.action.panelBtn;
-            default -> mBinding.control.action.text;
-        };
+        // 字幕 / 音轨 / 视轨入口已移入「更多设置」浮层，三个按钮都藏在 hidden 容器里
+        // （坐标为 0，不能当锚点），浮层统一从「更多设置」按钮上方展开。
+        View anchor = mBinding.control.action.panelBtn;
         mTrackSheet.bindTrack(player(), type);
         mSheet.show(anchor, mTrackSheet.getView(), ResUtil.dp2px(TrackSheet.WIDTH_DP) + ResUtil.dp2px(16), mTrackSheet::focus);
     }

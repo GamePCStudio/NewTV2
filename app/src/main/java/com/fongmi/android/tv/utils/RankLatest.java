@@ -256,9 +256,9 @@ public final class RankLatest {
         item.mediaType = optString(json, "mediaType");
         item.genreTitle = optString(json, "genreTitle");
         if (TextUtils.isEmpty(item.genreTitle)) item.genreTitle = firstGenre(json);
-        // 主视觉元信息行的导演 / 主演：服务端已带数组，这里只取姓名；主演最多 3 名。
-        item.directors = personNames(json, "directors", 5);
-        item.actors = personNames(json, "actors", 3);
+        // 主视觉元信息行的导演 / 主演：服务端已带数组，这里只取姓名；导演 1 名、主演最多 4 名。
+        item.directors = personNames(json, "directors", 1);
+        item.actors = personNames(json, "actors", 4);
         item.voteCount = optInt(json, "voteCount");
         item.rank = optInt(json, "rank");
         item.rating = optDouble(json, "rating");
@@ -279,7 +279,7 @@ public final class RankLatest {
     /**
      * 从 {@code directors} / {@code actors} 数组里取姓名拼成一串。
      *
-     * <p>主演最多取 3 名（需求上限），导演取前 5 名防止异常数据撑爆元信息行；
+     * <p>主演最多取 4 名、导演只取 1 名（需求上限），防止异常数据撑爆元信息行；
      * 按姓名去重、空姓名跳过。老榜单没有该字段时返回空串，展示层据此隐藏对应片段。</p>
      */
     private static String personNames(JsonObject json, String key, int limit) {

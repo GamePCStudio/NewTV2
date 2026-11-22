@@ -2,11 +2,21 @@
 <!--
   「播放设置」浮层内容：与倍速 / 选集菜单同一套单列列表样式（44dp 行、同一焦点框、15sp）。
 
-  11 个隐性按钮全部收纳于此。其中「解码 / 标题 / 章节 / 主菜单 / 播放核心 / 刷新 /
-  重播 / 循环」已按用户裁定隐藏（visibility=gone，节点保留以维持原有状态同步与转发能力），
-  常显的只有三项必要的播放选项：画面比例 / 视轨 / 解析。
-  面板本身不实现播放逻辑：每个入口只转发到控制条 hidden 容器里同名按钮的 performClick()，
-  对话框、状态同步、错误提示全部沿用原有实现。
+  行序**自下而上**：文件信息 → 音轨 → 视轨 → 字幕 → 画面比例。
+  浮层从控制条按钮上方向上展开，最底下一行离按钮最近，所以 XML 里从上到下写反序：
+  画面比例 / 字幕 / 视轨 / 音轨 / 文件信息；初始焦点由 PanelSheet 落在最底下一行（文件信息）。
+
+  五项统一「图标 + 文案」形态：图标 24dp 矢量、drawablePadding 12dp、drawableTint 走
+  selector_sheet_icon_tint —— 常态 70% 白、聚焦或已开启（文件信息）时品牌橙。
+  标题行左侧同样复用控制栏图标（PlaybackSheetTitleIcon）。
+  各入口语义：
+    · 「字幕 / 音轨 / 视轨」转发到控制条 hidden 容器里同名按钮的 performClick()，
+      浮层、对话框、状态同步全部沿用原有实现；
+    · 「画面比例」（原始 / 填充 / 裁剪）与「文件信息」（调试）在面板内原地生效，
+      不收起浮层，便于连续对比与观察开关状态。
+
+  其余隐性按钮（解码 / 标题 / 章节 / 主菜单 / 播放核心 / 刷新 / 重播 / 循环）已按用户裁定
+  隐藏（visibility=gone，节点保留以维持原有状态同步与转发能力）。
 
   焦点链由 PanelSheet.relink() 在每次打开时按可见行重串：
   左右封口在本行、上下按行序走位、首行上 / 末行下自封口。
@@ -14,13 +24,18 @@
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:minWidth="220dp"
+    android:minWidth="240dp"
     android:orientation="vertical">
 
     <androidx.appcompat.widget.LinearLayoutCompat
         style="@style/PlaybackSheetTitleRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/sheetPanelIcon"
+            style="@style/PlaybackSheetTitleIcon"
+            android:src="@drawable/ic_control_panel" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/sheetPanelTitle"
@@ -32,6 +47,8 @@
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 
+    <View style="@style/PlaybackSheetDivider" />
+
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/sheetRows"
         android:layout_width="match_parent"
@@ -39,20 +56,50 @@
         android:orientation="vertical">
 
         <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/panelDecoder"
-            style="@style/SheetPanelRow"
-            android:visibility="gone"
-            android:text="@string/decoder_action" />
-
-        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/panelScale"
             style="@style/SheetPanelRow"
+            android:drawableStart="@drawable/ic_control_scale"
+            android:drawablePadding="12dp"
+            android:drawableTint="@color/selector_sheet_icon_tint"
             android:text="@string/play_scale" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/panelText"
+            style="@style/SheetPanelRow"
+            android:drawableStart="@drawable/ic_control_subtitle"
+            android:drawablePadding="12dp"
+            android:drawableTint="@color/selector_sheet_icon_tint"
+            android:text="@string/play_track_text" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/panelVideo"
             style="@style/SheetPanelRow"
+            android:drawableStart="@drawable/ic_control_video"
+            android:drawablePadding="12dp"
+            android:drawableTint="@color/selector_sheet_icon_tint"
             android:text="@string/play_track_video" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/panelAudio"
+            style="@style/SheetPanelRow"
+            android:drawableStart="@drawable/ic_control_audio"
+            android:drawablePadding="12dp"
+            android:drawableTint="@color/selector_sheet_icon_tint"
+            android:text="@string/play_track_audio" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/panelDebug"
+            style="@style/SheetPanelRow"
+            android:drawableStart="@drawable/ic_action_debug"
+            android:drawablePadding="12dp"
+            android:drawableTint="@color/selector_sheet_icon_tint"
+            android:text="@string/player_file_info" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/panelDecoder"
+            style="@style/SheetPanelRow"
+            android:visibility="gone"
+            android:text="@string/decoder_action" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/panelEdition"
@@ -71,11 +118,6 @@
             style="@style/SheetPanelRow"
             android:visibility="gone"
             android:text="@string/play_disc_menu" />
-
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/panelParse"
-            style="@style/SheetPanelRow"
-            android:text="@string/parse" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/panelPlayer"

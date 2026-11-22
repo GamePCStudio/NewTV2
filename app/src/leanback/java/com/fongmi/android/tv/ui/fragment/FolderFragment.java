@@ -45,6 +45,11 @@ public class FolderFragment extends BaseFragment {
 
     /** 当前真正可见的分类页（进入子分类后新页叠在旧页上，取最后一个未隐藏的）。 */
     private TypeFragment getChild() {
+        // 换站源时 VodActivity.onTypesChanged 会先把旧 FolderFragment 从
+        // FragmentManager 移除；移除后 mHost 已置空（detach），此时再取
+        // childFragmentManager 会抛 "Fragment ... has not been attached yet"。
+        // 本类所有调用方都按 Optional 处理 null，这里直接放弃本次访问。
+        if (getHost() == null) return null;
         for (Fragment fragment : getChildFragmentManager().getFragments()) {
             if (fragment instanceof TypeFragment && !fragment.isHidden()) return (TypeFragment) fragment;
         }

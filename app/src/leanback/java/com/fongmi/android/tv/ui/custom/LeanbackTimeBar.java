@@ -12,6 +12,8 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 
 import androidx.annotation.Nullable;
@@ -52,10 +54,10 @@ import com.fongmi.android.tv.ui.danmaku.DanmakuHeat;
  * <p><b>弹幕热力图</b>：进度条上方叠一条密度曲线（参照行情软件的「分时图」：一条折线 + 线下渐变填充），
  * 数据来自 {@link DanmakuHeat}（每 5 秒一个统计桶）。曲线与条身共用同一段
  * {@code [left, right]} 与同一个 {@code duration} 分母，所以任意位置的起伏和滑块严格对齐；
- * 线色与填充色由「该处弹幕密度」决定，密集区段更高更暖，整体不透明度 35%。
- * 曲线与条身之间留 {@link #HEAT_GAP_DP} 的间隙，为此在测量阶段给视图**上方**追加
- * {@link #HEAT_EXTRA_DP} 的高度（见 {@link #onMeasure}），绘制时整体下移半个增量，
- * 条身、滑块、时间文字相对屏幕的位置都不变；没有数据时整条不画。
+ * 线色与填充色由「该处弹幕密度」决定：稀疏层白色、中层紫、密集层暖红，整体不透明度 35%。
+ * 曲线底边直接贴住条身上沿（{@link #HEAT_GAP_DP}=0，无 1dp 间隙）；测量时只在视图**上方**
+ * 追加高度，绘制时把父类内容下移半个增量，条身距底边不变；竖向空间不足时整体扩到 150%，
+ * 不压缩曲线，峰谷比例不失真。没有数据时整条不画。
  */
 public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnScrubListener {
 
@@ -79,28 +81,27 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
     private static final long EMPHASIS_DURATION = 160L;
 
     /**
-     * 热力曲线最大高度。
+     * 热力曲线常态最大高度。
      *
-     * <p>竖向能用的空间是算出来的，不是随便取的：父类 {@code DefaultTimeBar} 的
-     * {@code touch_target_height} 默认 26dp、{@code bar_height} 默认 4dp、gravity 为居中，
-     * 所以条身占 {@code 11dp ~ 15dp}，条身上沿在 11dp 处。本类再通过
-     * {@link #HEAT_EXTRA_DP} 在**上方**追加 1dp，可用空间变成
-     * {@code 11dp(原留白) + 1dp(追加)}，扣掉 {@link #HEAT_GAP_DP} 的条身间隙后正好是 11dp。
+     * <p>父类 {@code DefaultTimeBar} 的 {@code touch_target_height} 默认 26dp、{@code bar_height}
+     * 默认 4dp、gravity 居中，条身上沿在距顶 11dp 处。取消间隙后（{@link #HEAT_GAP_DP}=0），
+     * 再加 {@link #HEAT_EXTRA_DP} 在上方追加的 1dp，可用空间 12dp，足够放 11dp 曲线。
      *
-     * <p>为什么追加高度也要保住条身位置：控制面板贴屏幕下沿，视图变高会让整行上移；
-     * 所以绘制时把画布下移 {@code HEAT_EXTRA_DP / 2}，条身仍停在「距视图底边 13dp」处，
-     * 屏幕上不发生位移，追加的高度全部变成热力图的空间。
+     * <p>竖向空间不足时**不压缩曲线**，而是在 {@link #onMeasure} 里把控件测量高度扩到当前的
+     * {@link #HEAT_EXPANSION_FACTOR} 倍，并把曲线上限同步扩到 150%；所有采样值仍只乘同一个
+     * {@code maxHeight}，峰/谷的高度比与配色分位不变，不会因压缩而失真。
      */
     private static final float HEAT_HEIGHT_DP = 11f;
-    /** 曲线与条身之间的间隙：1dp，留一条细缝，曲线不再贴着条身。 */
-    private static final float HEAT_GAP_DP = 1f;
+    /** 空间不足时控件高度与热力渲染区高度的放大倍率：150%。 */
+    private static final float HEAT_EXPANSION_FACTOR = 1.5f;
+    /** 曲线底边直接贴住条身上沿：取消原来的 1dp 间隙。 */
+    private static final float HEAT_GAP_DP = 0f;
     /**
-     * 为「间隙 + 曲线高度」在视图上方追加的测量高度。
+     * 常态下在视图上方追加的测量高度。
      *
-     * <p>条身上方原有留白约 11dp，现在要放「1dp 间隙 + 11dp 曲线」= 12dp，所以追加 1dp。
-     * 只加在上方、配合 {@link #onDraw} 的半个增量下移，条身与滑块位置保持不变。
-     * 与 {@code exo_player_seek_view.xml} 里两个时间文字的 {@code translationY}
-     * （本值的一半）必须同步修改：行高增加多少，居中文字就上移一半。
+     * <p>只加在上方、绘制时把父类内容下移半个增量，条身距视图底边仍是 13dp。
+     * 时间文字的 translationY 补偿由 {@link #syncTimeTextOffset} 按实际增量动态写入，
+     * 扩容时也不会错位。
      */
     private static final float HEAT_EXTRA_DP = 1f;
     /** 采样间距：约 2dp 一个采样点，600dp 宽约 300 点，足够画出平滑曲线又不至于每帧过重。 */
@@ -112,16 +113,20 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
     /** 曲线在「零弹幕」处的保底不透明度（缩放前）：太亮会变成一条横线，太淡则曲线断掉。 */
     private static final float HEAT_LINE_ALPHA_MIN = 90f;
     private static final float HEAT_LINE_ALPHA_MAX = 255f;
-    /** 热力配色：冷（稀疏）→ 紫（中等）→ 暖（密集）。 */
-    private static final int HEAT_COLOR_LOW = 0xFF4C8DFF;
+    /** 热力配色：稀疏层由冷蓝改为**白色**，中/高两档不动；透明度公式也完全不变。 */
+    private static final int HEAT_COLOR_LOW = 0xFFFFFFFF;
     private static final int HEAT_COLOR_MID = 0xFFB45BFF;
     private static final int HEAT_COLOR_HIGH = 0xFFFF4D3D;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
     private final float density;
-    /** {@link #HEAT_EXTRA_DP} 的像素值：测量、绘制、条身中线三处共用同一个值。 */
-    private final float heatExtraPx;
+    /** 当前追加的上方高度（像素）：常态 1dp，空间不足时按 150% 扩容。 */
+    private float heatExtraPx;
+    /** 当前曲线最大高度（像素）：常态 11dp，扩容时 16.5dp。 */
+    private float heatMaxHeightPx;
+    /** 条身中心到底边的距离（像素）：等于父类测得高度的一半，扩容也不变。 */
+    private float barBottomMarginPx;
 
     private int playedColor = Color.WHITE;
     private int bufferedColor = 0xCCFFFFFF;
@@ -162,6 +167,8 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
         heatExtraPx = Math.round(dp(HEAT_EXTRA_DP));
+        heatMaxHeightPx = dp(HEAT_HEIGHT_DP);
+        barBottomMarginPx = dp(26f) / 2f;
         // 父类滑块全透明：滑块统一由本类绘制，避免聚焦时父类再画一个更大的 dragged 滑块
         super.setScrubberColor(Color.TRANSPARENT);
         // 监听自身的拖动事件，拿到父类私有的 scrubPosition，使自绘滑块在拖动中实时跟随
@@ -307,17 +314,47 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
     }
 
     /**
-     * 在父类测得的高度上追加 {@link #HEAT_EXTRA_DP}：这段高度全部落在条身**上方**，
-     * 由 {@link #onDraw} 通过半增量下移抵消，条身相对视图底边的距离不变。
+     * 在父类测得的高度上追加热力图所需空间。
      *
-     * <p>本视图在 {@code exo_player_seek_view} 里是 {@code wrap_content} + 行内垂直居中，
-     * 行高随之增加 1dp、行顶随之上移 1dp，所以条身在屏幕上不会动 —— 这也是为什么必须
-     * 给同行的时间文字补 {@code translationY="0.5dp"}`（居中位移的补偿）。
+     * <p>常态只加 {@link #HEAT_EXTRA_DP}（1dp）；若父类给的高度不够画满
+     * {@link #HEAT_HEIGHT_DP}（竖屏 / 紧凑布局），则把控件总高扩到当前的
+     * {@link #HEAT_EXPANSION_FACTOR} 倍，曲线上限也同比放大。追加高度全部落在条身**上方**，
+     * 由 {@link #onDraw} 通过半增量下移抵消，条身距视图底边始终是 {@code base/2}；
+     * 曲线底边贴住条身上沿、顶部留白为正，因此不会越界。
      */
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        setMeasuredDimension(getMeasuredWidth(), getMeasuredHeight() + Math.round(heatExtraPx));
+        int base = getMeasuredHeight();
+        barBottomMarginPx = base / 2f;
+        int normalExtra = Math.round(dp(HEAT_EXTRA_DP));
+        float normalAvailable = base / 2f - dp(BAR_HEIGHT_DP) / 2f - dp(HEAT_GAP_DP) + normalExtra;
+        if (normalAvailable < dp(HEAT_HEIGHT_DP)) {
+            heatMaxHeightPx = dp(HEAT_HEIGHT_DP) * HEAT_EXPANSION_FACTOR;
+            heatExtraPx = (int) Math.ceil((base + normalExtra) * HEAT_EXPANSION_FACTOR) - base;
+        } else {
+            heatMaxHeightPx = dp(HEAT_HEIGHT_DP);
+            heatExtraPx = normalExtra;
+        }
+        setMeasuredDimension(getMeasuredWidth(), base + Math.round(heatExtraPx));
+        syncTimeTextOffset(Math.round(heatExtraPx) / 2f);
+    }
+
+    /**
+     * 同行时间文字的居中补偿：行高增加多少，居中文字就上移增量的一半。
+     *
+     * <p>常态算出 0.5dp，与 {@code exo_player_seek_view.xml} 里的静态值一致；扩容时由这里
+     * 改成实际增量的一半，避免时间文字与放大后的条身错位。用平移不参与测量，不会引起循环布局。
+     */
+    private void syncTimeTextOffset(float offsetPx) {
+        if (!(getParent() instanceof ViewGroup group)) return;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            int id = child.getId();
+            if (id == androidx.media3.ui.R.id.exo_position || id == androidx.media3.ui.R.id.exo_duration) {
+                child.setTranslationY(offsetPx);
+            }
+        }
     }
 
     @Override
@@ -402,7 +439,9 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
         if (heatmap == null || duration <= 0) return;
         float width = right - left;
         if (width <= 0) return;
-        float maxHeight = Math.min(dp(HEAT_HEIGHT_DP), bottom - getPaddingTop());
+        // 峰谷比例只由 values[] 决定，这里统一乘同一个 maxHeight；扩容时上限同比放大，
+        // 不再走「空间不够就压缩曲线」的降级路径。
+        float maxHeight = Math.min(heatMaxHeightPx, bottom - getPaddingTop());
         if (maxHeight <= dp(1)) return;
         if (!ensureHeat(left, right, bottom, maxHeight)) return;
         // 线下面积：横向渐变，颜色跟着密度走，安静区段几乎透明
@@ -541,7 +580,9 @@ public final class LeanbackTimeBar extends DefaultTimeBar implements TimeBar.OnS
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(scrubberColor);
         paint.setAlpha((int) (52 * emphasis));
-        canvas.drawCircle(centerX, centerY, radius + dp(SCRUBBER_HALO_DP), paint);
+        // 紧凑高度下条身离底边不足 11.1dp 时收窄柔光，保证整颗滑块（含光晕）不越界。
+        float halo = Math.min(dp(SCRUBBER_HALO_DP), Math.max(0f, barBottomMarginPx - radius));
+        canvas.drawCircle(centerX, centerY, radius + halo, paint);
         paint.setAlpha(255);
         canvas.drawCircle(centerX, centerY, radius, paint);
     }

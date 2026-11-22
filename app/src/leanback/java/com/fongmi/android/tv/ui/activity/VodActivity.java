@@ -137,7 +137,12 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         if (mBinding.pager.getAdapter() == null) return null;
         try {
             Object fragment = mBinding.pager.getAdapter().instantiateItem(mBinding.pager, pagerIndex);
-            return fragment instanceof FolderFragment ? (FolderFragment) fragment : null;
+            // instantiateItem 会把缓存里已有的实例直接返回：换站源时旧片段已被移除，
+            // 这里拿到的是已 detach 的对象，继续访问会抛 "has not been attached yet"。
+            if (fragment instanceof FolderFragment && ((FolderFragment) fragment).getHost() != null) {
+                return (FolderFragment) fragment;
+            }
+            return null;
         } catch (Exception e) {
             // 快速滑动时适配器状态可能瞬时不一致，放弃本次访问而不是让进程崩掉。
             return null;
@@ -510,6 +515,9 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
      */
     private void onTypesChanged(Result result) {
         if (result == null || result.getTypes().isEmpty()) return;
+        // 必须先清再移除：下方 remove 会让旧 FolderFragment detach，
+        // 之后再访问它的 childFragmentManager 会抛 "has not been attached yet"。
+        clearPendingPoster();
         FragmentManager manager = getSupportFragmentManager();
         List<Fragment> stale = new ArrayList<>();
         for (Fragment fragment : manager.getFragments()) {
@@ -520,7 +528,6 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
             for (Fragment fragment : stale) transaction.remove(fragment);
             transaction.commitNowAllowingStateLoss();
         }
-        clearPendingPoster();
         mOldView = null;
         mAdapter.addAll(result.getTypes());
         mBinding.pager.setAdapter(new PageAdapter(manager));

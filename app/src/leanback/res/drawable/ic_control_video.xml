@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  视轨图标：胶片外框 + 左右两列齿孔，与音轨（波形）成对表达「画面轨 / 声音轨」。
+
+  与字幕（20.9x19.0dp）/ 音轨（21x19.5dp）/ 画面比例（19.34x16.5dp）同一线宽：
+  外框 19.34 x 15.0dp、描边 1.55、圆角 2.0；齿孔 1.7 x 1.7dp 实心、左右各三枚、间距 2.55dp。
+  纯白，由 selector_sheet_icon_tint / selector_control_icon_tint 着色。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 胶片外框 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4.33,4.5 L19.67,4.5 A2.0,2.0 0 0 1 21.67,6.5 L21.67,17.5 A2.0,2.0 0 0 1 19.67,19.5 L4.33,19.5 A2.0,2.0 0 0 1 2.33,17.5 L2.33,6.5 A2.0,2.0 0 0 1 4.33,4.5 Z"
+        android:strokeColor="@android:color/white"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.55" />
+
+    <!-- 左列齿孔 -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4.55,6.9h1.7v1.7h-1.7zM4.55,11.15h1.7v1.7h-1.7zM4.55,15.4h1.7v1.7h-1.7z" />
+
+    <!-- 右列齿孔 -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M17.75,6.9h1.7v1.7h-1.7zM17.75,11.15h1.7v1.7h-1.7zM17.75,15.4h1.7v1.7h-1.7z" />
+</vector>

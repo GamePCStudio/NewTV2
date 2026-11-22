@@ -19,6 +19,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <!-- 标题图标：按轨道类型（字幕 / 音轨 / 视轨 / 弹幕）在 TrackSheet 里切换，复用控制栏图标 -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/sheetTrackIcon"
+            style="@style/PlaybackSheetTitleIcon"
+            tools:src="@drawable/ic_control_subtitle" />
+
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/sheetTrackTitle"
             style="@style/PlaybackSheetTitle"
@@ -83,6 +89,8 @@
             tools:visibility="visible" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <View style="@style/PlaybackSheetDivider" />
 
     <com.fongmi.android.tv.ui.custom.CustomRecyclerView
         android:id="@+id/sheetTrackRecycler"

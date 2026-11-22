@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -95,16 +96,20 @@ public final class SheetList {
     /**
      * 设置列表上方的标题（「选集」「倍速」），与「播放设置」浮层的标题共用同一套样式。
      *
-     * <p>传空则整行 {@code GONE}、不占高度。标题行只影响浮层总高，不参与列表的
-     * 行数与滚动计算（{@link #setRows} 回写的 maxHeight 仍然只管列表那一段）。
+     * <p>传空则整行 {@code GONE}、不占高度，标题下方的分割线一并收起（不留一条孤线）。
+     * 标题行只影响浮层总高，不参与列表的行数与滚动计算（{@link #setRows} 回写的 maxHeight
+     * 仍然只管列表那一段）。
      */
     public void setTitle(CharSequence title) {
         boolean visible = !TextUtils.isEmpty(title);
         binding.sheetListTitle.setText(title);
         binding.sheetListTitleRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+        binding.sheetListDivider.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
-    public void setTitle(@StringRes int resId) {
+    /** 标题 + 左侧图标（选集 / 倍速各用自己的控制栏图标）。 */
+    public void setTitle(@StringRes int resId, @DrawableRes int iconRes) {
+        binding.sheetListIcon.setImageResource(iconRes);
         setTitle(ResUtil.getString(resId));
     }
 

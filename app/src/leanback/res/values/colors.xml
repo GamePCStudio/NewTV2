@@ -5,6 +5,8 @@
     <color name="control_scrubber_halo">#4DE97022</color>
     <color name="control_track_played">#CCFFFFFF</color>
     <color name="control_track_unplayed">#33FFFFFF</color>
+    <!-- 播放页浮层标题下方的分割线（6% 白），与弹幕搜索框内的那条同色 -->
+    <color name="sheet_divider">#1FFFFFFF</color>
 
     <!-- 「海报卡片堆叠」按钮配色（规范设计稿） -->
     <color name="stack_page_bg">#0E0E13</color>

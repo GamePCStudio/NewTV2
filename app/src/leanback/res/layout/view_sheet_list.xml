@@ -2,7 +2,7 @@
 <!--
   浮层里的单列列表（选集 / 倍速共用）。
 
-  布局分两段：顶部标题行 + 下方列表容器。
+  布局分两段：顶部标题行（含标题下方的分割线） + 下方列表容器。
   标题行与「播放设置」浮层用的是同一套样式（PlaybackSheetTitleRow / PlaybackSheetTitle），
   所以「选集」「倍速」「更多设置」三个弹窗的标题字号、颜色、左右缩进完全一致。
   标题由 SheetList.setTitle() 回写，没有标题时整行 GONE，不占高度。
@@ -21,6 +21,7 @@
 -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/sheetListRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -33,6 +34,11 @@
         android:layout_height="wrap_content"
         android:visibility="gone">
 
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/sheetListIcon"
+            style="@style/PlaybackSheetTitleIcon"
+            tools:src="@drawable/ic_control_episode" />
+
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/sheetListTitle"
             style="@style/PlaybackSheetTitle"
@@ -41,6 +47,12 @@
             android:layout_weight="1" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <!-- 标题下方的分割线：与弹幕搜索框内的那条同款，标题隐藏时一起隐藏 -->
+    <View
+        android:id="@+id/sheetListDivider"
+        style="@style/PlaybackSheetDivider"
+        android:visibility="gone" />
 
     <FrameLayout
         android:id="@+id/sheetListFrame"

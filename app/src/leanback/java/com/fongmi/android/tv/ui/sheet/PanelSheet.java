@@ -6,6 +6,7 @@ import android.view.ViewGroup;
 
 import com.fongmi.android.tv.databinding.ViewControlVodActionBinding;
 import com.fongmi.android.tv.databinding.ViewSheetPanelBinding;
+import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,27 +14,42 @@ import java.util.List;
 /**
  * 「播放设置」浮层的内容。
  *
- * <p>11 个隐性按钮全部收纳于此；其中「解码 / 标题 / 章节 / 主菜单 / 播放核心 / 刷新 /
- * 重播 / 循环」按用户裁定隐藏（{@code visibility=gone}，节点保留以维持原有状态同步能力），
- * 常显的只有三项必要播放选项：「画面比例 / 视轨 / 解析」。
- * 面板本身不实现播放逻辑：每个入口只转发到控制条 {@code hidden} 容器里同名按钮的
- * {@code performClick()}，对话框、状态同步、错误提示全部沿用原有实现。
+ * <p>常显五个入口，统一「图标 + 文案」形态，**自下而上**依次为：
+ * 文件信息 / 音轨 / 视轨 / 字幕 / 画面比例。浮层从控制条按钮向上展开，
+ * 最底下一行离按钮最近，所以初始焦点落在「文件信息」上，与选集 / 倍速菜单的贴底逻辑一致。
+ * 面板本身不实现播放逻辑：
+ * <ul>
+ *   <li>字幕 / 音轨 / 视轨：转发到控制条 {@code hidden} 容器里同名按钮的 {@code performClick()}，
+ *       轨道浮层、对话框、状态同步全部沿用原有实现；</li>
+ *   <li>文件信息：转发同一个调试按钮，但<b>不收起面板</b>，便于当场看到开关状态（图标转品牌橙）；</li>
+ *   <li>画面比例（原始 / 填充 / 裁剪）：直接在面板内循环切换并回写文案，同样不收起面板。</li>
+ * </ul>
+ *
+ * <p>五个入口常显、不随轨道可用性隐藏：菜单是这些功能的唯一入口，隐藏后就没有第二次机会可达；
+ * 轨道浮层内部本就会给出空态提示，因此这里不再照抄控制条同名按钮的可见性。
  *
  * <p>焦点链在每次打开时按可见行运行时重串：左右各行自封口，上下按行序走位，
  * 首行上 / 末行下自封口，保证焦点不会逃出浮层，也不会落到已隐藏的行上。
  */
 public final class PanelSheet {
 
+    /**
+     * 面板内容宽度：固定一档。
+     *
+     * <p>不再用 {@code wrap_content} 实测：标题行是 {@code 0dp + weight}、行又是 {@code match_parent}
+     * 且带 {@code minWidth}，在 AT_MOST 下量出来的宽度会随文本与可见行数抖动（时而比行宽窄、
+     * 时而把整行挤到溢出），表现为浮层忽宽忽窄。菜单内容固定，直接给定值最稳。
+     */
+    private static final int WIDTH_DP = 260;
+
     public interface OnAction {
         void onAction();
     }
 
-    private final Activity activity;
     private final ViewControlVodActionBinding action;
     private final ViewSheetPanelBinding binding;
 
     public PanelSheet(Activity activity, ViewControlVodActionBinding action) {
-        this.activity = activity;
         this.action = action;
         this.binding = ViewSheetPanelBinding.inflate(activity.getLayoutInflater());
     }
@@ -42,27 +58,32 @@ public final class PanelSheet {
         return binding.getRoot();
     }
 
-    /** 内容自适应宽度（浮层左右内边距由 VideoSheet 负责）。 */
+    /** 内容宽度（浮层左右内边距由 VideoSheet 负责，调用方另加 12dp×2 的宿主内边距）。 */
     public int measureWidth(int maxWidth) {
-        View view = binding.getRoot();
-        view.measure(View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        return view.getMeasuredWidth();
+        return Math.min(ResUtil.dp2px(WIDTH_DP), Math.max(0, maxWidth));
     }
 
     public void bind(OnAction onAction) {
-        syncLabels();
+        syncContent();
         relink();
+        // 字幕 / 音轨 / 视轨：先收面板再弹轨道浮层，否则浮层会叠在面板上面
+        binding.panelText.setOnClickListener(view -> forward(action.text, onAction));
+        binding.panelAudio.setOnClickListener(view -> forward(action.audio, onAction));
+        binding.panelVideo.setOnClickListener(view -> forward(action.video, onAction));
+        // 文件信息：原地开关，不收起面板；图标与选中态立即回读
+        binding.panelDebug.setOnClickListener(view -> {
+            if (action.debug != null) action.debug.performClick();
+            syncDebug();
+        });
         // 画面比例：不关面板，原地循环切换，便于连续对比
         binding.panelScale.setOnClickListener(view -> {
             if (action.scale != null) action.scale.performClick();
-            syncLabels();
+            syncContent();
         });
         binding.panelDecoder.setOnClickListener(view -> forward(action.decoder, onAction));
-        binding.panelVideo.setOnClickListener(view -> forward(action.video, onAction));
         binding.panelEdition.setOnClickListener(view -> forward(action.edition, onAction));
         binding.panelChapter.setOnClickListener(view -> forward(action.chapter, onAction));
         binding.panelDiscMenu.setOnClickListener(view -> forward(action.discMenu, onAction));
-        binding.panelParse.setOnClickListener(view -> forward(action.parse, onAction));
         binding.panelPlayer.setOnClickListener(view -> forward(action.player, onAction));
         binding.panelReset.setOnClickListener(view -> forward(action.reset, onAction));
         binding.panelReplay.setOnClickListener(view -> forward(action.replay, onAction));
@@ -75,9 +96,15 @@ public final class PanelSheet {
         if (target != null) target.performClick();
     }
 
-    private void syncLabels() {
-        if (action.scale == null) return;
-        binding.panelScale.setText(action.scale.getText());
+    /** 打开 / 切换后同步：画面比例文案与文件信息开关态。 */
+    private void syncContent() {
+        if (action.scale != null) binding.panelScale.setText(action.scale.getText());
+        syncDebug();
+    }
+
+    /** 文件信息开着时整行 activated：图标随 selector_sheet_icon_tint 常亮品牌橙。 */
+    private void syncDebug() {
+        binding.panelDebug.setActivated(action.debug != null && action.debug.isSelected());
     }
 
     /** 运行时统一重串焦点链：左右自封口、上下按行序、首末行上/下自封口。 */
@@ -92,15 +119,20 @@ public final class PanelSheet {
         }
     }
 
-    /** 浮层打开后把焦点交给第一个可见入口。 */
+    /**
+     * 浮层打开后把焦点交给**最底下一行**。
+     *
+     * <p>浮层是贴着控制条按钮向上展开的，最底下一行离手指/焦点来源最近；菜单也按
+     * 「自下而上」排序（文件信息 → 音轨 → 视轨 → 字幕 → 画面比例），所以初始选中框落在底部。
+     */
     public void focus() {
         relink();
-        View first = firstVisible(binding.sheetRows);
-        if (first != null) first.requestFocus();
+        View last = lastVisible(binding.sheetRows);
+        if (last != null) last.requestFocus();
     }
 
-    private View firstVisible(ViewGroup group) {
-        for (int i = 0; i < group.getChildCount(); i++) {
+    private View lastVisible(ViewGroup group) {
+        for (int i = group.getChildCount() - 1; i >= 0; i--) {
             View child = group.getChildAt(i);
             if (child.getVisibility() == View.VISIBLE) return child;
         }

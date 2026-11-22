@@ -880,7 +880,7 @@ public class DoubanHotPresenter extends Presenter {
          *
          * <p>六项全部来自榜单富化数据（{@link DoubanHotItem}）：服务端已经通过 TMDB
          * 把评分、上映年份、题材、导演与主演算好，展示层不再查本地素材、也不触发任何刮削。
-         * 主演在数据层已限制最多 3 名；导演 / 主演任一为空时整段不显示，不留下空标签。</p>
+         * 主演在数据层已限制最多 4 名、导演 1 名；导演 / 主演任一为空时整段不显示，不留下空标签。</p>
          */
         private void bindMeta(DoubanHotItem item) {
             List<String> meta = new ArrayList<>(6);
