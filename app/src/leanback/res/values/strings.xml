@@ -31,6 +31,7 @@
     <string name="douban_hot_actors">Cast: %1$s</string>
     <string name="history_played">Watched: %1$s</string>
     <string name="site_switch_config">Switch Address</string>
+    <string name="site_edit">Edit Sites</string>
     <string name="site_switch_empty">No saved addresses yet</string>
     <string name="douban_hot_type_tv">Series</string>
     <string name="douban_hot_type_movie">Movie</string>

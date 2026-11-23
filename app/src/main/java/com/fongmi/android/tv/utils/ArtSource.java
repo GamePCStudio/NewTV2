@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 海报 / 评分 / 简介的<b>唯一</b>抓取门面：TMDB 单源抓取 + 失败分级处置。
@@ -46,8 +47,18 @@ public final class ArtSource {
     public static final int CAT_MOVIE = 2;
     /** 只查剧集榜单。 */
     public static final int CAT_TV = 3;
-    /** 卡片评分备注前缀：兼容旧缓存，新数据统一走 Vod.artScore。 */
+    /** 卡片评分备注前缀：评分写在备注字符串里（「评分：x.x」），不单独占字段。 */
     public static final String SCORE_PREFIX = "评分：";
+    /**
+     * 备注里任意位置的评分段（含半角冒号、省略冒号、尾部「分」字）。
+     *
+     * <p>不锚定行首：站源备注五花八门，评分可能出现在开头（「评分：8.7」）、
+     * 结尾（「更新至12集 评分9.1」）或中间（「豆瓣评分：8.0 更新至12集」）。
+     * 只剥行首会让后两种与本站评分叠成两个评分 —— 这正是「同一张卡出现 2 个评分」的成因。</p>
+     */
+    private static final Pattern SCORE_ANY = Pattern.compile("评分\\s*[:：]?\\s*\\d{1,2}(\\.\\d)?\\s*分?");
+    /** 剥掉评分后残留在首尾的分隔符（空格 / 中点 / 竖线 / 逗号 / 顿号）。 */
+    private static final Pattern EDGE_JUNK = Pattern.compile("^[\\s·•|｜,，、]+|[\\s·•|｜,，、]+$");
 
     /** 相邻两次抓取提交的最小间隔（毫秒）。 */
     private static final long INTERVAL_MS = 500L;
@@ -94,7 +105,7 @@ public final class ArtSource {
 
     /**
      * 从旧格式备注里识别评分；返回值统一为 10 分制一位小数。
-     * 新数据不再写备注，这里只为兼容旧缓存。
+     * 评分现在直接写在备注字符串里，卡片不再解析角标，这里只留给旧缓存与数据迁移用。
      */
     public static String score(String remarks) {
         if (TextUtils.isEmpty(remarks)) return "";
@@ -105,36 +116,82 @@ public final class ArtSource {
         return ArtRating.normalize(value);
     }
 
-    /** 由片名构造一张热榜卡片；与首页站源卡片共用 {@link #apply(Vod)}。 */
+    /**
+     * 把评分拼进备注字符串 —— 评分角标出现前的历史做法：评分就写在备注里，
+     * 卡片只渲染这一行文本，没有任何独立角标。
+     *
+     * <p>热搜 / 榜单卡片的备注槽本来是空的，旧实现直接写「评分：x.x」；
+     * 站源卡片自带备注（集数、更新状态），直接覆盖会丢信息，所以评分放最前面、
+     * 原备注留在后面，整行仍由 TextView 按卡片宽度统一截断。</p>
+     *
+     * <p><b>幂等</b>：先把备注里<b>任意位置</b>已有的评分段全部剥掉（见 {@link #SCORE_ANY}），
+     * 再写入本次评分。所以重复调用（缓存回填、多次 {@link #apply}）、以及站源备注里
+     * 自带评分的情况，都不会出现两个评分。</p>
+     */
+    public static String scoreRemark(String remarks, String rating) {
+        String value = ArtRating.normalize(rating);
+        String text = TextUtils.isEmpty(remarks) ? "" : remarks;
+        if (value.isEmpty()) return text;
+        String rest = SCORE_ANY.matcher(text).replaceAll("").replaceAll("\\s{2,}", " ");
+        rest = EDGE_JUNK.matcher(rest).replaceAll("").trim();
+        String score = SCORE_PREFIX + value;
+        return rest.isEmpty() ? score : score + " " + rest;
+    }
+
+    /** 由片名构造一张热榜卡片：素材与评分一起写入（纯片名卡片没有站源备注）。 */
     public static Vod card(String title) {
         Vod vod = new Vod();
         vod.setName(title);
-        apply(vod);
+        applyWithScore(vod);
         return vod;
     }
 
     /**
-     * 把索引里的海报与评分就地应用到一张卡片，返回是否有变化。
-     * 首页的站源 Vod 会保留片名、播放地址与站源备注，只覆盖图片并写入独立评分字段；
-     * 纯片名卡片（最近观看）则用它拿到全部素材。两者走的是同一份索引与同一套格式。
+     * 只回填海报，<b>不动备注</b>。
+     *
+     * <p>专供站源卡片（首页「来自 · 站源名」及其「更多影片」页）：这些卡片的备注是站源原文
+     * （集数、更新状态，且常自带它自己的评分，如「豆瓣8.9」——不带「评分」二字，
+     * 无法被 {@link #SCORE_ANY} 识别），若再拼一条 TMDB 评分，一行就会同时出现两个评分。
+     * 按「保留备注、不显示其它评分」的口径，这里只覆盖海报。</p>
      */
     public static boolean apply(Vod vod) {
         if (vod == null || TextUtils.isEmpty(vod.getName())) return false;
         TmdbArt art = TmdbStore.find(vod.getName());
+        return art != null && applyArt(vod, art);
+    }
+
+    /**
+     * 海报 + 评分一起写入，供纯片名卡片（热榜 / 榜单）使用。
+     * 站源卡片不要用它 —— 会把评分拼到站源备注前面，见 {@link #apply(Vod)}。
+     */
+    public static boolean applyWithScore(Vod vod) {
+        if (vod == null || TextUtils.isEmpty(vod.getName())) return false;
+        TmdbArt art = TmdbStore.find(vod.getName());
         if (art == null) return false;
-        String oldPic = vod.getArtPic();
-        String oldScore = vod.getArtScore();
+        boolean changed = applyArt(vod, art);
+        String rating = ArtRating.normalize(art.getRating());
+        if (!rating.isEmpty()) {
+            String old = vod.getRemarks();
+            String next = scoreRemark(old, rating);
+            if (!next.equals(old)) {
+                vod.setRemarks(next);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** 把索引里的海报写到卡片的展示字段，返回是否有变化。 */
+    private static boolean applyArt(Vod vod, TmdbArt art) {
         File file = art.getCardFile();
+        if (file == null) return false;
+        String oldPic = vod.getArtPic();
         // 本地文件走内嵌服务器的 /file/ 路由（GlideUrl 只认 http(s)，不能塞绝对路径）。
         // 拼法与 SpiderTest.sourceUrl 一致：去掉开头的 '/'，避免 /file//data 双斜杠。
         // 只写独立的展示字段，站源 Vod 的原始 vodPic 保持不变，首页结果缓存才不会被本地地址污染。
-        if (file != null) {
-            String path = file.getAbsolutePath().replaceFirst("^/", "");
-            vod.setArtPic(Server.get().getAddress("/file/") + Uri.encode(path, "/"));
-        }
-        String rating = ArtRating.normalize(art.getRating());
-        if (!rating.isEmpty()) vod.setArtScore(rating);
-        return !vod.getArtPic().equals(oldPic) || !vod.getArtScore().equals(oldScore);
+        String path = file.getAbsolutePath().replaceFirst("^/", "");
+        vod.setArtPic(Server.get().getAddress("/file/") + Uri.encode(path, "/"));
+        return !vod.getArtPic().equals(oldPic);
     }
 
     /** 是否有「可用卡片图 + 有效评分」的完整缓存。 */

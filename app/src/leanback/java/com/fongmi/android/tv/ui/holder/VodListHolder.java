@@ -7,6 +7,7 @@ import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterVodListBinding;
 import com.fongmi.android.tv.ui.base.BaseVodHolder;
 import com.fongmi.android.tv.ui.custom.PosterFocusAnimator;
+import com.fongmi.android.tv.ui.custom.PosterFrameBreath;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
 import com.fongmi.android.tv.utils.ImgUtil;
 
@@ -14,13 +15,19 @@ public class VodListHolder extends BaseVodHolder {
 
     private final VodPresenter.OnClickListener listener;
     private final AdapterVodListBinding binding;
+    /** 白框慢闪呼吸：静止 500ms 后在 100%↔20% 之间往复。 */
+    private final PosterFrameBreath breath;
 
     public VodListHolder(@NonNull AdapterVodListBinding binding, VodPresenter.OnClickListener listener) {
         super(binding.getRoot());
         this.binding = binding;
         this.listener = listener;
+        breath = new PosterFrameBreath(binding.getRoot());
         // 列表卡整卡有实底，边界即内容轮廓，可安全抬升；片名聚焦时跑马灯。
-        PosterFocusAnimator.bind(binding.getRoot(), true, (card, focused) -> PosterFocusAnimator.marquee(binding.name, focused));
+        PosterFocusAnimator.bind(binding.getRoot(), true, (card, focused) -> {
+            PosterFocusAnimator.marquee(binding.name, focused);
+            breath.setFocused(focused);
+        });
     }
 
     @Override
@@ -31,11 +38,14 @@ public class VodListHolder extends BaseVodHolder {
         binding.remark.setVisibility(item.getRemarkVisible());
         binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
         binding.getRoot().setOnLongClickListener(v -> listener.onLongClick(item));
+        // 复用时可能已持有焦点（焦点回调不会再触发），补一次呼吸倒计时。
+        if (binding.getRoot().hasFocus()) breath.setFocused(true);
         ImgUtil.load(item.getName(), item.getDisplayPic(), binding.image, true);
     }
 
     @Override
     public void unbind() {
+        breath.release();
         PosterFocusAnimator.reset(binding.getRoot());
         Glide.with(binding.image).clear(binding.image);
     }

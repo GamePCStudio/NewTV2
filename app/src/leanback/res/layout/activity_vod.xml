@@ -22,6 +22,15 @@
     android:layout_height="match_parent"
     android:clipChildren="false">
 
+    <!-- L-1：整页背景漫反射（焦点卡主色驱动，画在所有内容之下，含分类页网格）。 -->
+    <FrameLayout
+        android:id="@+id/pageGlow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
+
     <!-- L0：顶部渐变遮罩（高度由 VodActivity.applyTopScrim() 设置；不参与焦点与点击） -->
     <View
         android:id="@+id/topScrim"

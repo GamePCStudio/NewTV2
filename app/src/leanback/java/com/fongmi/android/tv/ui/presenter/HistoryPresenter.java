@@ -2,6 +2,7 @@ package com.fongmi.android.tv.ui.presenter;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,7 +14,11 @@ import androidx.leanback.widget.Presenter;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.TmdbApi;
@@ -22,8 +27,11 @@ import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.TmdbArt;
 import com.fongmi.android.tv.databinding.AdapterVodHistoryBinding;
 import com.fongmi.android.tv.setting.TmdbSetting;
+import com.fongmi.android.tv.ui.custom.CardGlowComposeView;
 import com.fongmi.android.tv.ui.custom.PosterFocusAnimator;
+import com.fongmi.android.tv.ui.custom.PosterFrameBreath;
 import com.fongmi.android.tv.utils.ArtSource;
+import com.fongmi.android.tv.utils.HeroGlowColor;
 import com.fongmi.android.tv.utils.HistoryEpisode;
 import com.fongmi.android.tv.utils.ImgUtil;
 
@@ -103,17 +111,51 @@ public class HistoryPresenter extends Presenter {
 
         private final AdapterVodHistoryBinding binding;
         private final OnClickListener listener;
+        /** 底部主色漫反射绘制叶子；只在聚焦时亮起，颜色来自当前剧照 / 海报。 */
+        private final CardGlowComposeView glow;
+        /** 白框慢闪呼吸：静止 500ms 后在 100%↔20% 之间往复。 */
+        private final PosterFrameBreath breath;
         /** 当前绑定的历史记录 key：异步回调回来时据此判断卡片是否已经被复用。 */
         private String boundKey = "";
         /** 当前卡片的播放进度文案：集数纠错回调里要拼回去。 */
         private String boundPercent = "";
+        /** 聚焦态：剧照异步加载完成时据此决定是否补提色。 */
+        private boolean focused = false;
 
         private Holder(@NonNull AdapterVodHistoryBinding binding, OnClickListener listener) {
             super(binding.getRoot());
             this.binding = binding;
             this.listener = listener;
-            // 与网格卡同一套聚焦动效（只缩放、不抬升），片名被截断时切跑马灯。
-            PosterFocusAnimator.bind(view, false, (card, focused) -> PosterFocusAnimator.marquee(binding.name, focused));
+            // 剧照恢复 match_parent 铺满、与前景白框严格贴合（此前版本的位置关系，无空隙）。
+            // 卡片光层仍在剧照之下（index 0）并完整保留提色 / 显隐逻辑，不删不改光效实现；
+            // 用负 margin 让光层比画框大一圈，光从白框外侧四周露出（底部更宽）。
+            glow = new CardGlowComposeView(binding.poster.getContext());
+            binding.poster.addView(glow.getView(), 0, CardGlowComposeView.createLayoutParams(binding.poster));
+            breath = new PosterFrameBreath(binding.poster);
+            // 与网格卡同一套聚焦动效（只缩放、不抬升），片名被截断时切跑马灯，并点亮背景光。
+            PosterFocusAnimator.bind(view, false, (card, isFocused) -> {
+                focused = isFocused;
+                PosterFocusAnimator.marquee(binding.name, isFocused);
+                glow.setFocused(isFocused);
+                breath.setFocused(isFocused);
+                if (isFocused) {
+                    // 提色是异步的，先把局部提亮的圆心推到这张卡，避免光滞留在上一张卡上。
+                    CardGlowComposeView.reportPageGlowCenter(binding.poster);
+                    extractGlow(binding.image.getDrawable());
+                }
+            });
+        }
+
+        /** 聚焦时从当前剧照 / 海报提主色；回调只认仍绑定的那张卡且仍处于聚焦。 */
+        private void extractGlow(Drawable drawable) {
+            if (drawable == null) return;
+            String key = boundKey;
+            HeroGlowColor.load(key, drawable, color -> {
+                if (!key.equals(boundKey) || !focused) return;
+                glow.setGlowColor(color);
+                // 上报焦点卡主色 + 屏幕位置，驱动首页整页背景漫反射（仅首页订阅）。
+                CardGlowComposeView.reportPageGlow(binding.poster, color);
+            });
         }
 
         /**
@@ -130,6 +172,15 @@ public class HistoryPresenter extends Presenter {
 
         private void bind(History item, boolean delete) {
             boundKey = item.getKey();
+            /*
+             * 行末卡片是横向滚动时才被复用绑定的：此时它已经持有焦点，但焦点回调不会
+             * 为「本来就在聚焦」的 View 再触发一次。若这里无脑置 false，glowReady() 的
+             * 补提色会被 !focused 挡掉，整页光就只在这一张卡上点不亮。
+             */
+            focused = binding.getRoot().hasFocus();
+            // 同上：绑定时已聚焦则补一次呼吸倒计时，否则这张卡要等下次焦点切换才会呼吸。
+            if (focused) breath.setFocused(true);
+            glow.reset();
             binding.name.setText(item.getVodName());
             binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
             binding.meta.setVisibility(delete ? View.GONE : View.VISIBLE);
@@ -141,6 +192,14 @@ public class HistoryPresenter extends Presenter {
                 else listener.onItemClick(item);
             });
             bindArtwork(item);
+            // 复用时若这张卡已经聚焦，补一次提色：图片命中内存缓存时 Glide 的就绪回调
+            // 可能早于本次绑定，空 URL 的分支更根本不会走 listener。几何也一并推过去，
+            // 避免光晕留在上一张卡的位置（HomeActivity 下一帧还会再校正一次）。
+            if (focused) {
+                CardGlowComposeView.reportPageGlowCenter(binding.poster);
+                Drawable ready = binding.image.getDrawable();
+                if (ready != null) extractGlow(ready);
+            }
         }
 
         /**
@@ -203,6 +262,7 @@ public class HistoryPresenter extends Presenter {
                     .dontTransform()
                     .downsample(DownsampleStrategy.CENTER_OUTSIDE)
                     .error(R.drawable.artwork)
+                    .listener(glowReady())
                     .into(binding.image);
         }
 
@@ -219,7 +279,33 @@ public class HistoryPresenter extends Presenter {
                     .dontTransform()
                     .downsample(DownsampleStrategy.CENTER_OUTSIDE)
                     .error(R.drawable.artwork)
+                    .listener(glowReady())
                     .into(binding.image);
+        }
+
+        /**
+         * 剧照 / 海报异步就绪后，若这张卡仍聚焦就补一次提色。聚焦瞬间 drawable 常为 null，
+         * 只靠焦点回调会让整页背景光迟迟不亮；就绪回调保证光最终一定点亮。
+         */
+        private RequestListener<Drawable> glowReady() {
+            return new RequestListener<>() {
+                @Override
+                public boolean onLoadFailed(@Nullable GlideException e, Object model, @NonNull Target<Drawable> target, boolean isFirstResource) {
+                    binding.image.post(() -> {
+                        if (focused) extractGlow(binding.image.getDrawable());
+                    });
+                    return false;
+                }
+
+                @Override
+                public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> target, @NonNull DataSource dataSource, boolean isFirstResource) {
+                    // Glide 在本回调之后才把 drawable 塞进 ImageView，故 post 到下一帧再补提色。
+                    binding.image.post(() -> {
+                        if (focused) extractGlow(binding.image.getDrawable());
+                    });
+                    return false;
+                }
+            };
         }
 
         /** 缺剧照时补抓一次（统一入口内部有缓存 / 进行中 / 冷却多重短路，重复绑定不会打接口）。 */
@@ -259,6 +345,10 @@ public class HistoryPresenter extends Presenter {
         private void unbind() {
             boundKey = "";
             boundPercent = "";
+            focused = false;
+            glow.reset();
+            // 先停呼吸再 reset：reset 的 jumpToCurrentState 会把 foreground 的 alpha 落回呼吸最后的值。
+            breath.release();
             PosterFocusAnimator.reset(view);
             RequestManager manager = glide();
             if (manager != null) manager.clear(binding.image);

@@ -63,8 +63,9 @@ import okhttp3.Response;
  */
 public final class TmdbApi {
 
+    /** 榜单横版图的固定档位：只用于 {@code RankLatest} 拼 URL，不参与刮削下载。 */
     public static final String BACKDROP_SIZE = "w1280";
-    /** 竖版海报：卡片图用；比 w1280 背景图小，不额外增加明显带宽。 */
+    /** 榜单 / 兜底用的竖版海报档位：同上，刮削下载走 {@link TmdbSetting#getPosterSize()}。 */
     public static final String POSTER_SIZE = "w500";
     /**
      * logo 取原图：w500 在 1080p 电视上放大到 200dp（400px）后会发虚、边缘出锯齿。
@@ -593,11 +594,14 @@ public final class TmdbApi {
         art.setYear(yearOf(item.releaseDate, item.firstAirDate));
         art.setGenre(genreOf(item.genreIds));
         String error = null;
+        // 刮削下载的图片档位由设置页决定（海报 / 横版剧照各一组），默认取最高档。
+        String backdropSize = TmdbSetting.getBackdropSize();
+        String posterSize = TmdbSetting.getPosterSize();
         // 横版剧照：首页主视觉用；缺失或下载失败都不再阻断，交给竖版海报兜底。
         if (!TextUtils.isEmpty(backdrop)) {
             try {
-                byte[] bytes = downloadRotating("/t/p/" + BACKDROP_SIZE + backdrop, keyword, TmdbLog.STAGE_BACKDROP);
-                File file = TmdbStore.imageFile(BACKDROP_SIZE, backdrop);
+                byte[] bytes = downloadRotating("/t/p/" + backdropSize + backdrop, keyword, TmdbLog.STAGE_BACKDROP);
+                File file = TmdbStore.imageFile(backdropSize, backdrop);
                 TmdbStore.write(file, bytes);
                 art.setBackdrop(file.getName());
             } catch (Exception e) {
@@ -609,8 +613,8 @@ public final class TmdbApi {
         // 竖版海报：卡片用；只有剧照时允许缺失，卡片会回退剧照。
         if (!TextUtils.isEmpty(poster)) {
             try {
-                byte[] bytes = downloadRotating("/t/p/" + POSTER_SIZE + poster, keyword, TmdbLog.STAGE_POSTER);
-                File file = TmdbStore.imageFile(POSTER_SIZE, poster);
+                byte[] bytes = downloadRotating("/t/p/" + posterSize + poster, keyword, TmdbLog.STAGE_POSTER);
+                File file = TmdbStore.imageFile(posterSize, poster);
                 TmdbStore.write(file, bytes);
                 art.setPoster(file.getName());
             } catch (Exception e) {

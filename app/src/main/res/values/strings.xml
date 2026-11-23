@@ -252,6 +252,10 @@
     <string name="setting_module">Modules</string>
     <string name="setting_danmaku">Danmaku setting</string>
     <string name="setting_incognito">Incognito mode</string>
+    <string name="diag_disclaimer_title">Disclaimer</string>
+    <string name="diag_disclaimer_agree">Agree</string>
+    <string name="diag_disclaimer_decline">Decline</string>
+    <string name="diag_disclaimer_body">1. No video content is included: This project (the "App") is an open-source player client. The App itself does not contain, integrate, provide, store, or distribute any video content, including but not limited to movies, TV series, variety shows and anime, nor any video files, audio, subtitles, direct links, torrents or download addresses.\n\n2. Content comes from user-configured third-party sources: everything playable in the App is returned by third-party site interfaces (scraper rules) added by the user. The App is not responsible for the legality, accuracy or completeness of that data. Users must ensure their configuration and usage comply with local laws; any resulting liability rests with the user.\n\n3. Artwork is for identification only: posters, stills and title logos shown in the App come from public metadata services (such as TMDB) and are used solely to identify and describe content. They do not involve storage, distribution or playback of any video content, and copyright remains with their respective owners.\n\n4. Study and exchange only: this project is for personal study, research and technical exchange. Commercial use is strictly prohibited.\n\n5. Takedown requests: if this project (including documents, screenshots and displayed artwork) infringes your rights, please contact us through GitHub Issues with proof of ownership. Verified content will be removed promptly.\n\n6. Limitation of liability: this project is provided "as is", without any express or implied warranty regarding the legality, accuracy or completeness of its content. Downloading, installing or using this project means you have read, understood and accepted all terms of this notice.\n\n7. Anonymous diagnostics: diagnostic data helps improve NewTV, keeping it stable and working as expected. You are sending required diagnostic data as part of using NewTV2: your device sends NewTV a limited set of data, including a randomly generated installation identifier, a digest derived from device information (Android ID, build fingerprint, device model) through an irreversible hash, plus app version, system version, error logs, screen resolution and CPU architecture. The digest cannot be reversed to the original device information, and the record contains no IMEI, MAC address, serial number, advertising ID, location or installed-app list.</string>
     <string name="setting_theme_color">Theme color</string>
     <string name="setting_auto">Auto</string>
     <string name="setting_custom">Custom</string>
@@ -624,11 +628,15 @@
     <string name="tmdb_disabled_hint">Enable TMDB scraping in Settings → Media scraping settings first</string>
     <string name="tmdb_no_keyword">No title available for scraping</string>
     <string name="setting_group_tmdb">TMDB</string>
-    <string name="tmdb_connection_hint">Choose how the app reaches TMDB. This address is used for all TMDB artwork and metadata.</string>
+    <string name="tmdb_connection_hint">Choose how TMDB data is scraped. Selecting a custom site and filling in an API key unlocks more features, such as cover stills for Recently Watched.</string>
     <string name="tmdb_mode">TMDB connection</string>
     <string name="tmdb_mode_proxy">Default proxy</string>
     <string name="tmdb_mode_official">TMDB direct connection</string>
     <string name="tmdb_mode_custom">Custom proxy</string>
+    <string name="tmdb_image_poster">Poster resolution</string>
+    <string name="tmdb_image_backdrop">Backdrop resolution</string>
+    <string name="tmdb_image_still">Episode still resolution</string>
+    <string name="tmdb_image_profile">Profile image resolution</string>
     <string name="tmdb_site_custom">Custom TMDB proxy address</string>
     <string name="tmdb_site_unset">Not set</string>
     <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>

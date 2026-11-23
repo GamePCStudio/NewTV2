@@ -84,4 +84,15 @@ public class Migrations {
             database.execSQL("DROP TABLE IF EXISTS Live");
         }
     };
+
+    /**
+     * 观看记录跨站点共用：新增「记录所属的点播配置地址」。
+     * 老记录保持 NULL，点击时退回「站源 key 在当前配置里是否存在」判断。
+     */
+    public static final Migration MIGRATION_38_39 = new Migration(38, 39) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE History ADD COLUMN siteUrl TEXT");
+        }
+    };
 }

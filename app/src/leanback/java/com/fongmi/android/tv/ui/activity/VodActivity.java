@@ -39,12 +39,15 @@ import com.fongmi.android.tv.databinding.ViewHomeToolbarBinding;
 import com.fongmi.android.tv.databinding.ViewSiteSheetBinding;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.Callback;
+import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.ui.adapter.ConfigMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.SiteMenuAdapter;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.ui.custom.PageGlowController;
+import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.ui.fragment.FolderFragment;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -59,13 +62,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-public class VodActivity extends BaseActivity implements TypeAdapter.OnClickListener {
+public class VodActivity extends BaseActivity implements TypeAdapter.OnClickListener, SiteListener {
 
     /** sheet 打开时的弹出渐变时长（与首页同一口径）。 */
     private static final long SHEET_ANIM = 220L;
-    /** 下拉列表最多显示 8 行站点名，每项 30dp。 */
+    /** 站源下拉可完整显示的<b>站源行数</b>（不含「点播地址切换」「站点编辑」两个固定入口）。 */
     private static final int SITE_ROWS = 8;
+    /** 列表项行高，对应 adapter_site_menu.xml 与 adapter_site_menu_switch.xml 的 30dp。 */
     private static final int SITE_ROW_DP = 30;
+    /** 只有「站点编辑」那一行显示的分割线：1dp 线 + 上下各 2dp 外边距。 */
+    private static final int SITE_DIVIDER_DP = 1;
+    private static final int SITE_DIVIDER_MARGIN_DP = 2;
     /** 站源名字符预算：emoji 按 1 个字符计，截断「...」整体按 1 个字符计。 */
     private static final int SITE_NAME_LIMIT = 6;
 
@@ -81,6 +88,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     private ConfigMenuAdapter mConfigMenuAdapter;
     private SiteViewModel mViewModel;
     private Clock mClock;
+    /** 整页背景漫反射 + 焦点卡提亮（与首页同源，页面无主视觉故不做 scrim 断层处理）。 */
+    private PageGlowController mPageGlow;
     private String mKey;
     private View mOldView;
     /** 上一次已应用的海报尺寸档位；设置里改过之后回到前台要按新列数重建分类页。 */
@@ -161,6 +170,9 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     protected void initView(Bundle savedInstanceState) {
         mKey = getIntent().getStringExtra("key");
         mPosterSize = PlayerSetting.getSize();
+        // 整页光层要先于内容挂上：它铺在布局最底层，后面建出来的网格才有背景可透。
+        mPageGlow = new PageGlowController(this, mBinding.pageGlow);
+        mPageGlow.attach();
         setRecyclerView();
         setToolbar();
         setViewModel();
@@ -203,7 +215,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         mSheet.siteScrim.setOnClickListener(v -> hideSiteSheet());
         mSheet.siteList.setLayoutManager(new LinearLayoutManager(this));
         mSheet.siteList.setItemAnimator(null);
-        mSheet.siteList.setMaxHeight(ResUtil.dp2px(SITE_ROW_DP * SITE_ROWS));
+        // 8 行站源 + 2 个固定入口，正好整行数，超出部分在面板内滚动。
+        mSheet.siteList.setMaxHeight(siteListHeight());
         // 搜索圆钮（放大镜，占原品牌位）：点击进搜索页；「我的」= 设置入口。
         mToolbar.brandEntry.setOnClickListener(v -> SearchActivity.start(this));
         mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this));
@@ -233,7 +246,10 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         if (sheetClosing) finishSheetClose();
         if (isVisible(mSheet.getRoot())) return;
         List<Site> sites = VodConfig.get().getSites().stream().filter(site -> !site.isHide()).toList();
-        if (sites.isEmpty()) return;
+        /*
+         * 站源为空也要弹面板：面板第 0 项「切换站点」与站源无关，
+         * 用户正是靠它在没有任何站源时切到另一个点播地址。
+         */
         mSiteMenuAdapter = new SiteMenuAdapter(sites, VodConfig.get().getHome(), new SiteMenuAdapter.OnClickListener() {
             @Override
             public void onItemClick(Site item) {
@@ -243,6 +259,13 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
             @Override
             public void onSwitchClick() {
                 showConfigSheet();
+            }
+
+            @Override
+            public void onEditClick() {
+                // 与首页 / 设置页同一个站点编辑弹窗；先收面板再弹，避免两层焦点陷阱叠加。
+                hideSiteSheet();
+                SiteDialog.create().action().show(VodActivity.this);
             }
         });
         mSheet.siteList.setAdapter(mSiteMenuAdapter);
@@ -316,6 +339,19 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     }
 
     /** 面板锚定：顶边贴入口下方 6dp、右缘对齐入口右缘；宽度按最长站源名自适应。 */
+    /**
+     * 站源下拉列表的精确高度：8 行站源 + 两个固定入口 + 「站点编辑」那一行的一条分割线。
+     *
+     * <p>逐段按密度四舍五入，与 XML 的 {@code getDimensionPixelSize} 口径一致；
+     * 一次性换算总 dp 在非整数密度下会差几像素，最后一行底部会被切掉（半行 / 文字贴边）。</p>
+     */
+    private int siteListHeight() {
+        float density = getResources().getDisplayMetrics().density;
+        int row = Math.round(SITE_ROW_DP * density);
+        int divider = Math.round(SITE_DIVIDER_DP * density) + 2 * Math.round(SITE_DIVIDER_MARGIN_DP * density);
+        return row * (SITE_ROWS + 2) + divider;
+    }
+
     private void positionSheet() {
         int[] entry = new int[2];
         int[] root = new int[2];
@@ -327,8 +363,10 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         lp.topMargin = entry[1] - root[1] + mToolbar.siteEntry.getHeight() + ResUtil.dp2px(6);
         lp.rightMargin = marginEnd;
         float textWidth = mSiteMenuAdapter.maxTextWidth(mToolbar.siteName.getPaint());
-        // 「切换站点」入口也要算进面板宽度，别把它挤成省略号
-        textWidth = Math.max(textWidth, mToolbar.siteName.getPaint().measureText(getString(R.string.site_switch_config)));
+        // 两个固定入口也要算进面板宽度，别把它们挤成省略号
+        for (int id : new int[]{R.string.site_switch_config, R.string.site_edit}) {
+            textWidth = Math.max(textWidth, mToolbar.siteName.getPaint().measureText(getString(id)));
+        }
         int width = (int) Math.ceil(textWidth) + ResUtil.dp2px(44);
         int maxWidth = Math.max(ResUtil.dp2px(140), mBinding.getRoot().getWidth() - marginEnd - ResUtil.dp2px(48));
         lp.width = Math.min(Math.max(width, ResUtil.dp2px(140)), maxWidth);
@@ -487,7 +525,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     }
 
     /** 下拉里选中站源：切换首页站源 → 分类列表已失效，重新拉一次首页内容拿 types。 */
-    private void setSite(Site item) {
+    @Override
+    public void setSite(Site item) {
         VodConfig.get().setHome(item);
         mKey = item.getKey();
         clearPendingPoster();
@@ -763,6 +802,7 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     @Override
     protected void onDestroy() {
         getWindow().getDecorView().getViewTreeObserver().removeOnGlobalFocusChangeListener(focusGuard);
+        if (mPageGlow != null) mPageGlow.detach();
         if (mClock != null) mClock.stop();
         super.onDestroy();
     }

@@ -43,6 +43,28 @@ public final class TmdbSetting {
     private static final String KEY_LEGACY_URL = "tmdb_api_url";
     private static final String KEY_LEGACY_KEY = "tmdb_api_key";
 
+    /* ------------------------------------------------------------ 图片分辨率 */
+
+    /** 海报（竖版）：默认取列表最高档。 */
+    public static final String[] POSTER_SIZES = {"w342", "w500", "w780"};
+    /** 背景图（横版剧照）：默认取列表最高档。 */
+    public static final String[] BACKDROP_SIZES = {"w780", "w1280"};
+    /** 单集剧照：暂未接线，仅保存选择。 */
+    public static final String[] STILL_SIZES = {"w185", "w300"};
+    /** 人物头像：暂未接线，仅保存选择。 */
+    public static final String[] PROFILE_SIZES = {"w185", "h632"};
+
+    /** 各类尺寸的默认下标：海报 / 背景图取最高档，剧照 / 头像取 w185。 */
+    private static final int POSTER_DEFAULT = POSTER_SIZES.length - 1;
+    private static final int BACKDROP_DEFAULT = BACKDROP_SIZES.length - 1;
+    private static final int STILL_DEFAULT = 0;
+    private static final int PROFILE_DEFAULT = 0;
+
+    private static final String KEY_IMAGE_POSTER = "tmdb_image_poster";
+    private static final String KEY_IMAGE_BACKDROP = "tmdb_image_backdrop";
+    private static final String KEY_IMAGE_STILL = "tmdb_image_still";
+    private static final String KEY_IMAGE_PROFILE = "tmdb_image_profile";
+
     /** 轮换游标保留给 API 层的统一请求入口；当前只有一个全局站点。 */
     private static final AtomicInteger CURSOR = new AtomicInteger();
     private static volatile TmdbSite cache;
@@ -102,6 +124,68 @@ public final class TmdbSetting {
 
     public static String getApiKey() {
         return getSite().getKey();
+    }
+
+    /**
+     * 海报分辨率：新抓取的海报按这个档位下载。
+     *
+     * <p>已落库的素材保留原尺寸（索引里存的是具体文件名），只有之后新刮削的影片才换档，
+     * 避免改一次设置就触发全库重抓。</p>
+     */
+    public static String getPosterSize() {
+        return readSize(KEY_IMAGE_POSTER, POSTER_SIZES, POSTER_DEFAULT);
+    }
+
+    public static void putPosterSize(String size) {
+        writeSize(KEY_IMAGE_POSTER, size, POSTER_SIZES, POSTER_DEFAULT);
+    }
+
+    /** 横版剧照（背景图）分辨率：新抓取按这个档位下载。 */
+    public static String getBackdropSize() {
+        return readSize(KEY_IMAGE_BACKDROP, BACKDROP_SIZES, BACKDROP_DEFAULT);
+    }
+
+    public static void putBackdropSize(String size) {
+        writeSize(KEY_IMAGE_BACKDROP, size, BACKDROP_SIZES, BACKDROP_DEFAULT);
+    }
+
+    /** 单集剧照分辨率：暂未接线，仅保存用户选择。 */
+    public static String getStillSize() {
+        return readSize(KEY_IMAGE_STILL, STILL_SIZES, STILL_DEFAULT);
+    }
+
+    public static void putStillSize(String size) {
+        writeSize(KEY_IMAGE_STILL, size, STILL_SIZES, STILL_DEFAULT);
+    }
+
+    /** 人物头像分辨率：暂未接线，仅保存用户选择。 */
+    public static String getProfileSize() {
+        return readSize(KEY_IMAGE_PROFILE, PROFILE_SIZES, PROFILE_DEFAULT);
+    }
+
+    public static void putProfileSize(String size) {
+        writeSize(KEY_IMAGE_PROFILE, size, PROFILE_SIZES, PROFILE_DEFAULT);
+    }
+
+    /**
+     * 尺寸在候选列表里的位置；非法值（含首次安装的空串）回落到默认档位。
+     * 设置页弹窗用它定位当前选中项（{@code highest} = 默认取最高档）。
+     */
+    public static int indexOf(String[] sizes, String size, boolean highest) {
+        for (int i = 0; i < sizes.length; i++) if (sizes[i].equals(size)) return i;
+        return highest ? sizes.length - 1 : 0;
+    }
+
+    private static String readSize(String key, String[] sizes, int defIndex) {
+        String value = Prefers.getString(key, "");
+        for (String size : sizes) if (size.equals(value)) return size;
+        return sizes[defIndex];
+    }
+
+    private static void writeSize(String key, String value, String[] sizes, int defIndex) {
+        String next = sizes[defIndex];
+        for (String size : sizes) if (size.equals(value)) next = size;
+        Prefers.put(key, next);
     }
 
     /** 是否已有可用地址；自定义反代必须由用户填地址。 */

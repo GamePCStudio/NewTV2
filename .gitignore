@@ -64,3 +64,13 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# 本地调试产物
+adb-diag/
+adb-diag-*/
+
+# 阶段性分析报告
+*-REPORT.md
+
+# 服务端部署资产：含数据库标识与自有域名，单独存放，不进公开仓库
+diag/

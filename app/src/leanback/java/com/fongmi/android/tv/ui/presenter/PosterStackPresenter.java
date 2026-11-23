@@ -13,6 +13,7 @@ import com.fongmi.android.tv.bean.Style;
 import com.fongmi.android.tv.bean.ViewAllItem;
 import com.fongmi.android.tv.databinding.AdapterViewAllBinding;
 import com.fongmi.android.tv.ui.custom.PosterFocusAnimator;
+import com.fongmi.android.tv.ui.custom.PosterFrameBreath;
 
 /**
  * 把 {@link com.fongmi.android.tv.ui.custom.PosterStackView} 挂进 Leanback 页面。
@@ -50,12 +51,15 @@ public class PosterStackPresenter extends Presenter {
 
     private final OnClickListener listener;
     private final int[] size;
+    /** 画框高宽比（h/w），由当前海报规格推得，保证堆叠按钮与同行海报严格同比例。 */
+    private final float cardRatio;
     /** 周边海报卡画框下方的片名 + 元数据区总高（与 adapter_vod_rect 等高）。 */
     private final int textBlock;
 
     public PosterStackPresenter(OnClickListener listener, Style style, Context context) {
         this.listener = listener;
         this.size = Product.getSpec(style);
+        this.cardRatio = size[0] > 0 ? size[1] / (float) size[0] : 1.5f;
         this.textBlock = context.getResources().getDimensionPixelOffset(R.dimen.stack_poster_text_block);
     }
 
@@ -64,6 +68,8 @@ public class PosterStackPresenter extends Presenter {
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent) {
         AdapterViewAllBinding binding = AdapterViewAllBinding.inflate(
                 LayoutInflater.from(parent.getContext()), parent, false);
+        // 比例先同步：内部三层海报与白色描边的几何都按它算，写死会让白框与海报脱开。
+        binding.getRoot().setCardRatio(cardRatio);
         ViewGroup.LayoutParams lp = binding.getRoot().getLayoutParams();
         lp.width = size[0];
         // 与周边整卡等高（画框 + 片名区），保证行高与垂直对齐完全一致；
@@ -72,8 +78,10 @@ public class PosterStackPresenter extends Presenter {
         binding.getRoot().setLayoutParams(lp);
         // 焦点反馈完全复用海报卡：整卡 1.04 缩放 + selector_vod 白描边 + 120ms。
         // 矩形卡 elevate=false（与 VodRectHolder 一致），不抬升只缩放。
-        PosterFocusAnimator.bind(binding.getRoot(), false);
-        return new Holder(binding);
+        // 白框挂在 layers 上，呼吸动画也作用在那一层（不是控件根）。
+        PosterFrameBreath breath = new PosterFrameBreath(binding.getRoot().getGlowFrame());
+        PosterFocusAnimator.bind(binding.getRoot(), false, (card, focused) -> breath.setFocused(focused));
+        return new Holder(binding, breath);
     }
 
     @Override
@@ -84,6 +92,8 @@ public class PosterStackPresenter extends Presenter {
         holder.binding.getRoot().setOnClickListener(v -> {
             if (listener != null) listener.onClick(entry);
         });
+        // 复用时可能已持有焦点，补一次呼吸倒计时。
+        if (holder.binding.getRoot().hasFocus()) holder.breath.setFocused(true);
     }
 
     @Override
@@ -91,16 +101,20 @@ public class PosterStackPresenter extends Presenter {
         Holder holder = (Holder) viewHolder;
         holder.binding.getRoot().clearPosters();
         holder.binding.getRoot().setOnClickListener(null);
+        // 先停呼吸再 reset：reset 的 jumpToCurrentState 会把描边 alpha 落回呼吸最后的值。
+        holder.breath.release();
         PosterFocusAnimator.reset(holder.binding.getRoot());
     }
 
     private static final class Holder extends ViewHolder {
 
         private final AdapterViewAllBinding binding;
+        private final PosterFrameBreath breath;
 
-        private Holder(AdapterViewAllBinding binding) {
+        private Holder(AdapterViewAllBinding binding, PosterFrameBreath breath) {
             super(binding.getRoot());
             this.binding = binding;
+            this.breath = breath;
         }
     }
 }

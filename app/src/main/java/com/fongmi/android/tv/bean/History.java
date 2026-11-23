@@ -20,8 +20,11 @@ import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -64,6 +67,17 @@ public class History implements Diffable<History> {
     private int scale;
     @SerializedName("cid")
     private int cid;
+    /**
+     * 保存这条记录时的点播配置地址。
+     *
+     * <p>记录不再按配置隔离，多条点播地址的观看记录共用一份历史；点开记录时用这个字段
+     * 判断它属于哪个站点 —— 与当前配置地址一致就直接进播放页，不一致就走搜索结果页
+     * 重新找片（旧站点可能已经没有这个 id）。</p>
+     *
+     * <p>老数据没有这个字段（null），点击时退回「站源 key 在当前配置里是否存在」判断。</p>
+     */
+    @SerializedName("siteUrl")
+    private String siteUrl;
 
     private transient long saveTime;
 
@@ -87,7 +101,15 @@ public class History implements Diffable<History> {
     }
 
     public static List<History> get() {
-        return get(VodConfig.getCid());
+        /*
+         * 跨站点共用：不再按 cid 过滤，取所有点播地址下的记录。
+         * 同名影片只保留最新一条（查询已按 createTime 倒序），避免同一部片在多个站点
+         * 看过之后首页出现一串重复卡片。要判断某条记录属于哪个站点看 siteUrl。
+         */
+        List<History> items = AppDatabase.get().getHistoryDao().findSince(System.currentTimeMillis() - Constant.HISTORY_TIME);
+        Map<String, History> unique = new LinkedHashMap<>();
+        for (History item : items) if (!unique.containsKey(item.getVodName())) unique.put(item.getVodName(), item);
+        return new ArrayList<>(unique.values());
     }
 
     public static List<History> get(int cid) {
@@ -112,6 +134,11 @@ public class History implements Diffable<History> {
 
     public static void clear(int cid) {
         Task.executeSerial(() -> delete(cid));
+    }
+
+    /** 清空全部点播地址下的观看记录（首页最近观看已跨站点共用，清空要对得上看到的内容）。 */
+    public static void clearAll() {
+        Task.executeSerial(() -> AppDatabase.get().getHistoryDao().delete());
     }
 
     public static void sync(List<History> targets) {
@@ -265,6 +292,28 @@ public class History implements Diffable<History> {
         this.cid = cid;
     }
 
+    public String getSiteUrl() {
+        return siteUrl == null ? "" : siteUrl;
+    }
+
+    public void setSiteUrl(String siteUrl) {
+        this.siteUrl = siteUrl;
+    }
+
+    /**
+     * 本站播放成功后，删掉<b>其它点播地址</b>下同名的旧记录。
+     *
+     * <p>没有它，同一个片名每换一个站点点开一次就会多一条记录；跨站点共用后要求
+     * 「替换原有记录而不是新增」。同一配置内的去重仍由 {@link #merge()} 按播放进度
+     * 判断，这里只清理换了配置的那批。</p>
+     */
+    public History replaceOthers() {
+        // 片名为空时无法判定「同名」，宁可不清也不能误删整张表。
+        if (TextUtils.isEmpty(getVodName())) return this;
+        AppDatabase.get().getHistoryDao().deleteOthers(getVodName(), getKey(), getSiteUrl());
+        return this;
+    }
+
     public History cid(int cid) {
         setKey(getSiteKey().concat(AppDatabase.SYMBOL).concat(getVodId()).concat(AppDatabase.SYMBOL) + cid);
         setCid(cid);
@@ -340,6 +389,7 @@ public class History implements Diffable<History> {
         item.speed = speed;
         item.scale = scale;
         item.cid = cid;
+        item.siteUrl = siteUrl;
         return item;
     }
 

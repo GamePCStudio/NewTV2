@@ -82,25 +82,32 @@ public class ImgUtil {
     }
 
     public static void load(String text, String url, ImageView view, boolean vod) {
+        load(text, url, view, vod, null);
+    }
+
+    /** 图片就绪（含失败占位图）后回调，供聚焦卡片补提色；不影响原有加载链路。 */
+    public static void load(String text, String url, ImageView view, boolean vod, Runnable onReady) {
         view.setScaleType(vod ? CENTER_CROP : FIT_CENTER);
         if (!vod && TextUtils.isEmpty(url)) {
             Glide.with(view).clear(view);
             view.setImageDrawable(null);
             view.setVisibility(View.GONE);
+            if (onReady != null) view.post(onReady);
             return;
         }
         if (!vod) view.setVisibility(View.VISIBLE);
         if (TextUtils.isEmpty(url) || failed.contains(url)) {
             Glide.with(view).clear(view);
             view.setImageDrawable(getTextDrawable(text, vod));
+            if (onReady != null) view.post(onReady);
             return;
         }
-        loadImage(text, url, view, vod);
+        loadImage(text, url, view, vod, onReady);
     }
 
-    private static void loadImage(String text, String url, ImageView view, boolean vod) {
+    private static void loadImage(String text, String url, ImageView view, boolean vod, Runnable onReady) {
         try {
-            RequestBuilder<Drawable> builder = Glide.with(view).load(getUrl(url)).listener(getListener(text, url, view, vod));
+            RequestBuilder<Drawable> builder = Glide.with(view).load(getUrl(url)).listener(getListener(text, url, view, vod, onReady));
             if (vod) builder.centerCrop().into(view);
             else builder.fitCenter().into(view);
         } catch (Throwable e) {
@@ -179,17 +186,20 @@ public class ImgUtil {
         return builder.buildRoundRect(text, ColorGenerator.get400(text), ResUtil.dp2px(4));
     }
 
-    private static RequestListener<Drawable> getListener(String text, String url, ImageView view, boolean vod) {
+    private static RequestListener<Drawable> getListener(String text, String url, ImageView view, boolean vod, Runnable onReady) {
         return new RequestListener<>() {
             @Override
             public boolean onLoadFailed(@Nullable GlideException e, Object model, @NonNull Target<Drawable> target, boolean isFirstResource) {
                 view.setImageDrawable(getTextDrawable(text, vod));
                 failed.add(url);
+                if (onReady != null) view.post(onReady);
                 return true;
             }
 
             @Override
             public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                // Glide 会在本回调之后才把 drawable 塞进 ImageView，故 post 到下一帧再补提色。
+                if (onReady != null) view.post(onReady);
                 return false;
             }
         };

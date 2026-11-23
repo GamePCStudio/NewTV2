@@ -19,7 +19,9 @@ import com.fongmi.android.tv.databinding.ActivityHomeMoreBinding;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
+import com.fongmi.android.tv.ui.custom.PageGlowController;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
+import com.fongmi.android.tv.utils.ArtSource;
 import com.fongmi.android.tv.utils.HomeBoard;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.common.collect.Lists;
@@ -65,6 +67,8 @@ public class HomeMoreActivity extends BaseActivity implements VodPresenter.OnCli
     private Style mStyle;
     private String mSiteKey;
     private boolean mSiteIndex;
+    /** 整页背景漫反射 + 焦点卡提亮（查看更多页）。 */
+    private PageGlowController mPageGlow;
 
     /** 首页分类模块的「更多」入口。 */
     public static void startBoard(Activity activity, String title, int board) {
@@ -96,6 +100,9 @@ public class HomeMoreActivity extends BaseActivity implements VodPresenter.OnCli
     protected void initView(Bundle savedInstanceState) {
         mStyle = getIntent().getParcelableExtra(EXTRA_STYLE);
         if (mStyle == null) mStyle = Style.rect();
+        // 光层先挂：铺在布局最底层，网格才有背景可透。
+        mPageGlow = new PageGlowController(this, mBinding.pageGlow);
+        mPageGlow.attach();
         mSiteKey = getIntent().getStringExtra(EXTRA_SITE_KEY);
         mSiteIndex = getIntent().getBooleanExtra(EXTRA_SITE_INDEX, true);
         mBinding.title.setText(getIntent().getStringExtra(EXTRA_TITLE));
@@ -126,7 +133,10 @@ public class HomeMoreActivity extends BaseActivity implements VodPresenter.OnCli
                 Vod vod = new Vod();
                 vod.setName(item.getTitle());
                 vod.setArtPic(item.getPoster());
-                vod.setArtScore(item.getScore());
+                // 评分不单独占字段：拼进备注，卡片按次标题统一渲染（与评分角标出现前一致）。
+                // 无评分 / 评分为 0 时统一显示「暂无评分」，与首页四个分类模块一致。
+                String remark = ArtSource.scoreRemark("", item.getScore());
+                vod.setRemarks(remark.isEmpty() ? getString(R.string.douban_hot_no_rating) : remark);
                 vods.add(vod);
             }
             setItems(vods);
@@ -170,5 +180,11 @@ public class HomeMoreActivity extends BaseActivity implements VodPresenter.OnCli
         if (item == null || TextUtils.isEmpty(item.getName())) return false;
         CollectActivity.start(this, item.getName());
         return true;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mPageGlow != null) mPageGlow.detach();
+        super.onDestroy();
     }
 }

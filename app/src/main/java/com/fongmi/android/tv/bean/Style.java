@@ -30,8 +30,15 @@ public class Style implements Parcelable {
         this.ratio = in.readFloat();
     }
 
+    /**
+     * 竖版海报默认比例 2:3（宽:高）。此前是 0.75（3:4），卡片偏方；
+     * 改成 2:3 后宽度不变、高度增加 12.5%，与主流海报素材一致。
+     * 站点显式指定的 ratio（横版 1.33 / 圆形 1.0）不受影响。
+     */
+    public static final float POSTER_RATIO = 2f / 3f;
+
     public static Style rect() {
-        return new Style("rect", 0.75f);
+        return new Style("rect", POSTER_RATIO);
     }
 
     public static Style list() {
@@ -49,7 +56,7 @@ public class Style implements Parcelable {
     }
 
     public float getRatio() {
-        return ratio <= 0 ? (isOval() ? 1.0f : 0.75f) : Math.min(4, ratio);
+        return ratio <= 0 ? (isOval() ? 1.0f : POSTER_RATIO) : Math.min(4, ratio);
     }
 
     public boolean isRect() {

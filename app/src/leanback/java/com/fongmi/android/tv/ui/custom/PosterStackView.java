@@ -155,6 +155,16 @@ public class PosterStackView extends FrameLayout {
         return (RoundedPosterView) frontWrap.getChildAt(0);
     }
 
+    /**
+     * 画框区域（三层海报 + 白描边所在容器），尺寸与同行海报卡的 {@code R.id.poster} 完全一致。
+     *
+     * <p>「查看全部」堆叠按钮内部没有 {@code R.id.poster}，首页整页背景光的圆心校正
+     * 需要用这个画框来取几何，否则光晕会沿父链升到行容器、误命中该行第一张海报。</p>
+     */
+    public View getGlowFrame() {
+        return layers;
+    }
+
     private void readAttrs(@NonNull Context context, @Nullable AttributeSet attrs) {
         Resources res = context.getResources();
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.PosterStackView);
@@ -191,6 +201,17 @@ public class PosterStackView extends FrameLayout {
         TypedValue value = new TypedValue();
         res.getValue(id, value, true);
         return value.type == TypedValue.TYPE_FLOAT ? value.getFloat() : fallback;
+    }
+
+    /**
+     * 画框高宽比（h / w）。海报比例跟随「图片尺寸」所在页面的样式走，
+     * 不能写死：海报从 3:4 改成 2:3 后，若这里仍是 1.3294，三层海报会缩在画框里、
+     * 下方留出一截空白，白框就不再贴合海报了。
+     */
+    public void setCardRatio(float ratio) {
+        if (ratio <= 0f || Math.abs(ratio - cardRatio) < 0.001f) return;
+        cardRatio = ratio;
+        requestLayout();
     }
 
     /**

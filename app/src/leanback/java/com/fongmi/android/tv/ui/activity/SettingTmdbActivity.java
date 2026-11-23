@@ -16,6 +16,8 @@ import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.dialog.TmdbSiteDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+import java.util.function.Consumer;
+
 /**
  * 设置 → 影片刮削设置：全局连接方式与自定义反代地址。
  *
@@ -48,6 +50,32 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     protected void initEvent() {
         mBinding.tmdbMode.setOnClickListener(view -> showModeDialog());
         mBinding.tmdbSite.setOnClickListener(view -> TmdbSiteDialog.show(this));
+        // 图片分辨率：选中即生效；海报 / 横版剧照决定之后新刮削下载的档位。
+        mBinding.tmdbPoster.setOnClickListener(view -> showImageSizeDialog(
+                R.string.tmdb_image_poster, TmdbSetting.POSTER_SIZES, TmdbSetting.getPosterSize(), true, TmdbSetting::putPosterSize));
+        mBinding.tmdbBackdrop.setOnClickListener(view -> showImageSizeDialog(
+                R.string.tmdb_image_backdrop, TmdbSetting.BACKDROP_SIZES, TmdbSetting.getBackdropSize(), true, TmdbSetting::putBackdropSize));
+        mBinding.tmdbStill.setOnClickListener(view -> showImageSizeDialog(
+                R.string.tmdb_image_still, TmdbSetting.STILL_SIZES, TmdbSetting.getStillSize(), false, TmdbSetting::putStillSize));
+        mBinding.tmdbProfile.setOnClickListener(view -> showImageSizeDialog(
+                R.string.tmdb_image_profile, TmdbSetting.PROFILE_SIZES, TmdbSetting.getProfileSize(), false, TmdbSetting::putProfileSize));
+    }
+
+    /**
+     * 图片分辨率选择：单击选项即生效并关闭弹窗（与连接方式的选择方式一致）。
+     *
+     * <p>{@code highest} 只影响「当前值非法 / 首次安装」时弹窗里预选哪一档，
+     * 与实际写入无关 —— 写入的永远是用户点中的那一项。</p>
+     */
+    private void showImageSizeDialog(int titleRes, String[] sizes, String current, boolean highest, Consumer<String> save) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(titleRes)
+                .setSingleChoiceItems(sizes, TmdbSetting.indexOf(sizes, current, highest), (dialog, which) -> {
+                    dialog.dismiss();
+                    save.accept(sizes[which]);
+                    updateText();
+                })
+                .show();
     }
 
     @Override
@@ -107,6 +135,11 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     private void updateText() {
         int mode = TmdbSetting.getMode();
         mBinding.tmdbModeText.setText(getString(TmdbSetting.getModeLabelRes()));
+        // 图片分辨率：摘要直接显示档位名（w342 / w780 …）。
+        mBinding.tmdbPosterText.setText(TmdbSetting.getPosterSize());
+        mBinding.tmdbBackdropText.setText(TmdbSetting.getBackdropSize());
+        mBinding.tmdbStillText.setText(TmdbSetting.getStillSize());
+        mBinding.tmdbProfileText.setText(TmdbSetting.getProfileSize());
         boolean custom = mode == TmdbSetting.MODE_CUSTOM;
         // 非自定义方式下整行收起：内置地址不落到界面上。
         // 先归位焦点再隐藏，避免正在这一行时 setVisibility(GONE) 把焦点丢掉。

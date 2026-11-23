@@ -90,6 +90,14 @@ public class Setting {
         Prefers.put("incognito", incognito);
     }
 
+    public static boolean isDiagAccepted() {
+        return Prefers.getInt("diag_accepted", 0) == 1;
+    }
+
+    public static void putDiagAccepted(boolean accepted) {
+        Prefers.put("diag_accepted", accepted ? 1 : 0);
+    }
+
     public static boolean getUpdate() {
         return Prefers.getBoolean("update", true);
     }

@@ -251,8 +251,19 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     }
 
     public static void collect(Activity activity, String key, Vod item) {
+        collect(activity, key, item, null);
+    }
+
+    /**
+     * 从搜索结果页进入播放页，并带上跨站点的待续播记录。
+     *
+     * <p>{@code history} 非空时把它的集数名作为 {@code mark} 传给播放页：详情加载完成后
+     * 先按名称在新站点里找同一集，找不到再按集数序号，超出总集数就落回第 1 集。</p>
+     */
+    public static void collect(Activity activity, String key, Vod item, History history) {
         Intent intent = createIntent(activity, key, item);
         intent.putExtra("collect", true);
+        intent.putExtra("mark", item.getPlayId().isEmpty() && history != null ? history.getVodRemarks() : null);
         activity.startActivity(intent);
     }
 

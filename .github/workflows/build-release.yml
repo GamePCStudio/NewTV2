@@ -6,9 +6,12 @@ name: Build & Release (leanback)
 #   <YYYYMMDD> / <HHMMSS> 均为北京时间（UTC+8），非 UTC。
 # versionCode 用「Unix 秒 - 1700000000」保证单调递增且不超 int 上限。
 # 应用内更新检查（Github.REPO = ctowl2018/NewTV2）按 语义版本 + 时间戳 判定更新。
+# stats/** 是每日统计快照的自动提交，不参与构建，否则每天都会产出一个 Release。
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'stats/**'
   workflow_dispatch:
 
 permissions:

@@ -3,6 +3,9 @@ import com.fongmi.gradle.AbiApkPackaging
 
 plugins {
     alias libs.plugins.android.application
+    // AGP 9 内置 Kotlin 编译，不能再显式应用 kotlin-android（扩展冲突）；
+    // 只保留 Compose Compiler 插件，版本与 Kotlin stdlib 对齐。
+    alias libs.plugins.kotlin.compose
 }
 
 def localProps = new Properties()
@@ -53,6 +56,8 @@ android {
     buildFeatures {
         buildConfig = true
         viewBinding = true
+        // 仅 leanback 用 Compose 做主视觉漫反射试点；mobile 源集没有 @Composable，不受影响。
+        compose = true
     }
 
     signingConfigs {
@@ -146,6 +151,12 @@ dependencies {
     implementation libs.textdrawable
     leanbackImplementation libs.leanback
     leanbackImplementation libs.androidautosize
+    // Compose 绘制叶子：只做主视觉的径向漫反射，不参与焦点与导航；BOM 统一版本。
+    leanbackImplementation platform(libs.compose.bom)
+    leanbackImplementation libs.compose.animation
+    leanbackImplementation libs.compose.ui
+    leanbackImplementation libs.compose.foundation
+    leanbackImplementation libs.compose.runtime
     mobileImplementation libs.biometric
     mobileImplementation libs.zxing.android.embedded
     annotationProcessor libs.room.compiler

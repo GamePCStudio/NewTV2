@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  弹窗按钮的选中框，与顶栏导航（selector_nav_button）同款胶囊：
+  聚焦 → 纯白底 + 黑字；默认 → 全透明 + 白字。
+  几何按 48dp 按钮高度取圆角 24dp（半高，两端正半圆）。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+</selector>

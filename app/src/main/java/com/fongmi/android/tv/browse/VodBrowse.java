@@ -53,7 +53,9 @@ class VodBrowse {
 
     @NonNull
     static ImmutableList<MediaItem> getHistory() {
-        return History.get().stream().map(history -> detailItem(history.getKey(), history.getVodName(), history.getVodRemarks(), history.getVodPic())).collect(ImmutableList.toImmutableList());
+        // 车载浏览按 siteKey + vodId 解析，只能用在当前配置里；跨站点的记录在这里无法解析，
+        // 因此这里仍然只取当前配置的记录（首页「最近观看」才做跨站点共用）。
+        return History.get(VodConfig.getCid()).stream().map(history -> detailItem(history.getKey(), history.getVodName(), history.getVodRemarks(), history.getVodPic())).collect(ImmutableList.toImmutableList());
     }
 
     @NonNull

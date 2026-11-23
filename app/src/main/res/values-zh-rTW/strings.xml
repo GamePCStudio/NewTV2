@@ -251,6 +251,10 @@
     <string name="setting_module">模組管理</string>
     <string name="setting_danmaku">彈幕設定</string>
     <string name="setting_incognito">無痕模式</string>
+    <string name="diag_disclaimer_title">免責聲明</string>
+    <string name="diag_disclaimer_agree">同意</string>
+    <string name="diag_disclaimer_decline">不同意，退出</string>
+    <string name="diag_disclaimer_body">一、不含任何影視資源：本專案（下稱「本應用」）是一款開源播放器用戶端。本應用本身不包含、不整合、不提供、不儲存、不分發任何影視資源（包括但不限於電影、電視劇、綜藝、動漫等影片檔案、音訊、字幕，以及其直連、種子或下載位址）。\n\n二、內容來自使用者自行設定的第三方介面：本應用中呈現的一切可播放內容，均來自使用者自行新增的第三方站點介面（爬蟲規則）所傳回的資料，其合法性、準確性、完整性均與本應用無關。使用者應自行確保其設定與使用行為符合所在地區法律法規，由此產生的一切法律責任由使用者自行承擔。\n\n三、展示素材僅作資訊介紹：應用介面中展示的海報、劇照、片名 Logo 等圖片素材，來自公開的影視資料介面（如 TMDB），僅用於內容識別與資訊介紹，不涉及任何影視資源的儲存、分發或播放；相關素材的著作權歸其原始權利人所有。\n\n四、僅供學習交流：本專案僅供個人學習、研究與技術交流使用，嚴禁用於任何商業用途。\n\n五、侵權請聯絡刪除：若本專案（包括文件、截圖及介面中展示的素材）侵害了您的合法權益，請透過 GitHub Issues 聯絡我們並提供權屬證明，經核實後我們將立即刪除相關內容。\n\n六、責任限制：本專案按「現狀」提供，不對內容的合法性、準確性、完整性作任何明示或默示的保證。下載、安裝或使用本專案即視為已閱讀、理解並同意本聲明全部條款。\n\n七、匿名診斷資訊：診斷資料幫助改進 NewTV，使其擁有更好的穩定性並按預期運作。您正在傳送必需的診斷資料，作為使用 NewTV2 的一部分；您的裝置會向 NewTV 傳送一組有限的資料，這些資料包括：隨機產生的安裝標識，由裝置資訊（系統 Android ID、系統版本指紋、裝置型號）經不可逆雜湊得到的摘要，以及應用版本、系統版本、錯誤日誌、螢幕解析度與處理器架構。該摘要無法還原為原始裝置資訊，記錄中亦不包含 IMEI、MAC 位址、序號、廣告標識、位置資訊或已安裝應用清單。</string>
     <string name="setting_theme_color">主題色彩</string>
     <string name="setting_auto">自動</string>
     <string name="setting_custom">自訂</string>
@@ -607,11 +611,15 @@
     <string name="tmdb_disabled_hint">請先在「設定 → 影片刮削設定」中啟用 TMDB 刮削</string>
     <string name="tmdb_no_keyword">沒有可用的片名，無法刮削</string>
     <string name="setting_group_tmdb">TMDB</string>
-    <string name="tmdb_connection_hint">選擇 TMDB 資料的存取方式，該位址將用於應用程式內所有 TMDB 圖片與資料請求</string>
+    <string name="tmdb_connection_hint">選擇TMDB資料刮削方式，當選擇自訂站點並填寫了API密鑰，可獲得「最近觀看」封面劇照刮削等更多擴展功能</string>
     <string name="tmdb_mode">TMDB連線方式</string>
     <string name="tmdb_mode_proxy">預設反代</string>
     <string name="tmdb_mode_official">TMDB官方直連</string>
     <string name="tmdb_mode_custom">自訂反代</string>
+    <string name="tmdb_image_poster">海報解析度</string>
+    <string name="tmdb_image_backdrop">橫版劇照解析度</string>
+    <string name="tmdb_image_still">單集劇照解析度</string>
+    <string name="tmdb_image_profile">人物頭像解析度</string>
     <string name="tmdb_site_custom">自訂TMDB反代位址</string>
     <string name="tmdb_site_unset">未設定</string>
     <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>

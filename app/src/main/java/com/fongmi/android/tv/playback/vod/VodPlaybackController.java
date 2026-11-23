@@ -769,8 +769,23 @@ public class VodPlaybackController {
     private Episode findHistoryEpisode(Flag flag, History history) {
         if (history == null) return null;
         boolean strict = host.getVodMark().isEmpty();
-        if (strict && flag.getFlag().equals(history.getVodFlag()) && SourceUrl.isResolved(history.getEpisodeUrl())) return flag.getEpisodes().stream().filter(episode -> episode.getUrl().equals(history.getEpisodeUrl())).findFirst().orElse(null);
-        return flag.find(history.getVodRemarks(), strict);
+        if (strict && flag.getFlag().equals(history.getVodFlag()) && SourceUrl.isResolved(history.getEpisodeUrl())) {
+            Episode matched = flag.getEpisodes().stream().filter(episode -> episode.getUrl().equals(history.getEpisodeUrl())).findFirst().orElse(null);
+            if (matched != null) return matched;
+        }
+        // 同站点续播保持原逻辑：名称匹配 → 当前选中位置 → 严格模式下不兜底。
+        if (strict) return flag.find(history.getVodRemarks(), true);
+        /*
+         * 跨站点续播（mark 非空，来自搜索结果页带过来的旧记录）：
+         * ① 先按集数名匹配 —— Episode.getScore 里本身就有一档「集数序号相同」（第12集 ↔ 12），
+         *    所以这一步已经覆盖了「先名称后序号」；
+         * ② 名字与序号都对不上（记录集数大于新片总集数）→ 回退播放第 1 集，
+         *    倒序播放时列表本身是反的，第 1 集在末尾。
+         */
+        Episode episode = history.getVodRemarks().isEmpty() ? null : flag.findByName(history.getVodRemarks());
+        if (episode != null) return episode;
+        List<Episode> episodes = flag.getEpisodes();
+        return episodes.isEmpty() ? null : episodes.get(history.isRevSort() ? episodes.size() - 1 : 0);
     }
 
     private void mergeFlag(Flag activated, Flag item) {

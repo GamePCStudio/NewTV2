@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.presenter;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
@@ -42,6 +43,7 @@ import com.fongmi.android.tv.bean.TmdbArt;
 import com.fongmi.android.tv.databinding.AdapterDoubanHotBinding;
 import com.fongmi.android.tv.ui.custom.BackdropStyle;
 import com.fongmi.android.tv.utils.ColdTrace;
+import com.fongmi.android.tv.utils.HeroGlowColor;
 import com.fongmi.android.tv.utils.RankLatest;
 import com.fongmi.android.tv.utils.ResUtil;
 
@@ -556,6 +558,8 @@ public class DoubanHotPresenter extends Presenter {
             binding.overview.setVisibility(View.GONE);
             binding.action.setVisibility(View.GONE);
             binding.indicator.setVisibility(View.GONE);
+            // 内容清空时一并淡出主色漫反射，避免空状态残留上一部的光。
+            binding.backdrop.setGlowColor(Color.TRANSPARENT);
         }
 
         private void show(int position, boolean animate) {
@@ -641,6 +645,12 @@ public class DoubanHotPresenter extends Presenter {
                             // drawable 已就位，先按新图尺寸重算矩阵再淡入，避免第一帧错位
                             binding.backdrop.applyMatrices();
                             reveal(target, old, animate);
+                            // 主色漫反射：提色异步，回调里再判 generation，旧图颜色晚到也不会盖住新片；
+                            // 提色失败回透明，Compose 叶子淡出到不画。
+                            HeroGlowColor.load(item.getBackdrop(), resource, color -> {
+                                if (gen != generation) return;
+                                binding.backdrop.setGlowColor(color);
+                            });
                             return false;
                         }
                     })

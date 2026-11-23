@@ -51,7 +51,7 @@ public class Product {
         return getSpec(space, column, style);
     }
 
-    /** 收藏页 / 最近观看用的竖版海报规格（ratio 0.75），与网格卡同源。 */
+    /** 收藏页 / 最近观看用的竖版海报规格（2:3），与网格卡同源。 */
     public static int[] getRectSpec() {
         return getSpec(Style.rect());
     }

@@ -55,6 +55,7 @@ import com.fongmi.android.tv.databinding.ViewSiteSheetBinding;
 import com.fongmi.android.tv.db.BackupManager;
 import com.fongmi.android.tv.event.CastEvent;
 import com.fongmi.android.tv.event.ConfigEvent;
+import com.fongmi.android.tv.event.FocusGlowEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.event.ServerEvent;
 import com.fongmi.android.tv.impl.Callback;
@@ -63,6 +64,8 @@ import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.player.extractor.Source;
 import com.fongmi.android.tv.playback.ExternalPlayback;
 import com.fongmi.android.tv.server.Server;
+import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.service.DLNARendererService;
 import com.fongmi.android.tv.service.PlaybackService;
@@ -73,8 +76,12 @@ import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.HeroInset;
+import com.fongmi.android.tv.ui.custom.HomeHeroBackdropView;
 import com.fongmi.android.tv.ui.custom.HeroTransition;
+import com.fongmi.android.tv.ui.custom.PageGlowComposeView;
+import com.fongmi.android.tv.ui.custom.PosterStackView;
 import com.fongmi.android.tv.ui.custom.StackRowSelector;
+import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.ui.presenter.PosterStackPresenter;
 import com.fongmi.android.tv.ui.presenter.DoubanHotPresenter;
 import com.fongmi.android.tv.ui.presenter.HeaderPresenter;
@@ -83,6 +90,7 @@ import com.fongmi.android.tv.ui.presenter.ProgressPresenter;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.ColdTrace;
+import com.fongmi.android.tv.utils.Disclaimer;
 import com.fongmi.android.tv.utils.ArtBlacklist;
 import com.fongmi.android.tv.utils.DoubanHot;
 import com.fongmi.android.tv.utils.HomeBoard;
@@ -110,9 +118,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private static final long SHEET_ANIM = 220L;
     /** 顶部导航栏（工具栏 + 渐变遮罩）显示 / 隐藏的过渡时长。 */
     private static final long TOOLBAR_ANIM = 220L;
-    /** 下拉列表最多显示 8 行站点名，每项 30dp。 */
+    /** 站源下拉可完整显示的<b>站源行数</b>（不含「点播地址切换」「站点编辑」两个固定入口）。 */
     private static final int SITE_ROWS = 8;
+    /** 列表项行高，对应 adapter_site_menu.xml 与 adapter_site_menu_switch.xml 的 30dp。 */
     private static final int SITE_ROW_DP = 30;
+    /** 只有「站点编辑」那一行显示的分割线：1dp 线 + 上下各 2dp 外边距。 */
+    private static final int SITE_DIVIDER_DP = 1;
+    private static final int SITE_DIVIDER_MARGIN_DP = 2;
     /** 站源名字符预算：emoji 按 1 个字符计，截断「...」整体按 1 个字符计。 */
     private static final int SITE_NAME_LIMIT = 6;
     /** 「首页」按钮连按两次退出的时间窗口（毫秒），窗口内再按一次才真正退出。 */
@@ -124,6 +136,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     private ActivityHomeBinding mBinding;
+    /** 整页背景漫反射绘制叶子：焦点卡主色经事件总线上报后驱动全屏柔光。 */
+    private PageGlowComposeView mPageGlow;
     /**
      * 顶栏与站源面板已抽成可复用布局（view_home_toolbar / view_site_sheet），
      * 分类页 VodActivity 也 include 同一份 XML；这里通过 include 的 binding 访问子控件，
@@ -185,6 +199,16 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     /** 列表样式下的「查看全部」入口：列表卡没有海报位，用一个哑条目代替类海报按钮。 */
     private Vod mRecommendMore;
     /**
+     * 当前生效的海报尺寸档位（{@link PlayerSetting#getSize()}）。
+     *
+     * <p>卡片尺寸由 {@link Product#getSpec} 在 presenter 构造时算好、写进 holder 的
+     * LayoutParams，已挂出的行不会自己重新测量。从设置页改档位返回时必须据此识别并重建，
+     * 否则只有重启应用才生效。</p>
+     */
+    private int mPosterSize = -1;
+    /** 免责声明同意后才会置位：未置位时首页不显示、不加载任何数据。 */
+    private boolean mHomeStarted;
+    /**
      * 分类数据的启动延迟：主视觉的榜单请求在 initView 里就已经发出，
      * 四个分类晚 800ms 再拉，避免首屏关键请求被这四份 JSON 抢带宽。
      */
@@ -212,17 +236,130 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private final ViewTreeObserver.OnGlobalFocusChangeListener toolbarFocusWatcher =
             (oldFocus, newFocus) -> {
                 // 焦点一旦进过列表就认为用户开始浏览：之后再插入主视觉不再回拽视口。
-                if (isDescendant(newFocus, mBinding.recycler)) mContentVisited = true;
+                boolean inContent = isDescendant(newFocus, mBinding.recycler);
+                if (inContent) mContentVisited = true;
+                /*
+                 * 只在焦点「明确落到内容区之外」时熄灭。newFocus == null 是行末滚动重组的
+                 * 中间态（焦点短暂被回收），此时若发 clear，随后到达的异步提色回调又会被
+                 * onFocusGlowEvent 的守卫挡下，光就永久熄灭 —— 表现为只有最右那张卡不亮。
+                 */
+                if (newFocus != null && !inContent && mPageGlow != null) FocusGlowEvent.clear();
+                /*
+                 * 焦点切到任意内容卡（含不发主色事件的「查看全部」堆叠按钮）都按当前焦点
+                 * 校正一次几何：提色是异步的，单靠 Holder 上报会把光圈滞留在上一张卡。
+                 * 「查看全部」本身不提色，若只靠滚动回调，快速横移到行末时光圈不会归位。
+                 */
+                if (inContent) scheduleGlowCenter();
                 updateToolbar(newFocus);
             };
 
+    /** 延后一帧按当前焦点重新取几何，去重后每帧至多一次。 */
+    private void scheduleGlowCenter() {
+        if (mBinding == null) return;
+        mBinding.recycler.removeCallbacks(glowCenterTask);
+        mBinding.recycler.post(glowCenterTask);
+    }
+
     /** 滚动也参与显隐判定：程序化滚回顶部时，用当前焦点重新收敛一次顶栏状态。 */
+    /** 滚动时延后一帧再校正局部提亮圆心；见 [toolbarScrollWatcher] 里的说明。 */
+    private final Runnable glowCenterTask = this::updatePageGlowCenter;
+
     private final RecyclerView.OnScrollListener toolbarScrollWatcher = new RecyclerView.OnScrollListener() {
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
             updateToolbar(getCurrentFocus());
+            // 主视觉 scrim 下沿随滚动移动，整页光的渐入起点要同步，否则断层会"错位"。
+            updatePageGlowEdge();
+            /*
+             * 局部提亮的圆心延后一帧再取：滚动途中焦点往往还没切到新卡，
+             * 立刻取会拿到旧卡位置，表现为光晕先跟着旧卡"漂"一段再跳回来。
+             * 下一帧时焦点已稳定，取到的才是真正的焦点卡。
+             */
+            recyclerView.removeCallbacks(glowCenterTask);
+            recyclerView.post(glowCenterTask);
+        }
+
+        @Override
+        public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            // 滚动彻底停下时再补一次：最后一帧的 post 可能早于焦点归位，
+            // 少了这一下，光晕就会停在半路（实测下移一整行后 cy 卡在 0.86 不再更新）。
+            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                recyclerView.removeCallbacks(glowCenterTask);
+                recyclerView.post(glowCenterTask);
+            }
         }
     };
+
+    /**
+     * 滚动时按焦点卡当前真实位置校正局部提亮的圆心与范围。
+     *
+     * <p>主色只在提色成功那一刻上报一次，滚动过程中不会重发；若不在这里同步几何，
+     * 上下切换行时背景光就会"漂"到上/下一层——这正是用户看到的现象。</p>
+     */
+    private void updatePageGlowCenter() {
+        if (mPageGlow == null || mBinding == null) return;
+        View focus = getCurrentFocus();
+        if (focus == null || focus == mBinding.recycler || !isDescendant(focus, mBinding.recycler)) return;
+        /*
+         * 先收敛到「卡片 itemView」：父级是行内 HorizontalGridView（RecyclerView）的那一层。
+         * 绝不能继续向上到行容器再 findViewById(R.id.poster) —— 首页的一级子是「行」，
+         * 在行容器里搜 poster 会命中该行第一张卡。焦点落在行末「查看全部」堆叠按钮时
+         * （它内部没有 R.id.poster），旧逻辑就是这样一路升到行容器、把光晕钉死在行首的。
+         */
+        View card = focus;
+        ViewParent parent = null;
+        while (card != null && card != mBinding.recycler) {
+            parent = card.getParent();
+            if (parent instanceof RecyclerView) break;
+            card = parent instanceof View ? (View) parent : null;
+        }
+        // 父级是外层 recycler 说明升到了行容器（主视觉行没有行内 RecyclerView），
+        // 这时保持上一帧几何，不去行里搜 poster，否则又会钉到行首。
+        if (card == null || card == mBinding.recycler || parent == mBinding.recycler) return;
+        /*
+         * 只在这张卡片内部取画框。「查看全部」是 PosterStackView（id=stack），没有
+         * R.id.poster，改用它的画框容器 layers —— 尺寸与同行海报画框完全一致，
+         * 光晕就能正确落在按钮上而不是行首第一张海报。
+         */
+        View stack = card.findViewById(R.id.stack);
+        View target = stack instanceof PosterStackView
+                ? ((PosterStackView) stack).getGlowFrame()
+                : card.findViewById(R.id.poster);
+        if (target == null) return;
+        if (target.getWidth() <= 0 || target.getHeight() <= 0) return;
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        if (screenW <= 0 || screenH <= 0) return;
+        int[] loc = new int[2];
+        target.getLocationOnScreen(loc);
+        mPageGlow.setCenter(
+                (loc[0] + target.getWidth() / 2f) / screenW,
+                (loc[1] + target.getHeight() / 2f) / screenH,
+                target.getWidth() / (float) screenW,
+                target.getHeight() / (float) screenH);
+    }
+
+    /**
+     * 把主视觉羽化 scrim 的绘制下沿换算成整屏归一化 y，交给整页背景光层作为渐入起点。
+     *
+     * <p>scrim 末端是纯不透明 #101114，会挡住光层；光必须严格从这条边之下才渐入，
+     * 交界处光强为 0、上下同为页面底色，才不会出现水平断层。主视觉行随列表滚动，
+     * 所以每次滚动 / 焦点变化都要重算；行还没布局时退回 0（整屏可画，此时也无挡板）。</p>
+     */
+    private void updatePageGlowEdge() {
+        if (mPageGlow == null || mBinding == null) return;
+        int hero = indexOfHero();
+        RecyclerView.ViewHolder holder = hero >= 0 ? mBinding.recycler.findViewHolderForAdapterPosition(hero) : null;
+        View row = holder == null ? null : holder.itemView;
+        HomeHeroBackdropView backdrop = row == null ? null : row.findViewById(R.id.backdrop);
+        if (backdrop == null || backdrop.getHeight() <= 0) {
+            mPageGlow.setScrimEdge(0f);
+            return;
+        }
+        int screenH = ResUtil.getScreenHeight(this);
+        if (screenH <= 0) return;
+        mPageGlow.setScrimEdge((float) backdrop.getScrimBottomOnScreen() / screenH);
+    }
 
     private Site getHome() {
         return VodConfig.get().getHome();
@@ -270,15 +407,39 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         ColdTrace.mark("home.initView.start");
         if (savedInstanceState == null || !savedInstanceState.getBoolean(STATE_ACTION_HANDLED)) pendingAction = getIntent();
         mResult = Result.empty();
+        // 整页背景漫反射：挂到根 FrameLayout 的 pageGlow 占位容器，画在所有内容之下。
+        mPageGlow = new PageGlowComposeView(this);
+        mBinding.pageGlow.addView(mPageGlow.getView(), new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         mBinding.progressLayout.showProgress();
-        Updater.get().start(this, false);
         ColdTrace.mark("home.updater.start");
         setRecyclerView();
         setToolbar();
         applyTopScrim();
         setViewModel();
         setAdapter();
+        mPosterSize = PlayerSetting.getSize();
         ColdTrace.mark("home.views.built");
+        if (Setting.isDiagAccepted()) {
+            startHome();
+        } else {
+            // 声明未同意前整页不可见、数据不加载；弹窗在 onResume 里弹出（窗口已就绪）。
+            mBinding.getRoot().setVisibility(View.INVISIBLE);
+        }
+        ColdTrace.mark("home.initView.end");
+    }
+
+    /**
+     * 首页启动链路：检查更新、拉主视觉与四个分类、注册素材监听、放首帧焦点与启动画面。
+     *
+     * <p>单独成方法是为了让「免责声明未同意」时整条链路不执行 —— 声明弹窗关闭前
+     * 主界面既不显示也不发请求；同意后从这里一次性补上，行为与冷启动完全一致。</p>
+     */
+    private void startHome() {
+        if (mBinding == null || mHomeStarted || isFinishing() || isDestroyed()) return;
+        mHomeStarted = true;
+        mBinding.getRoot().setVisibility(View.VISIBLE);
+        Updater.get().start(this, false);
         ArtSource.register(mArtListener);
         checkPermission();
         loadDoubanHot();
@@ -288,7 +449,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         installInitialFocus();
         // 启动画面：静态品牌 banner（原始尺寸 50%、等比居中）显示片刻后自动淡出。
         mBinding.splashBrand.play();
-        ColdTrace.mark("home.initView.end");
+        startClock();
     }
 
     @Override
@@ -370,6 +531,20 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
          * 已 clipChildren=false，关闭置顶不会造成焦点卡片边缘被相邻行裁掉。
          */
         mBinding.recycler.setFocusDrawingOrderEnabled(false);
+
+        /*
+         * 行内横向卷动补一次圆心校正。
+         *
+         * 横向滚动发生在每行的 HorizontalGridView 上，**不会触发 recycler 的 onScrolled**，
+         * 只靠焦点回调上报的坐标会停在“按下方向键那一刻”，而卡片随后仍被行卷动带着走——
+         * 这就是快速横移到最右、再折返左侧时看到的光晕脱节。
+         * ViewTreeObserver 能兜住整棵树里任何 View 的滚动，统一延后一帧按焦点卡真实位置校正。
+         */
+        mBinding.recycler.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            if (mBinding == null) return;
+            mBinding.recycler.removeCallbacks(glowCenterTask);
+            mBinding.recycler.post(glowCenterTask);
+        });
     }
 
     /**
@@ -394,8 +569,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mSheet.siteScrim.setOnClickListener(v -> hideSiteSheet());
         mSheet.siteList.setLayoutManager(new LinearLayoutManager(this));
         mSheet.siteList.setItemAnimator(null);
-        // 8 行站点名 = 8 × 30dp = 240dp，超出部分在面板内滚动。
-        mSheet.siteList.setMaxHeight(ResUtil.dp2px(SITE_ROW_DP * SITE_ROWS));
+        // 8 行站源 + 2 个固定入口，正好整行数，超出部分在面板内滚动。
+        mSheet.siteList.setMaxHeight(siteListHeight());
         // 搜索圆钮（放大镜，占原品牌位）：点击 / 确认键进搜索页。
         mToolbar.brandEntry.setOnClickListener(v -> SearchActivity.start(this));
         // 当前所在页 = 首页：常亮 50% 黑胶囊 + 白字（焦点离开后仍保留）。
@@ -558,7 +733,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         if (isVisible(mSheet.getRoot())) return;
         showToolbarImmediate();
         List<Site> sites = VodConfig.get().getSites().stream().filter(site -> !site.isHide()).toList();
-        if (sites.isEmpty()) return;
+        /*
+         * 站源为空也要弹面板：面板第 0 项「切换站点」与站源无关，用户正是靠它
+         * 在没有任何站源时切到另一个点播地址。以前这里直接 return，站源一空就
+         * 再也没有入口能换点播地址。
+         */
         mSiteMenuAdapter = new SiteMenuAdapter(sites, getHome(), new SiteMenuAdapter.OnClickListener() {
             @Override
             public void onItemClick(Site item) {
@@ -568,6 +747,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             @Override
             public void onSwitchClick() {
                 showConfigSheet();
+            }
+
+            @Override
+            public void onEditClick() {
+                // 与设置页「点播地址」右侧 home 按钮完全同一个弹窗；先收面板再弹，避免两层焦点陷阱叠加。
+                hideSiteSheet();
+                SiteDialog.create().action().show(HomeActivity.this);
             }
         });
         mSheet.siteList.setAdapter(mSiteMenuAdapter);
@@ -654,6 +840,25 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /**
+     * 站源下拉列表的精确高度：8 行站源 + 「点播地址切换」「站点编辑」两个固定入口，
+     * 外加「站点编辑」那一行底部的一条分割线。
+     *
+     * <p><b>必须逐段按密度四舍五入，不能把总 dp 一次性换算</b>：XML 里的 {@code 30dp / 1dp / 2dp}
+     * 走 {@code getDimensionPixelSize}（四舍五入），而 {@code ResUtil.dp2px} 是截断。
+     * 在非整数密度（如 2.75，30dp=82.5、1dp=2.75、2dp=5.5）下两种算法能差出十来像素，
+     * 最后一行的底部就会被切掉一条 —— 观感正是「半行 / 文字贴边」。</p>
+     *
+     * <p>分割线只在「站点编辑」行显示，「点播地址切换」行没有（两者之间不画线），
+     * 所以只加一份。</p>
+     */
+    private int siteListHeight() {
+        float density = getResources().getDisplayMetrics().density;
+        int row = Math.round(SITE_ROW_DP * density);
+        int divider = Math.round(SITE_DIVIDER_DP * density) + 2 * Math.round(SITE_DIVIDER_MARGIN_DP * density);
+        return row * (SITE_ROWS + 2) + divider;
+    }
+
+    /**
      * 面板锚定：顶边贴在入口下方 6dp、右缘与入口右缘对齐；宽度按<b>最长站源名</b>自适应
      * （文字宽 + item 左右 padding + panel 左右 padding + 余量），不受入口 6 字符限宽约束。
      */
@@ -668,8 +873,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         lp.topMargin = entry[1] - root[1] + mToolbar.siteEntry.getHeight() + ResUtil.dp2px(6);
         lp.rightMargin = marginEnd;
         float textWidth = mSiteMenuAdapter.maxTextWidth(mToolbar.siteName.getPaint());
-        // 「切换站点」入口也要算进面板宽度，别把它挤成省略号
-        textWidth = Math.max(textWidth, mToolbar.siteName.getPaint().measureText(getString(R.string.site_switch_config)));
+        // 两个固定入口也要算进面板宽度，别把它们挤成省略号
+        for (int id : new int[]{R.string.site_switch_config, R.string.site_edit}) {
+            textWidth = Math.max(textWidth, mToolbar.siteName.getPaint().measureText(getString(id)));
+        }
         int width = (int) Math.ceil(textWidth) + ResUtil.dp2px(44);
         // 极长站源名不能把面板顶出屏幕左边，给一个不截断文字前提下的安全上限。
         int maxWidth = Math.max(ResUtil.dp2px(140), mBinding.getRoot().getWidth() - marginEnd - ResUtil.dp2px(48));
@@ -936,7 +1143,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             List<String> names = new ArrayList<>();
             for (Vod vod : items) {
                 if (vod == null) continue;
-                // 站源卡片保留片名 / 播放地址 / 站源备注，只覆盖海报并写入独立评分。
+                // 站源卡片只回填海报：备注保持站源原文，不叠加 TMDB 评分（否则会和站源自带评分并存）。
                 ArtSource.apply(vod);
                 if (!vod.getName().isEmpty()) names.add(vod.getName());
             }
@@ -1020,7 +1227,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /**
      * 素材落库后就地刷新首页海报网格：既有直接挂在列表上的站源卡片，也有包在
-     * 横向行里的卡片；只改海报与评分字段，不重建行、不动焦点与滚动位置。
+     * 横向行里的卡片；只改海报，不重建行、不动焦点与滚动位置。
+     * 备注一律不动（站源原文，含它自己的评分），避免一行出现两个评分。
      */
     private void refreshArt() {
         if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
@@ -1104,7 +1312,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     private void clearHistory() {
         removeHistoryBlock();
-        History.clear(VodConfig.getCid());
+        // 最近观看已跨站点共用：清空要把所有配置的记录一起清掉，否则换站点后又冒出来。
+        History.clearAll();
         mPresenter.setDelete(false);
         mHistoryAdapter.clear();
     }
@@ -1124,6 +1333,45 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /* ------------------------------------------------------- 首页分类模块 */
+
+    /**
+     * 海报尺寸档位变化后重建所有受影响的卡片行。
+     *
+     * <p>尺寸由 {@link Product#getSpec} 在 presenter 构造时算出并写进 holder 的
+     * LayoutParams，已挂出的 ViewHolder 不会重新测量，所以只能丢掉 presenter 与整行重挂。
+     * 三类数据都已在内存里（分类命中 HomeBoard 的 12 小时缓存、站源与最近观看在字段里），
+     * 重建不会发起新的网络请求。</p>
+     */
+    private void refreshPosterSize() {
+        if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
+        // 最近观看：卡片宽度 / 每屏列数与档位同源，换 presenter 后原地替换那一行。
+        getHistory(true);
+        // 「来自 · 站源名」：丢掉旧 presenter 与整块（标题 + 网格），按缓存结果重建。
+        rebuildRecommend();
+        // 四个分类模块：共用 presenter 先置空，摘掉旧标题与旧行后按新尺寸重挂。
+        mBoardPresenter = null;
+        for (int board = 0; board < HomeBoard.COUNT; board++) removeBoard(board);
+        loadBoards();
+    }
+
+    /** 用当前缓存重建「来自 · 站源名」块（标题 + 网格 / 列表），尺寸档位变化后调用。 */
+    private void rebuildRecommend() {
+        if (mRecommendItems == null || mRecommendItems.isEmpty()) return;
+        removeRecommendBlock();
+        ensureRecommendHeader();
+        boolean more = mRecommendItems.size() >= HomeBoard.HOME_LIMIT;
+        List<Vod> shown = mRecommendItems.size() > HomeBoard.HOME_LIMIT ? new ArrayList<>(mRecommendItems.subList(0, HomeBoard.HOME_LIMIT)) : mRecommendItems;
+        if (mRecommendStyle.isList()) {
+            // 列表样式的卡片是整行宽条目，没有海报位：仍用一个哑条目承接「查看全部」。
+            mRecommendMore = more ? moreEntry() : null;
+            List<Vod> cards = new ArrayList<>(shown);
+            if (mRecommendMore != null) cards.add(mRecommendMore);
+            mAdapter.addAll(mAdapter.size(), cards);
+        } else {
+            mRecommendMore = null;
+            addGrid(shown, mRecommendStyle, more);
+        }
+    }
 
     /** 拉取四个分类；命中 12 小时缓存会立即挂行，首次安装则走网络。 */
     private void loadBoards() {
@@ -1165,7 +1413,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             Vod vod = new Vod();
             vod.setName(item.getTitle());
             vod.setArtPic(item.getPoster());
-            vod.setArtScore(item.getScore());
+            // 评分不单独占字段：拼进备注，卡片按次标题统一渲染（与评分角标出现前一致）。
+            // 无评分 / 评分为 0 时不能整行收掉，四个分类模块统一显示「暂无评分」占位。
+            String remark = ArtSource.scoreRemark("", item.getScore());
+            vod.setRemarks(remark.isEmpty() ? getString(R.string.douban_hot_no_rating) : remark);
             vods.add(vod);
         }
         if (vods.isEmpty()) {
@@ -1525,6 +1776,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onRefreshEvent(RefreshEvent event) {
+        if (!mHomeStarted) return;
         switch (event.getType()) {
             case HOME:
                 getVideo();
@@ -1538,6 +1790,38 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 getHistory(true);
                 break;
         }
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onFocusGlowEvent(FocusGlowEvent event) {
+        if (mPageGlow == null) return;
+        if (event.isClear()) {
+            mPageGlow.clear();
+            return;
+        }
+        /*
+         * 焦点「明确」离开内容区时，晚到的异步提色回调不能再把熄灭的光点亮。
+         * 但 getCurrentFocus() == null 只是滚动重组的中间态，此时要放行：
+         * 提色是异步的且不会重发，一旦在这里丢掉，这张卡就再也不会亮。
+         */
+        if (mBinding == null) return;
+        View focus = getCurrentFocus();
+        if (focus != null && !isDescendant(focus, mBinding.recycler)) return;
+        // scrim 下沿随列表滚动实时变化，光层渐入起点每次都按当前位置重算。
+        updatePageGlowEdge();
+        if (event.isCenterOnly()) {
+            // 焦点刚落到新卡、主色还在后台提：先把光圈挪过去，颜色沿用上一张，等回调补齐。
+            mPageGlow.setCenter(event.getCx(), event.getCy(), event.getCardW(), event.getCardH());
+        } else {
+            /*
+             * 只换颜色，不用事件里的几何。提色（Palette）在后台线程跑，快速连按方向键时
+             * 上一张卡的回调会晚到，若带着旧坐标 setGlow 就会把光晕拽回旧卡甚至行首。
+             * 几何统一由 reportPageGlowCenter / updatePageGlowCenter 按当前焦点实时给出。
+             */
+            mPageGlow.setColor(event.getColor());
+        }
+        // 焦点切换常伴随一次滚动，下一帧按焦点卡真实位置再校正一次几何。
+        scheduleGlowCenter();
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -1591,7 +1875,28 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     @Override
     public void onItemClick(History item) {
-        VideoActivity.start(this, item.getSiteKey(), item.getVodId(), item.getVodName(), item.getVodPic());
+        if (belongsToCurrentConfig(item)) {
+            VideoActivity.start(this, item.getSiteKey(), item.getVodId(), item.getVodName(), item.getVodPic());
+            return;
+        }
+        /*
+         * 换过点播地址：这条记录是上一个站点的，它的 site key / vod id 在当前配置里
+         * 已经不存在，直接进播放页只会拿不到详情。改走搜索结果页按片名重找，
+         * 并把记录一起带过去 —— 在结果页选中同一部片时按它跳回原集数。
+         */
+        CollectActivity.start(this, item.getVodName(), item);
+    }
+
+    /**
+     * 这条观看记录是否属于当前点播地址。
+     *
+     * <p>判据两条：① {@code siteUrl} 与当前配置地址一致（老数据没有该字段，视为一致）；
+     * ② 记录里的站源 key 在当前配置里确实存在。任一不满足都说明是换站前的记录。</p>
+     */
+    private boolean belongsToCurrentConfig(History item) {
+        String url = item.getSiteUrl();
+        boolean sameConfig = TextUtils.isEmpty(url) || TextUtils.equals(url, VodConfig.getUrl());
+        return sameConfig && !TextUtils.isEmpty(VodConfig.get().getSite(item.getSiteKey()).getKey());
     }
 
     @Override
@@ -1668,6 +1973,11 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     protected void onResume() {
         super.onResume();
         ColdTrace.mark("home.onResume");
+        // 免责声明未同意：页面不可见也不加载，先弹声明，同意后走 startHome 补全启动链路。
+        if (!mHomeStarted) {
+            Disclaimer.check(this, this::startHome);
+            return;
+        }
         // 设置页改过 TMDB 连接方式/站点：旧主视觉行内容没变但图片地址已失效，清签名强制重建。
         if (RankLatest.consumeConfigChanged()) {
             mHeroSignature = "";
@@ -1676,12 +1986,26 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             HomeBoard.reset();
             loadBoards();
         }
-        if (mClock != null) mClock.stop();
-        mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
-        mClock.start();
+        /*
+         * 设置页改过「海报大小」：卡片尺寸在 presenter 构造时就写进 holder 的 LayoutParams，
+         * 已挂出的行不会自己重新测量。返回首页时按新档位重建分类模块、站源行与最近观看，
+         * 否则要重启应用才生效（「来自 · 站源名」之外的四行以前正是这个表现）。
+         */
+        if (mPosterSize >= 0 && PlayerSetting.getSize() != mPosterSize) {
+            mPosterSize = PlayerSetting.getSize();
+            refreshPosterSize();
+        }
+        startClock();
         // 从片库等页面返回：焦点若还停在上一页的导航项上（如「片库」），
         // 在首帧绘制之前就归位到「首页」，避免先看到旧高亮再跳过来。
         if (mInitialFocusDone && isNavFocused() && !mToolbar.navHome.hasFocus()) mToolbar.navHome.requestFocus();
+    }
+
+    /** 顶栏时钟：每次回到前台重挂一次，同意声明后启动的首次链路也会走到这里。 */
+    private void startClock() {
+        if (mClock != null) mClock.stop();
+        mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
+        mClock.start();
     }
 
     @Override

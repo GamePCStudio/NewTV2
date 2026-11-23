@@ -24,6 +24,8 @@ public class VodHistoryPolicy {
             history.setCid(VodConfig.getCid());
         }
         history = history == null ? create(key, item) : history;
+        // 记录归属：写当前点播配置地址，换站点后首页据此判断该不该直接进播放页。
+        history.setSiteUrl(VodConfig.getUrl());
         if (!TextUtils.isEmpty(mark)) history.setVodRemarks(mark);
         if (Setting.isIncognito()) history.delete();
         item.checkName(history.getVodName());
@@ -35,6 +37,7 @@ public class VodHistoryPolicy {
         History history = new History();
         history.setKey(key);
         history.setCid(VodConfig.getCid());
+        history.setSiteUrl(VodConfig.getUrl());
         history.setVodName(item.getName());
         history.findEpisode(item.getFlags());
         return history;
@@ -48,7 +51,8 @@ public class VodHistoryPolicy {
         if (history == null || !history.canSave() || Setting.isIncognito()) return;
         History copy = copyForSave(history);
         Task.executeSerial(() -> {
-            copy.merge().save();
+            // 跨站点共用：先在其它点播地址下删掉同名旧记录，再写入本站这条（替换而非新增）。
+            copy.merge().replaceOthers().save();
             if (exit) RefreshEvent.history();
         });
     }
@@ -88,7 +92,9 @@ public class VodHistoryPolicy {
         if (history == null || Setting.isIncognito()) return;
         History copy = copyForSave(history);
         Task.executeSerial(() -> {
-            copy.save();
+            // 播放已经开始推进：立刻把其它点播地址下的同名旧记录替换掉，
+            // 不必等退出播放页那一次保存。
+            copy.replaceOthers().save();
             if (refresh) RefreshEvent.history();
         });
     }

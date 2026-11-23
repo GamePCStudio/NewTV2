@@ -19,6 +19,7 @@ import androidx.core.os.HandlerCompat;
 import com.fongmi.android.tv.receiver.RuntimeReceiver;
 import com.fongmi.android.tv.ui.dialog.SpiderDialog;
 import com.fongmi.android.tv.utils.ColdTrace;
+import com.fongmi.android.tv.utils.Disclaimer;
 import com.fongmi.android.tv.utils.NoticePolicy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.RuntimeInstaller;
@@ -148,6 +149,7 @@ public class App extends Application implements Application.ActivityLifecycleCal
         RuntimeModule.refresh();
         RuntimeInstaller.resumeUpdate(activity);
         Updater.get().notifyModules();
+        Disclaimer.check(activity, null);
     }
 
     @Override

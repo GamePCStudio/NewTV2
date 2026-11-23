@@ -31,6 +31,7 @@
     <string name="douban_hot_actors">主演：%1$s</string>
     <string name="history_played">已播:%1$s</string>
     <string name="site_switch_config">點播地址切換</string>
+    <string name="site_edit">站點編輯</string>
     <string name="site_switch_empty">暫無歷史點播地址</string>
     <string name="douban_hot_type_tv">劇集</string>
     <string name="douban_hot_type_movie">電影</string>

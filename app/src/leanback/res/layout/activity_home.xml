@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  首页分四层（FrameLayout 的子 View 顺序即绘制顺序，后画的压在先画的之上；
+  首页分层（FrameLayout 的子 View 顺序即绘制顺序，后画的压在先画的之上；
+
+    L-1 pageGlow（无 elevation，最底层）整页背景漫反射：焦点卡主色驱动的
+        全屏柔光，画在所有内容之下、盖在 windowBackground 之上；不参与焦点与点击。
   再用 elevation 显式拉开 Z 序，避免 recycler 内部聚焦 item / 系统焦点高亮抢到上层）：
 
     L0  ProgressLayout → VerticalGridView
@@ -24,12 +27,21 @@
   不占用列表行。toolbar/sheet 是 ProgressLayout 的兄弟节点，因此
   ProgressLayout.showProgress() 隐藏 recycler 时不会把它们一起隐藏。
 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:clipChildren="false">
+
+    <!-- L-1：整页背景漫反射（焦点卡主色驱动，画在所有内容之下）。不参与焦点与点击。 -->
+    <FrameLayout
+        android:id="@+id/pageGlow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
 
     <!-- L0：列表内容（主视觉是它的第 0 行） -->
     <com.fongmi.android.tv.ui.custom.ProgressLayout

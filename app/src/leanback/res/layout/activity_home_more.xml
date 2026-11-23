@@ -3,12 +3,26 @@
   「更多影片」页：左上角是当前分类标题（24sp），下方是与分类页同款的海报网格
   （左右 48dp 安全区、列距 20dp、行距 8dp，尺寸全部走 Product.getSpec）。
 -->
-<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:clipChildren="false">
+
+    <!-- 整页背景漫反射（查看更多）：画在所有内容之下，不参与焦点与点击。 -->
+    <FrameLayout
+        android:id="@+id/pageGlow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/title"
@@ -48,4 +62,6 @@
 
     </com.fongmi.android.tv.ui.custom.ProgressLayout>
 
-</androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+</FrameLayout>

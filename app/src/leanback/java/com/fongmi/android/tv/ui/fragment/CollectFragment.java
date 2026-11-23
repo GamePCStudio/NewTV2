@@ -16,10 +16,12 @@ import androidx.viewbinding.ViewBinding;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Collect;
+import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.FragmentTypeBinding;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.ui.activity.CollectActivity;
 import com.fongmi.android.tv.ui.activity.VideoActivity;
 import com.fongmi.android.tv.ui.activity.VodActivity;
 import com.fongmi.android.tv.ui.activity.WebActivity;
@@ -127,7 +129,16 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         }
         requireActivity().setResult(Activity.RESULT_OK);
         if (item.isFolder()) VodActivity.start(requireActivity(), item.getSiteKey(), Result.folder(item));
-        else VideoActivity.collect(requireActivity(), item.getSiteKey(), item);
+        else VideoActivity.collect(requireActivity(), item.getSiteKey(), item, takeResume(item));
+    }
+
+    /**
+     * 跨站点观看记录带的「待续播」信息：只有点中的是同名影片才取到，取到即消费。
+     * 拿到后作为 mark 传给播放页，进详情时按它在新站点选集。
+     */
+    private History takeResume(Vod item) {
+        Activity activity = getActivity();
+        return activity instanceof CollectActivity ? ((CollectActivity) activity).takeResume(item) : null;
     }
 
     @Override

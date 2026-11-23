@@ -2,6 +2,7 @@ package com.fongmi.android.tv.ui.custom;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -11,6 +12,7 @@ import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
@@ -41,6 +43,8 @@ public class HomeHeroBackdropView extends FrameLayout {
 
     private final AppCompatImageView imageA;
     private final AppCompatImageView imageB;
+    /** 主色漫反射绘制叶子（Compose）。画在两层剧照之上、底部羽化之下；透明即不画。 */
+    private final HeroGlowComposeView glow;
     /** 底部羽化，画在两层剧照之上、文字层之下（文字是外部兄弟节点，不受影响）。 */
     private Paint bottomScrim;
 
@@ -67,6 +71,29 @@ public class HomeHeroBackdropView extends FrameLayout {
         imageB = createImage(context, View.GONE);
         addView(imageA, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         addView(imageB, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        // 绘制叶子放在两层剧照之后、dispatchDraw 的羽化之前：光在剧照上、羽化在光上。
+        // ComposeView 只负责画，不参与焦点与命中测试；初始透明 = 完全不画，零副作用降级。
+        glow = new HeroGlowComposeView(context);
+        glow.setGlowColor(Color.TRANSPARENT);
+        addView(glow.getView(), new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+    }
+
+    /** 设置主色漫反射；传 {@link Color#TRANSPARENT} 淡出到不画。 */
+    public void setGlowColor(@ColorInt int color) {
+        glow.setGlowColor(color);
+    }
+
+    /**
+     * 底部羽化 scrim 绘制下沿在屏幕中的绝对 y（含向下溢出段）。
+     *
+     * <p>scrim 末端是纯不透明 #101114，会盖住整页背景光层；首页按这个值把光的渐入起点
+     * 精确对齐到挡板下沿，交界处光强为 0、与 scrim 同色，避免水平断层。主视觉行随列表
+     * 滚动，所以每次都要实时取。</p>
+     */
+    public int getScrimBottomOnScreen() {
+        int[] loc = new int[2];
+        getLocationOnScreen(loc);
+        return loc[1] + drawHeight(getHeight());
     }
 
     private AppCompatImageView createImage(Context context, int visibility) {
