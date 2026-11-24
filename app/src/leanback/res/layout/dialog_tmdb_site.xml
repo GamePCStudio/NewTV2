@@ -9,24 +9,11 @@
         android:id="@+id/url"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/tmdb_site_url_hint"
-        android:imeOptions="actionNext"
-        android:importantForAutofill="no"
-        android:inputType="textUri"
-        android:nextFocusDown="@id/key"
-        android:singleLine="true"
-        android:textSize="18sp" />
-
-    <com.fongmi.android.tv.ui.custom.CustomEditText
-        android:id="@+id/key"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
         android:layout_marginBottom="16dp"
-        android:hint="@string/tmdb_site_key_hint"
+        android:hint="@string/tmdb_site_url_hint"
         android:imeOptions="actionDone"
         android:importantForAutofill="no"
-        android:inputType="text"
+        android:inputType="textUri"
         android:nextFocusDown="@id/positive"
         android:singleLine="true"
         android:textSize="18sp" />

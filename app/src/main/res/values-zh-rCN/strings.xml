@@ -611,11 +611,13 @@
     <string name="tmdb_disabled_hint">请先在「设置 → 影片刮削设置」中启用 TMDB 刮削</string>
     <string name="tmdb_no_keyword">没有可用的片名，无法刮削</string>
     <string name="setting_group_tmdb">TMDB</string>
-    <string name="tmdb_connection_hint">选择TMDB数据刮削方式，当选择自定义站点并填写了API密钥，可获得“最近观看”封面剧照刮削等更多扩展功能</string>
+    <string name="tmdb_connection_hint">选择TMDB数据刮削方式。API 密钥为独立配置，三种方式下都可用，可留空</string>
     <string name="tmdb_mode">TMDB连接方式</string>
     <string name="tmdb_mode_proxy">默认反代</string>
     <string name="tmdb_mode_official">TMDB官方直连</string>
     <string name="tmdb_mode_custom">自定义反代</string>
+    <string name="tmdb_api_key">API 密钥</string>
+    <string name="tmdb_api_key_hint">API 密钥（可选，三种连接方式均可用）</string>
     <string name="tmdb_image_poster">海报分辨率</string>
     <string name="tmdb_image_backdrop">横版剧照分辨率</string>
     <string name="tmdb_image_still">单集剧照分辨率</string>

@@ -91,13 +91,15 @@ public class Action implements Process {
 
     /**
      * 手机远程输入 TMDB 站点：与直播/点播地址输入一致，只把内容送到当前打开的输入窗口，
-     * 由用户按「确定」后才真正保存；地址与密钥都必填，空值直接丢弃。
+     * 由用户按「确定」后才真正保存。
+     *
+     * <p>密钥已与地址拆分，允许只提交其中一项（例如只更新密钥）；两项都为空时才丢弃。</p>
      */
     private void onTmdb(Map<String, String> params) {
         String url = params.get("url");
         String key = params.get("key");
-        if (TextUtils.isEmpty(url) || TextUtils.isEmpty(key)) return;
-        ServerEvent.tmdb(url.trim(), key.trim());
+        if (TextUtils.isEmpty(url) && TextUtils.isEmpty(key)) return;
+        ServerEvent.tmdb(url == null ? "" : url.trim(), key == null ? "" : key.trim());
     }
 
     private void onRefresh(Map<String, String> params) {

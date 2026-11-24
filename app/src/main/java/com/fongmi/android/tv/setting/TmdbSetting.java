@@ -14,16 +14,19 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * TMDB 刮削配置：全局连接方式 + 自定义反代地址（含可选密钥）。
+ * TMDB 刮削配置：全局连接方式 + 自定义反代地址 + 独立 API 密钥。
  *
  * <p>连接方式决定所有 TMDB 请求的基地址：默认反代、官方 API、自定义反代。
  * 项目内不再有其它数据源，所有图片与元数据拉取都经由这里给出的地址。</p>
  *
- * <p>站点记录形如 {@code {"url":"...","key":"..."}}，自定义反代地址可带专属密钥，
- * 密钥允许为空（反代服务可自行注入）；官方地址下填写的密钥同样通过这条记录读取。</p>
+ * <p><b>密钥与地址分离</b>：API 密钥单独存于 {@code tmdb_key}，三种连接方式下都参与请求，
+ * 不依赖是否填写自定义反代地址；切换连接方式不会清空或失效。站点记录
+ * {@code {"url":"...","key":"..."}} 中的 {@code key} 仅作为兼容副本：
+ * 保存地址时会同步独立密钥，旧版本回滚后仍能读到同一份密钥。</p>
  *
  * <p>兼容早期版本：旧版 {@code tmdb_api_url} + {@code tmdb_api_key} 或站点数组会在首次读取时
- * 迁移成单条站点记录，不注入任何内置密钥。</p>
+ * 迁移成单条站点记录；密钥在首次读取时从站点记录 / 更早版本键迁移到独立键，
+ * 迁移后立即落盘，不会因切换连接方式而丢失。</p>
  */
 public final class TmdbSetting {
 
@@ -39,6 +42,13 @@ public final class TmdbSetting {
 
     private static final String KEY_MODE = "tmdb_mode";
     private static final String KEY_SITE = "tmdb_site";
+    /**
+     * 独立 API 密钥：与连接方式、自定义地址完全解耦。
+     *
+     * <p>键一旦写入（包括写入空串）就以它为准，不再回落到旧配置 —— 这样用户主动清空密钥
+     * 不会被迁移逻辑用旧值“复活”。</p>
+     */
+    private static final String KEY_API_KEY = "tmdb_key";
     private static final String KEY_LEGACY_SITES = "tmdb_sites";
     private static final String KEY_LEGACY_URL = "tmdb_api_url";
     private static final String KEY_LEGACY_KEY = "tmdb_api_key";
@@ -68,6 +78,8 @@ public final class TmdbSetting {
     /** 轮换游标保留给 API 层的统一请求入口；当前只有一个全局站点。 */
     private static final AtomicInteger CURSOR = new AtomicInteger();
     private static volatile TmdbSite cache;
+    /** 独立密钥的内存副本：每次 TMDB 请求都会读它，避免反复走偏好存储。 */
+    private static volatile String cacheKey;
 
     private TmdbSetting() {
     }
@@ -99,6 +111,17 @@ public final class TmdbSetting {
 
     public static void putSite(TmdbSite site) {
         TmdbSite value = site == null ? new TmdbSite() : site;
+        /*
+         * 密钥副本双写：独立键是唯一读取来源，站点记录里的 key 只用于兼容旧版本读取路径。
+         * 保存地址时若带了密钥就同步到独立键；没带（新流程下地址弹窗不再编辑密钥）
+         * 就把独立键的当前值补进记录，避免两份数据不一致。
+         */
+        if (!TextUtils.isEmpty(value.getKey())) {
+            Prefers.put(KEY_API_KEY, value.getKey());
+            cacheKey = value.getKey();
+        } else {
+            value.setKey(getApiKey());
+        }
         Prefers.put(KEY_SITE, App.gson().toJson(value));
         cache = value;
         CURSOR.set(0);
@@ -110,8 +133,8 @@ public final class TmdbSetting {
      * 统一站点列表：API 层沿用它做请求入口，内容永远只有当前连接方式对应的那一条。
      */
     public static List<TmdbSite> getSites() {
-        TmdbSite saved = getSite();
-        TmdbSite active = new TmdbSite(getApiBase(), saved.getKey());
+        // 密钥来自独立配置：默认反代 / 官方直连 / 自定义反代三种方式下都生效。
+        TmdbSite active = new TmdbSite(getApiBase(), getApiKey());
         return Collections.singletonList(active);
     }
 
@@ -122,8 +145,55 @@ public final class TmdbSetting {
         return PROXY_API_URL;
     }
 
+    /**
+     * 当前 API 密钥；三种连接方式共用，与是否填写自定义地址无关。
+     *
+     * <p>首次读取时做一次性迁移：旧配置的密钥可能在站点记录里，也可能在更早版本的
+     * {@code tmdb_api_key} 键里。取到后立即写入独立键，后续切换连接方式、修改地址都不受影响。</p>
+     *
+     * <p>用「键是否存在」而不是「值是否为空」判断是否已迁移：用户主动清空密钥会写入空串，
+     * 此时必须尊重清空结果，不能再回落到旧值。</p>
+     */
     public static String getApiKey() {
-        return getSite().getKey();
+        String cached = cacheKey;
+        if (cached != null) return cached;
+        if (Prefers.getPrefers().contains(KEY_API_KEY)) {
+            String saved = Prefers.getString(KEY_API_KEY, "");
+            cacheKey = saved == null ? "" : saved;
+            return cacheKey;
+        }
+        String legacy = getSite().getKey();
+        if (TextUtils.isEmpty(legacy)) legacy = Prefers.getString(KEY_LEGACY_KEY, "");
+        legacy = legacy == null ? "" : legacy.trim();
+        Prefers.put(KEY_API_KEY, legacy);
+        cacheKey = legacy;
+        return legacy;
+    }
+
+    /**
+     * 保存 API 密钥（允许传空串表示清除）。
+     *
+     * <p>只写独立键，不改连接方式与自定义地址；站点记录里的副本同步更新，
+     * 保证旧版本回滚后读到的仍是同一份密钥。</p>
+     */
+    public static void putApiKey(String key) {
+        String value = key == null ? "" : key.trim();
+        Prefers.put(KEY_API_KEY, value);
+        cacheKey = value;
+        TmdbSite site = getSite();
+        if (!value.equals(site.getKey())) {
+            site.setKey(value);
+            Prefers.put(KEY_SITE, App.gson().toJson(site));
+            cache = site;
+        }
+        CURSOR.set(0);
+        TmdbApi.onConfigChanged();
+        RankLatest.markConfigChanged();
+    }
+
+    /** 设置页摘要：只露头尾，避免整串密钥铺在电视屏幕上；未设置返回空串。 */
+    public static String getApiKeyMasked() {
+        return TmdbSite.mask(getApiKey());
     }
 
     /**
@@ -196,9 +266,10 @@ public final class TmdbSetting {
         return getSite().isValid();
     }
 
-    /** 备份恢复 / 偏好整体替换后调用，重新解析当前站点。 */
+    /** 备份恢复 / 偏好整体替换后调用，重新解析当前站点与独立密钥。 */
     public static void reset() {
         cache = null;
+        cacheKey = null;
         CURSOR.set(0);
     }
 

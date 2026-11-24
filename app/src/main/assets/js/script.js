@@ -54,11 +54,12 @@ function setting() {
     doAction('setting', { text, name: $('#setting_name').val() });
 }
 
-// TMDB 站点与密钥：与直播/点播地址输入同一套交互，内容送到设备当前打开的站点输入窗口。
+// TMDB 站点与密钥：与直播/点播地址输入同一套交互，内容送到设备当前打开的输入窗口。
+// 地址与密钥已拆分，允许只填其中一项（例如切换连接方式后单独补密钥）。
 function tmdb() {
     const url = $('#tmdb_url').val().trim();
     const key = $('#tmdb_key').val().trim();
-    if (!url || !key) {
+    if (!url && !key) {
         warnToast(t('inputRequired'));
         return;
     }

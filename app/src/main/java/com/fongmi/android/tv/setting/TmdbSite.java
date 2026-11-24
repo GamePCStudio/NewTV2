@@ -52,8 +52,13 @@ public class TmdbSite {
 
     /** 设置页展示用：只露头尾，避免整串密钥铺在电视屏幕上。 */
     public String maskedKey() {
-        String value = getKey();
-        if (TextUtils.isEmpty(value)) return "";
+        return mask(getKey());
+    }
+
+    /** 掩码规则与实例方法一致；独立密钥没有站点实例，设置页通过静态入口复用同一套规则。 */
+    public static String mask(String key) {
+        if (TextUtils.isEmpty(key)) return "";
+        String value = key.trim();
         if (value.length() <= 8) return value.substring(0, Math.min(2, value.length())) + "****";
         return value.substring(0, 4) + "…" + value.substring(value.length() - 4);
     }

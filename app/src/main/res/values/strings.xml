@@ -628,11 +628,13 @@
     <string name="tmdb_disabled_hint">Enable TMDB scraping in Settings → Media scraping settings first</string>
     <string name="tmdb_no_keyword">No title available for scraping</string>
     <string name="setting_group_tmdb">TMDB</string>
-    <string name="tmdb_connection_hint">Choose how TMDB data is scraped. Selecting a custom site and filling in an API key unlocks more features, such as cover stills for Recently Watched.</string>
+    <string name="tmdb_connection_hint">Choose how TMDB data is scraped. The API key is a separate setting that works with all three modes and can be left empty.</string>
     <string name="tmdb_mode">TMDB connection</string>
     <string name="tmdb_mode_proxy">Default proxy</string>
     <string name="tmdb_mode_official">TMDB direct connection</string>
     <string name="tmdb_mode_custom">Custom proxy</string>
+    <string name="tmdb_api_key">API key</string>
+    <string name="tmdb_api_key_hint">API key (optional, works with all connection modes)</string>
     <string name="tmdb_image_poster">Poster resolution</string>
     <string name="tmdb_image_backdrop">Backdrop resolution</string>
     <string name="tmdb_image_still">Episode still resolution</string>

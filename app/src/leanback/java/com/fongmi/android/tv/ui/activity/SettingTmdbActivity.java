@@ -13,19 +13,21 @@ import com.fongmi.android.tv.databinding.ActivitySettingTmdbBinding;
 import com.fongmi.android.tv.impl.TmdbListener;
 import com.fongmi.android.tv.setting.TmdbSetting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.ui.dialog.TmdbKeyDialog;
 import com.fongmi.android.tv.ui.dialog.TmdbSiteDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.function.Consumer;
 
 /**
- * 设置 → 影片刮削设置：全局连接方式与自定义反代地址。
+ * 设置 → 影片刮削设置：全局连接方式、独立 API 密钥与自定义反代地址。
  *
  * <p>页面不提供任何刮削开关：TMDB 是唯一数据源，只要连接方式可用
  * （{@link TmdbSetting#isConfigured()}）就一直参与刮削，其余配置项互不依赖。</p>
  *
- * <p>自定义反代地址行只在「自定义TMDB反代」下显示，且只回显用户自己填过的地址；
- * 默认反代与官方直连的内置地址不会出现在这一行，避免把内置地址暴露到界面上。</p>
+ * <p>API 密钥是独立设置项：三种连接方式下都显示、都生效，不随自定义地址行的显隐变化；
+ * 切换连接方式不会清空密钥。自定义反代地址行只在「自定义TMDB反代」下显示，
+ * 且只回显用户自己填过的地址，默认反代与官方直连的内置地址不会出现在界面上。</p>
  */
 public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
 
@@ -49,6 +51,8 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     @Override
     protected void initEvent() {
         mBinding.tmdbMode.setOnClickListener(view -> showModeDialog());
+        // 密钥独立编辑：不依赖自定义地址是否填写，三种连接方式共用这一份配置。
+        mBinding.tmdbApiKey.setOnClickListener(view -> TmdbKeyDialog.show(this));
         mBinding.tmdbSite.setOnClickListener(view -> TmdbSiteDialog.show(this));
         // 图片分辨率：选中即生效；海报 / 横版剧照决定之后新刮削下载的档位。
         mBinding.tmdbPoster.setOnClickListener(view -> showImageSizeDialog(
@@ -135,6 +139,9 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     private void updateText() {
         int mode = TmdbSetting.getMode();
         mBinding.tmdbModeText.setText(getString(TmdbSetting.getModeLabelRes()));
+        // API 密钥：始终显示；有值时只露头尾，未设置时显示占位文案。
+        String masked = TmdbSetting.getApiKeyMasked();
+        mBinding.tmdbApiKeyText.setText(TextUtils.isEmpty(masked) ? getString(R.string.tmdb_site_unset) : masked);
         // 图片分辨率：摘要直接显示档位名（w342 / w780 …）。
         mBinding.tmdbPosterText.setText(TmdbSetting.getPosterSize());
         mBinding.tmdbBackdropText.setText(TmdbSetting.getBackdropSize());

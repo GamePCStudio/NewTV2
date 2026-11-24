@@ -37,6 +37,7 @@
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/tmdbApiKey"
             android:orientation="horizontal">
 
             <com.google.android.material.textview.MaterialTextView
@@ -61,6 +62,43 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
 
         <!--
+          API 密钥：与连接方式解耦的独立设置项。
+          默认反代 / 官方直连 / 自定义反代三种方式下都生效，不随自定义地址行显示或隐藏；
+          摘要只显示掩码，避免整串密钥铺在电视屏幕上。
+        -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tmdbApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/tmdbSite"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/tmdb_api_key"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/tmdbApiKeyText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="abcd…wxyz" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!--
           自定义反代地址：只在「自定义TMDB反代」下出现。
           内置地址（默认反代 / TMDB官方直连）不写进这一行，避免把内置地址暴露在界面上。
         -->
@@ -72,6 +110,7 @@
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/tmdbPoster"
             android:orientation="horizontal"
             android:visibility="gone"
             tools:visibility="visible">
