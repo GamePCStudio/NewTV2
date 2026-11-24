@@ -1,6 +1,8 @@
 name: Build & Release (leanback)
 
 # 每次 push 到 main 即构建 release 版并发布 GitHub Release。
+# 同一 Release 发布两套：原版 com.fongmi.android.tv（leanback-*.apk）与
+# 共存版 com.ctowl2018.android.newtv2（newtv2-leanback-*.apk），可在设备同时安装。
 # 版本号规则：<上游版本号>.NewTV2.<YYYYMMDD>.<HHMMSS>
 #   例：5.8.7.NewTV2.20261113.173045（UPSTREAM_VERSION 在下方 Compute version 步骤维护）
 #   <YYYYMMDD> / <HHMMSS> 均为北京时间（UTC+8），非 UTC。
@@ -68,25 +70,45 @@ jobs:
           echo "version_name=${UPSTREAM_VERSION}.NewTV2.${DATE}.${TIME}" >> "$GITHUB_OUTPUT"
           echo "version_code=$(( $(date +%s) - 1700000000 ))" >> "$GITHUB_OUTPUT"
 
-      - name: Build leanback release APK
+      - name: Build leanback release APK (stock + coexist)
         run: |
           chmod +x gradlew
+          COMMON_ARGS="--no-configuration-cache --no-daemon --stacktrace"
+          # 原版：applicationId 保持 com.fongmi.android.tv，资产名沿用历史 leanback-*.apk。
           ./gradlew :app:assembleLeanbackRelease \
             -PappVersionName="${{ steps.ver.outputs.version_name }}" \
             -PappVersionCode="${{ steps.ver.outputs.version_code }}" \
-            --no-configuration-cache --no-daemon --stacktrace
+            $COMMON_ARGS
+          # 两次构建输出文件名相同，先挪走原版产物，避免被共存版覆盖。
+          mkdir -p release-apks/stock
+          cp app/build/outputs/apk/leanback/release/*.apk release-apks/stock/
+          # 共存版：仅改设备标识，源码 namespace 不变；资产名加 newtv2- 前缀隔离更新。
+          ./gradlew :app:assembleLeanbackRelease \
+            -PappApplicationId=com.ctowl2018.android.newtv2 \
+            -PappVersionName="${{ steps.ver.outputs.version_name }}" \
+            -PappVersionCode="${{ steps.ver.outputs.version_code }}" \
+            $COMMON_ARGS
+          mkdir -p release-apks/coexist
+          cp app/build/outputs/apk/leanback/release/*.apk release-apks/coexist/
+          echo "=== stock ==="; ls -l release-apks/stock
+          echo "=== coexist ==="; ls -l release-apks/coexist
 
       - name: Prepare APKs for updater
         run: |
-          cd app/build/outputs/apk/leanback/release
-          shopt -s nullglob
-          for target in arm64_v8a armeabi_v7a; do
-            cand=$(ls *"${target}"*.apk 2>/dev/null | head -1)
-            if [ -n "$cand" ] && [ "$cand" != "leanback-${target}.apk" ]; then
-              mv -f "$cand" "leanback-${target}.apk"
-            fi
-          done
-          ls -l
+          prepare() {
+            dir="$1" prefix="$2"
+            cd "$dir"
+            shopt -s nullglob
+            for target in arm64_v8a armeabi_v7a; do
+              cand=$(ls *"${target}"*.apk 2>/dev/null | head -1)
+              if [ -n "$cand" ] && [ "$cand" != "${prefix}leanback-${target}.apk" ]; then
+                mv -f "$cand" "${prefix}leanback-${target}.apk"
+              fi
+            done
+            ls -l
+          }
+          prepare "$GITHUB_WORKSPACE/release-apks/stock" ""
+          prepare "$GITHUB_WORKSPACE/release-apks/coexist" "newtv2-"
 
       - name: Prepare Release notes from last commit
         run: |
@@ -106,8 +128,10 @@ jobs:
           name: NewTV2 v${{ steps.ver.outputs.version_name }}
           body_path: release_notes.md
           files: |
-            app/build/outputs/apk/leanback/release/leanback-arm64_v8a.apk
-            app/build/outputs/apk/leanback/release/leanback-armeabi_v7a.apk
+            release-apks/stock/leanback-arm64_v8a.apk
+            release-apks/stock/leanback-armeabi_v7a.apk
+            release-apks/coexist/newtv2-leanback-arm64_v8a.apk
+            release-apks/coexist/newtv2-leanback-armeabi_v7a.apk
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

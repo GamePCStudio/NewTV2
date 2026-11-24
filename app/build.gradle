@@ -19,7 +19,12 @@ android {
     compileSdk libs.versions.compileSdk.get().toInteger()
 
     defaultConfig {
-        applicationId "com.fongmi.android.tv"
+        // namespace 固定为 com.fongmi.android.tv（源码 package / R 类路径不变），
+        // 只有设备上的安装标识可变：默认保持原版，CI 加 -PappApplicationId=com.ctowl2018.android.newtv2
+        // 即产出可与原版共存的另一套。共存版另带资产前缀，避免应用内更新抓到原版安装包。
+        applicationId project.findProperty('appApplicationId') ?: 'com.fongmi.android.tv'
+        buildConfigField "String", "UPDATE_ASSET_PREFIX",
+                '"' + (project.findProperty('appApplicationId') == 'com.ctowl2018.android.newtv2' ? 'newtv2-' : '') + '"'
         minSdk libs.versions.minSdk.get().toInteger()
         targetSdk libs.versions.targetSdk.get().toInteger()
         ndkVersion = "28.2.13676358"
