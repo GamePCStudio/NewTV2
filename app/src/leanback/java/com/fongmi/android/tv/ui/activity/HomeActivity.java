@@ -25,6 +25,7 @@ import androidx.leanback.widget.HorizontalGridView;
 import androidx.leanback.widget.ItemBridgeAdapter;
 import androidx.leanback.widget.ListRow;
 import androidx.leanback.widget.OnChildViewHolderSelectedListener;
+import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -243,7 +244,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                  * 中间态（焦点短暂被回收），此时若发 clear，随后到达的异步提色回调又会被
                  * onFocusGlowEvent 的守卫挡下，光就永久熄灭 —— 表现为只有最右那张卡不亮。
                  */
-                if (newFocus != null && !inContent && mPageGlow != null) FocusGlowEvent.clear();
+                if (newFocus != null && !inContent && mPageGlow != null) FocusGlowEvent.clear(System.identityHashCode(this));
                 /*
                  * 焦点切到任意内容卡（含不发主色事件的「查看全部」堆叠按钮）都按当前焦点
                  * 校正一次几何：提色是异步的，单靠 Holder 上报会把光圈滞留在上一张卡。
@@ -260,18 +261,24 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mBinding.recycler.post(glowCenterTask);
     }
 
-    /** 滚动也参与显隐判定：程序化滚回顶部时，用当前焦点重新收敛一次顶栏状态。 */
-    /** 滚动时延后一帧再校正局部提亮圆心；见 [toolbarScrollWatcher] 里的说明。 */
-    private final Runnable glowCenterTask = this::updatePageGlowCenter;
+    /**
+     * 单一 post 任务：scrim 下沿 + 焦点卡圆心一帧内一起算完。
+     *
+     * <p>滚动 / 焦点 / 提色回调以前各自 post 一次几何校正（scrim 下沿还在 onScrolled 里
+     * 同步再算一遍），同一次滚动被多条监听重复驱动。现在统一收敛到这个任务：
+     * removeCallbacks + post 保证每帧至多跑一次，等值判断再挡掉坐标没变的无意义写入。</p>
+     */
+    private final Runnable glowCenterTask = () -> {
+        updatePageGlowEdge();
+        updatePageGlowCenter();
+    };
 
     private final RecyclerView.OnScrollListener toolbarScrollWatcher = new RecyclerView.OnScrollListener() {
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
             updateToolbar(getCurrentFocus());
-            // 主视觉 scrim 下沿随滚动移动，整页光的渐入起点要同步，否则断层会"错位"。
-            updatePageGlowEdge();
             /*
-             * 局部提亮的圆心延后一帧再取：滚动途中焦点往往还没切到新卡，
+             * 局部提亮的圆心与 scrim 下沿都延后一帧再取：滚动途中焦点往往还没切到新卡，
              * 立刻取会拿到旧卡位置，表现为光晕先跟着旧卡"漂"一段再跳回来。
              * 下一帧时焦点已稳定，取到的才是真正的焦点卡。
              */
@@ -1792,9 +1799,16 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         }
     }
 
+    /** 事件是否来自本页（sourceHash 为 0 表示不限定页面）。 */
+    private boolean isForThisPage(FocusGlowEvent event) {
+        return event.isFor(System.identityHashCode(this));
+    }
+
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onFocusGlowEvent(FocusGlowEvent event) {
-        if (mPageGlow == null) return;
+        // 定向分发 + 仅前台页面响应：页面栈里的其它 Activity 被广播唤醒后直接返回，
+        // 不做几何重算、不写 state、不触发重组（事件风暴时的主要放大器）。
+        if (mPageGlow == null || !isForThisPage(event) || getLifecycle().getCurrentState() != Lifecycle.State.RESUMED) return;
         if (event.isClear()) {
             mPageGlow.clear();
             return;
@@ -1807,8 +1821,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         if (mBinding == null) return;
         View focus = getCurrentFocus();
         if (focus != null && !isDescendant(focus, mBinding.recycler)) return;
-        // scrim 下沿随列表滚动实时变化，光层渐入起点每次都按当前位置重算。
-        updatePageGlowEdge();
+        // scrim 下沿与圆心统一交给 scheduleGlowCenter 的单一 post 任务计算。
         if (event.isCenterOnly()) {
             // 焦点刚落到新卡、主色还在后台提：先把光圈挪过去，颜色沿用上一张，等回调补齐。
             mPageGlow.setCenter(event.getCx(), event.getCy(), event.getCardW(), event.getCardH());

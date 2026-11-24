@@ -132,8 +132,8 @@ public class CollectActivity extends BaseActivity {
     @Override
     protected void initView(Bundle savedInstanceState) {
         // 光层先挂：铺在布局最底层，各站点分页里的网格才有背景可透。
+        // 监听与事件订阅在 onStart/onStop 挂摘，后台页面不再耗资源。
         mPageGlow = new PageGlowController(this, mBinding.pageGlow);
-        mPageGlow.attach();
         setRecyclerView();
         setViewModel();
         // 凡经 CollectActivity.start() 进入结果页的关键词一律不写搜索历史；
@@ -245,8 +245,19 @@ public class CollectActivity extends BaseActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    protected void onStart() {
+        super.onStart();
+        if (mPageGlow != null) mPageGlow.attach();
+    }
+
+    @Override
+    protected void onStop() {
         if (mPageGlow != null) mPageGlow.detach();
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
         super.onDestroy();
     }
 }

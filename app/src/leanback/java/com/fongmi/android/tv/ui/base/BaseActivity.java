@@ -12,6 +12,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.ui.custom.PosterFrameBreath;
 import com.fongmi.android.tv.utils.Util;
 
 import org.greenrobot.eventbus.EventBus;
@@ -98,6 +99,19 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     protected void onBackInvoked() {
         finish();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        PosterFrameBreath.setPageActive(true);
+    }
+
+    @Override
+    protected void onPause() {
+        // 页面退后台：所有海报白框呼吸统一停表，避免动画在后台持续重绘。
+        PosterFrameBreath.setPageActive(false);
+        super.onPause();
     }
 
     @Override

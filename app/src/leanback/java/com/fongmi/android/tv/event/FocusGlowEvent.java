@@ -3,12 +3,16 @@ package com.fongmi.android.tv.event;
 import org.greenrobot.eventbus.EventBus;
 
 /**
- * 焦点卡主色上报事件：由首页卡片 Holder / Presenter 在聚焦时发出，
- * 驱动首页整页背景（PageGlowComposeView）的漫反射柔光与焦点卡局部提亮。
+ * 焦点卡主色上报事件：由卡片 Holder / Presenter 在聚焦时发出，
+ * 驱动整页背景（PageGlowComposeView）的漫反射柔光与焦点卡局部提亮。
  *
  * <p>只用于视觉联动，不承载业务数据。{@code cx}/{@code cy} 是焦点卡中心在整屏中的
- * 归一化坐标（0..1），{@code cardW}/{@code cardH} 是卡片（含海报与片名区）的归一化宽高，
+ * 归一化坐标（0..1），{@code cardW}/{@code cardH} 是卡片的归一化宽高，
  * 让背景光圆心跟随焦点位置、局部提亮贴合卡片轮廓扩散。</p>
+ *
+ * <p><b>定向分发</b>：事件带上报方所在页面的身份标识。EventBus 仍是全局广播，但订阅者
+ * 只处理来源为自己页面的事件，页面栈内其它存活页面被唤醒后直接返回，不再做几何重算、
+ * 状态写入与重组。标识为 0 表示不限定页面（兼容没有宿主 Activity 的调用）。</p>
  */
 public class FocusGlowEvent {
 
@@ -23,19 +27,21 @@ public class FocusGlowEvent {
     private final float cy;
     private final float cardW;
     private final float cardH;
+    private final int sourceHash;
 
-    private FocusGlowEvent(int kind, int color, float cx, float cy, float cardW, float cardH) {
+    private FocusGlowEvent(int kind, int color, float cx, float cy, float cardW, float cardH, int sourceHash) {
         this.kind = kind;
         this.color = color;
         this.cx = cx;
         this.cy = cy;
         this.cardW = cardW;
         this.cardH = cardH;
+        this.sourceHash = sourceHash;
     }
 
     /** 聚焦到某张卡：上报主色、焦点卡屏幕中心，以及卡片的归一化宽高。 */
-    public static void show(int color, float cx, float cy, float cardW, float cardH) {
-        EventBus.getDefault().post(new FocusGlowEvent(KIND_SHOW, color, cx, cy, cardW, cardH));
+    public static void show(int color, float cx, float cy, float cardW, float cardH, int sourceHash) {
+        EventBus.getDefault().post(new FocusGlowEvent(KIND_SHOW, color, cx, cy, cardW, cardH, sourceHash));
     }
 
     /**
@@ -44,13 +50,18 @@ public class FocusGlowEvent {
      * <p>焦点换到新卡时提色是异步的（Palette 在后台线程跑），如果等它回来再更新圆心，
      * 这段时间里光圈会停在上一张卡的位置；这里先把几何推到新卡上。</p>
      */
-    public static void center(float cx, float cy, float cardW, float cardH) {
-        EventBus.getDefault().post(new FocusGlowEvent(KIND_CENTER, 0, cx, cy, cardW, cardH));
+    public static void center(float cx, float cy, float cardW, float cardH, int sourceHash) {
+        EventBus.getDefault().post(new FocusGlowEvent(KIND_CENTER, 0, cx, cy, cardW, cardH, sourceHash));
     }
 
     /** 焦点离开内容区（回到导航 / 主视觉）：熄灭整页背景光与局部提亮。 */
-    public static void clear() {
-        EventBus.getDefault().post(new FocusGlowEvent(KIND_CLEAR, 0, 0f, 0f, 0f, 0f));
+    public static void clear(int sourceHash) {
+        EventBus.getDefault().post(new FocusGlowEvent(KIND_CLEAR, 0, 0f, 0f, 0f, 0f, sourceHash));
+    }
+
+    /** 本事件是否应该由指定页面处理。 */
+    public boolean isFor(int pageHash) {
+        return sourceHash == 0 || sourceHash == pageHash;
     }
 
     public boolean isClear() {

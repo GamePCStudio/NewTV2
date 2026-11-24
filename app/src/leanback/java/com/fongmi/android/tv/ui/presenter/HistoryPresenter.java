@@ -111,8 +111,6 @@ public class HistoryPresenter extends Presenter {
 
         private final AdapterVodHistoryBinding binding;
         private final OnClickListener listener;
-        /** 底部主色漫反射绘制叶子；只在聚焦时亮起，颜色来自当前剧照 / 海报。 */
-        private final CardGlowComposeView glow;
         /** 白框慢闪呼吸：静止 500ms 后在 100%↔20% 之间往复。 */
         private final PosterFrameBreath breath;
         /** 当前绑定的历史记录 key：异步回调回来时据此判断卡片是否已经被复用。 */
@@ -126,17 +124,12 @@ public class HistoryPresenter extends Presenter {
             super(binding.getRoot());
             this.binding = binding;
             this.listener = listener;
-            // 剧照恢复 match_parent 铺满、与前景白框严格贴合（此前版本的位置关系，无空隙）。
-            // 卡片光层仍在剧照之下（index 0）并完整保留提色 / 显隐逻辑，不删不改光效实现；
-            // 用负 margin 让光层比画框大一圈，光从白框外侧四周露出（底部更宽）。
-            glow = new CardGlowComposeView(binding.poster.getContext());
-            binding.poster.addView(glow.getView(), 0, CardGlowComposeView.createLayoutParams(binding.poster));
+            // 卡片内不再挂任何绘制层：可见光统一由整页背景层提供，这里只保留提色 / 几何上报。
             breath = new PosterFrameBreath(binding.poster);
             // 与网格卡同一套聚焦动效（只缩放、不抬升），片名被截断时切跑马灯，并点亮背景光。
             PosterFocusAnimator.bind(view, false, (card, isFocused) -> {
                 focused = isFocused;
                 PosterFocusAnimator.marquee(binding.name, isFocused);
-                glow.setFocused(isFocused);
                 breath.setFocused(isFocused);
                 if (isFocused) {
                     // 提色是异步的，先把局部提亮的圆心推到这张卡，避免光滞留在上一张卡上。
@@ -152,8 +145,7 @@ public class HistoryPresenter extends Presenter {
             String key = boundKey;
             HeroGlowColor.load(key, drawable, color -> {
                 if (!key.equals(boundKey) || !focused) return;
-                glow.setGlowColor(color);
-                // 上报焦点卡主色 + 屏幕位置，驱动首页整页背景漫反射（仅首页订阅）。
+                // 只上报主色；可见光由当前页面的整页背景层绘制。
                 CardGlowComposeView.reportPageGlow(binding.poster, color);
             });
         }
@@ -180,7 +172,6 @@ public class HistoryPresenter extends Presenter {
             focused = binding.getRoot().hasFocus();
             // 同上：绑定时已聚焦则补一次呼吸倒计时，否则这张卡要等下次焦点切换才会呼吸。
             if (focused) breath.setFocused(true);
-            glow.reset();
             binding.name.setText(item.getVodName());
             binding.delete.setVisibility(delete ? View.VISIBLE : View.GONE);
             binding.meta.setVisibility(delete ? View.GONE : View.VISIBLE);
@@ -346,7 +337,6 @@ public class HistoryPresenter extends Presenter {
             boundKey = "";
             boundPercent = "";
             focused = false;
-            glow.reset();
             // 先停呼吸再 reset：reset 的 jumpToCurrentState 会把 foreground 的 alpha 落回呼吸最后的值。
             breath.release();
             PosterFocusAnimator.reset(view);

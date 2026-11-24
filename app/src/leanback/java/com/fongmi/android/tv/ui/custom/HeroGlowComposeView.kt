@@ -56,12 +56,13 @@ class HeroGlowComposeView(context: Context) {
     private inner class GlowHost(context: Context) : FrameLayout(context) {
 
         private var created = false
+        private var composeView: ComposeView? = null
 
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
             if (created) return
             created = true
-            val composeView = ComposeView(context).apply {
+            val cv = ComposeView(context).apply {
                 isFocusable = false
                 isClickable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -75,7 +76,14 @@ class HeroGlowComposeView(context: Context) {
                     HeroGlowCanvas(animated)
                 }
             }
-            addView(composeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            composeView = cv
+            addView(cv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+
+        /** 页面销毁、光层脱离窗口时销毁 composition，释放 SlotTable 与重组作用域。 */
+        override fun onDetachedFromWindow() {
+            composeView?.disposeComposition()
+            super.onDetachedFromWindow()
         }
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -88,7 +96,8 @@ class HeroGlowComposeView(context: Context) {
     }
 
     companion object {
-        const val GLOW_DURATION = 300
+        /** 低配设备补间时长减半，缩短每帧重组窗口。 */
+        val GLOW_DURATION: Int = if (GlowTier.isLowEnd()) 150 else 300
         // DecelerateInterpolator(1.8f) 的 Compose 等价：快起慢收。
         val GLOW_EASING = CubicBezierEasing(0f, 0f, 0.2f, 1f)
     }

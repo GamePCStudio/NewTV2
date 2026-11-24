@@ -13,6 +13,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * 海报选中框的慢闪呼吸：白框静止 500ms 后在 100% ↔ 20% 之间缓慢往复。
@@ -40,6 +42,13 @@ public final class PosterFrameBreath {
     /** 呼吸最低亮度：20%。 */
     private static final int ALPHA_MIN = 51;
     private static final int ALPHA_MAX = 255;
+    /**
+     * 往复次数上限：改为有限次数（原来是 INFINITE），静止太久后自然停表回到满亮，
+     * 避免焦点长时间不动时白框一直闪、整卡每帧重绘。3 个来回 ≈ 7.2s 后停。
+     */
+    private static final int BREATH_REPEAT = 5;
+    /** 低配电视直接关闭呼吸，只保留聚焦时的瞬时白框。 */
+    private static final boolean BREATH_DISABLED = GlowTier.isLowEnd();
 
     private final View frame;
     private final Drawable foreground;
@@ -59,6 +68,10 @@ public final class PosterFrameBreath {
 
     private ValueAnimator animator;
     private boolean focused;
+    /** 所有存活实例：页面退后台时统一停表，避免呼吸动画在后台持续重绘。 */
+    private static final Set<PosterFrameBreath> ALIVE = new CopyOnWriteArraySet<>();
+    /** 页面是否处于前台（由 BaseActivity 的 onResume/onPause 统一驱动）。 */
+    private static volatile boolean pageActive = true;
 
     /**
      * @param frame 承载白框的那个视图：网格卡传 {@code R.id.poster}，
@@ -66,6 +79,7 @@ public final class PosterFrameBreath {
      */
     public PosterFrameBreath(View frame) {
         this.frame = frame;
+        ALIVE.add(this);
         Drawable fg = frame.getForeground();
         if (fg != null) {
             Drawable mutated = fg.mutate();
@@ -104,23 +118,37 @@ public final class PosterFrameBreath {
         focused = false;
         attachScrollers(false);
         stop();
+        ALIVE.remove(this);
+    }
+
+    /** 页面进前台 / 退后台：退后台统一停表并复位，前台只放行、等下次聚焦再计时。 */
+    public static void setPageActive(boolean active) {
+        pageActive = active;
+        if (!active) {
+            for (PosterFrameBreath breath : ALIVE) breath.stop();
+        }
     }
 
     /** 有滚动：先停呼吸、白框回满，再重新计 500ms。 */
     private void defer() {
         stop();
-        if (focused) handler.postDelayed(startTask, IDLE_MS);
+        if (focused && pageActive && !BREATH_DISABLED) handler.postDelayed(startTask, IDLE_MS);
     }
 
     private void start() {
-        if (!focused || foreground == null) return;
+        if (!focused || !pageActive || BREATH_DISABLED || foreground == null) return;
         // 从 1 → 0 起步：起手就是满亮（视觉上无跳变），随后平滑降到 20%，再由 REVERSE 回升。
+        // 有限次数往复后停在满亮，避免静止时无限重绘。
         ValueAnimator value = ValueAnimator.ofFloat(1f, 0f);
         value.setDuration(HALF_CYCLE_MS);
-        value.setRepeatCount(ValueAnimator.INFINITE);
+        value.setRepeatCount(BREATH_REPEAT);
         value.setRepeatMode(ValueAnimator.REVERSE);
         value.setInterpolator(new AccelerateDecelerateInterpolator());
         value.addUpdateListener(anim -> {
+            if (!pageActive) {
+                stop();
+                return;
+            }
             float t = (float) anim.getAnimatedValue();
             setAlpha(Math.round(ALPHA_MIN + (ALPHA_MAX - ALPHA_MIN) * t));
         });

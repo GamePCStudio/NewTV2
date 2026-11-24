@@ -21,8 +21,6 @@ public class VodRectHolder extends BaseVodHolder {
 
     private final VodPresenter.OnClickListener listener;
     private final AdapterVodRectBinding binding;
-    /** 底部主色漫反射绘制叶子；只在聚焦时亮起，颜色来自当前海报。 */
-    private final CardGlowComposeView glow;
     /** 白框慢闪呼吸：静止 500ms 后在 100%↔20% 之间往复。 */
     private final PosterFrameBreath breath;
     /** 当前绑定的海报 URL：提色回调回来时据此判断卡片是否已被复用。 */
@@ -32,19 +30,13 @@ public class VodRectHolder extends BaseVodHolder {
         super(binding.getRoot());
         this.binding = binding;
         this.listener = listener;
-        // 海报恢复 match_parent 铺满、与前景白框严格贴合（此前版本的位置关系，无空隙）。
-        // 光层仍插在海报之下（index 0）并完整保留提色 / 显隐逻辑，不删不改光效实现；
-        // 用负 margin 让光层比画框大一圈，光从白框外侧四周露出（底部更宽）。
-        glow = new CardGlowComposeView(binding.poster.getContext());
-        binding.poster.addView(glow.getView(), 0, CardGlowComposeView.createLayoutParams(binding.poster));
+        // 卡片内不再挂任何绘制层：可见光统一由整页背景层提供，这里只保留提色 / 几何上报。
         breath = new PosterFrameBreath(binding.poster);
         // 卡片根只做 1.04 缩放；聚焦时展开元数据行、跑马灯并点亮背景光。
-        // 海报保持完整不透明、不被染色，光只从四周光道透出。
         PosterFocusAnimator.bind(binding.getRoot(), false, (card, focused) -> {
             int visibility = focused ? View.VISIBLE : View.INVISIBLE;
             if (binding.metadata.getVisibility() != visibility) binding.metadata.setVisibility(visibility);
             PosterFocusAnimator.marquee(binding.name, focused);
-            glow.setFocused(focused);
             breath.setFocused(focused);
             if (focused) {
                 // 提色是异步的，先把局部提亮的圆心推到这张卡，避免光滞留在上一张卡上。
@@ -59,8 +51,7 @@ public class VodRectHolder extends BaseVodHolder {
         if (drawable == null) return;
         HeroGlowColor.load(url, drawable, color -> {
             if (!url.equals(boundPic)) return;
-            glow.setGlowColor(color);
-            // 上报焦点卡主色 + 屏幕位置，驱动首页整页背景漫反射（仅首页订阅）。
+            // 只上报主色；可见光由当前页面的整页背景层绘制。
             CardGlowComposeView.reportPageGlow(binding.poster, color);
         });
     }
@@ -85,8 +76,6 @@ public class VodRectHolder extends BaseVodHolder {
     @Override
     public void initView(Vod item) {
         boundPic = item.getDisplayPic();
-        // 复用时先熄掉上一部的光，避免旧色闪现；新色等聚焦时按当前海报提取。
-        glow.reset();
         binding.name.setText(item.getName());
         binding.year.setText(item.getYear());
         binding.site.setText(item.getSiteName());
@@ -135,7 +124,6 @@ public class VodRectHolder extends BaseVodHolder {
         // 先停呼吸再 reset：reset 的 jumpToCurrentState 会把 foreground 的 alpha 落回呼吸最后的值。
         breath.release();
         PosterFocusAnimator.reset(binding.getRoot());
-        glow.reset();
         boundPic = "";
         Glide.with(binding.image).clear(binding.image);
     }

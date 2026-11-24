@@ -171,8 +171,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         mKey = getIntent().getStringExtra("key");
         mPosterSize = PlayerSetting.getSize();
         // 整页光层要先于内容挂上：它铺在布局最底层，后面建出来的网格才有背景可透。
+        // 监听与事件订阅在 onStart/onStop 挂摘，后台页面不再耗资源。
         mPageGlow = new PageGlowController(this, mBinding.pageGlow);
-        mPageGlow.attach();
         setRecyclerView();
         setToolbar();
         setViewModel();
@@ -735,6 +735,18 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (mPageGlow != null) mPageGlow.attach();
+    }
+
+    @Override
+    protected void onStop() {
+        if (mPageGlow != null) mPageGlow.detach();
+        super.onStop();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         if (mClock != null) mClock.stop();
@@ -802,7 +814,6 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     @Override
     protected void onDestroy() {
         getWindow().getDecorView().getViewTreeObserver().removeOnGlobalFocusChangeListener(focusGuard);
-        if (mPageGlow != null) mPageGlow.detach();
         if (mClock != null) mClock.stop();
         super.onDestroy();
     }

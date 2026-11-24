@@ -73,12 +73,17 @@ public final class PageGlowController {
                 if (card == null) {
                     // 真正离开列表（顶栏 / 分类胶囊 / 底部按钮）：熄灭并摘掉滚动监听。
                     detachScrollers();
-                    FocusGlowEvent.clear();
+                    FocusGlowEvent.clear(selfHash());
                     return;
                 }
                 attachScrollers(card);
                 scheduleCenter();
             };
+
+    /** 本页身份标识；用方法而非字段直引，避开字段初始化器中 lambda 的确定性赋值检查。 */
+    private int selfHash() {
+        return System.identityHashCode(activity);
+    }
 
     /**
      * @param host 布局最底层的空容器（{@code pageGlow}），光层会作为唯一子 View 铺满它。
@@ -87,24 +92,29 @@ public final class PageGlowController {
         this.activity = activity;
         this.host = host;
         this.glow = new PageGlowComposeView(activity);
-    }
-
-    /** 在 Activity 的 {@code initView} 里调用（此时 setContentView 已完成）。 */
-    public void attach() {
-        if (attached) return;
-        attached = true;
+        // 光层 View 只挂一次：attach()/detach() 会随 onStart/onStop 反复调用，
+        // 若把 addView 放在 attach 里，页面每次回前台都会往容器里重复添加一层。
         host.addView(glow.getView(), new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         host.setClickable(false);
         host.setFocusable(false);
         // 本页没有主视觉，也就不存在需要遮挡的 scrim：显式关掉遮罩。
         glow.setScrimEnabled(false);
+    }
+
+    /** 在 Activity 的 {@code onStart} 里调用：挂监听、订阅事件，恢复可见时的几何。 */
+    public void attach() {
+        if (attached) return;
+        attached = true;
         activity.getWindow().getDecorView().getViewTreeObserver()
                 .addOnGlobalFocusChangeListener(focusWatcher);
         EventBus.getDefault().register(this);
+        // 回到前台时按当前焦点重新点亮：detach 里 clear 过，且焦点卡通常已就位。
+        View focus = activity.getCurrentFocus();
+        if (focus != null) focusWatcher.onGlobalFocusChanged(null, focus);
     }
 
-    /** 在 Activity 的 {@code onDestroy} 里调用，摘监听并注销事件订阅，避免持有 Activity。 */
+    /** 在 Activity 的 {@code onStop} 里调用：摘监听、注销事件订阅，后台不再持有焦点监听与几何任务。 */
     public void detach() {
         if (!attached) return;
         attached = false;
@@ -118,7 +128,9 @@ public final class PageGlowController {
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onFocusGlowEvent(FocusGlowEvent event) {
-        if (!attached) return;
+        // attached 只在 onStart~onStop 之间为真（见各页面生命周期接线），
+        // 加上来源页过滤：栈内其它页面被全局广播唤醒后不做任何几何重算。
+        if (!attached || !event.isFor(selfHash())) return;
         if (event.isClear()) {
             glow.clear();
             return;
