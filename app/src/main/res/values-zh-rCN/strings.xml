@@ -259,6 +259,10 @@
     <string name="setting_auto">自动</string>
     <string name="setting_custom">自定义</string>
     <string name="setting_size">图片尺寸</string>
+    <string name="setting_search_layout">搜索排列</string>
+    <string name="search_layout_vertical">竖向</string>
+    <string name="search_layout_horizontal">横向</string>
+    <string name="collect_all_count">全部 %1$d/%2$d</string>
     <string name="setting_doh">DoH</string>
     <string name="setting_cache">缓存</string>
     <string name="setting_backup">备份</string>

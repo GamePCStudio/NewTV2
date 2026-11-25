@@ -5,6 +5,7 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.api.TmdbApi;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 import com.google.gson.JsonArray;
@@ -25,7 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 首页四个分类模块的数据层：豆瓣热门电影 / 豆瓣热门剧集 / TMDB今日电影 / TMDB今日剧集。
+ * 首页分类模块的数据层：豆瓣 / TMDB 热榜，以及奈飞 / HBO / 迪士尼的热门电影与剧集。
  *
  * <p><b>两种响应结构</b>：{@code /rank/latest/movie|series} 返回 {@code items[]}，
  * 字段是驼峰（{@code title} / {@code posterPath} / {@code rating}），海报是豆瓣绝对地址；
@@ -50,7 +51,16 @@ public final class HomeBoard {
     public static final int DOUBAN_SERIES = 1;
     public static final int TMDB_MOVIE = 2;
     public static final int TMDB_TV = 3;
-    public static final int COUNT = 4;
+    public static final int NETFLIX_MOVIE = 4;
+    public static final int NETFLIX_TV = 5;
+    public static final int HBO_MOVIE = 6;
+    public static final int HBO_TV = 7;
+    public static final int DISNEY_MOVIE = 8;
+    public static final int DISNEY_TV = 9;
+    public static final int COUNT = 10;
+
+    private static final int[] NETWORKS = {0, 0, 0, 0, 213, 213, 49, 49, 2739, 2739};
+    private static final int[] PROVIDERS = {0, 0, 0, 0, 8, 8, 384, 384, 337, 337};
 
     /** 首页每行最多展示的影片数；到 10 部时末尾追加「查看全部」卡片。 */
     public static final int HOME_LIMIT = 10;
@@ -140,7 +150,7 @@ public final class HomeBoard {
             }
             FETCHING[board] = true;
         }
-        // 磁盘读取与网络都在后台线程完成：四个分类加起来约 150KB，不能压在主线程上。
+        // 磁盘读取与网络都在后台线程完成：分类 JSON 不能压在主线程上。
         EXECUTOR.execute(() -> loadAndDispatch(board, callback));
     }
 
@@ -169,7 +179,7 @@ public final class HomeBoard {
             } else {
                 // 过期旧数据先兜底：本次拉取失败时至少还有内容，不会让整行突然消失。
                 if (disk != null) result = disk.items;
-                String json = fetch(BASE + PATHS[board]);
+                String json = fetchBoard(board);
                 if (!TextUtils.isEmpty(json)) {
                     List<Item> items = parse(json, board);
                     if (!items.isEmpty()) {
@@ -188,6 +198,22 @@ public final class HomeBoard {
         }
         final List<Item> dispatch = result;
         App.post(() -> callback.onResult(dispatch));
+    }
+
+    private static String fetchBoard(int board) {
+        if (board <= TMDB_TV) return fetch(BASE + PATHS[board]);
+        boolean movie = board % 2 == 0;
+        String type = movie ? "movie" : "tv";
+        String filter = movie
+                ? "with_watch_providers=" + PROVIDERS[board] + "&watch_region=US"
+                : "with_networks=" + NETWORKS[board];
+        String path = "/3/discover/" + type + "?language=zh-CN&page=1&sort_by=popularity.desc"
+                + "&vote_count.gte=" + (movie ? 50 : 10) + "&include_adult=false&" + filter;
+        try {
+            return TmdbApi.getJson(path);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private static String fetch(String url) {

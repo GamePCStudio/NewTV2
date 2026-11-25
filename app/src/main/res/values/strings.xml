@@ -260,6 +260,10 @@
     <string name="setting_auto">Auto</string>
     <string name="setting_custom">Custom</string>
     <string name="setting_size">Image size</string>
+    <string name="setting_search_layout">Search layout</string>
+    <string name="search_layout_vertical">Vertical</string>
+    <string name="search_layout_horizontal">Horizontal</string>
+    <string name="collect_all_count">All %1$d/%2$d</string>
     <string name="setting_doh">DoH</string>
     <string name="setting_cache">Cache</string>
     <string name="setting_backup">Backup</string>

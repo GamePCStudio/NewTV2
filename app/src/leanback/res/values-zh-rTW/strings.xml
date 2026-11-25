@@ -12,6 +12,12 @@
     <string name="home_board_douban_series">豆瓣·熱門劇集</string>
     <string name="home_board_tmdb_movie">TMDB·今日電影</string>
     <string name="home_board_tmdb_tv">TMDB·今日劇集</string>
+    <string name="home_board_netflix_movie">Netflix·熱門電影</string>
+    <string name="home_board_netflix_tv">Netflix·熱門劇集</string>
+    <string name="home_board_hbo_movie">HBO·熱門電影</string>
+    <string name="home_board_hbo_tv">HBO·熱門劇集</string>
+    <string name="home_board_disney_movie">Disney+·熱門電影</string>
+    <string name="home_board_disney_tv">Disney+·熱門劇集</string>
     <string name="home_board_more_title">查看全部</string>
     <string name="home_recommend_source">來自 · %1$s</string>
     <string name="hot_rank_tencent">騰訊視頻·熱搜榜</string>

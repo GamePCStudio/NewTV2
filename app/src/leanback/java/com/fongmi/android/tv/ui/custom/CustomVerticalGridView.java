@@ -27,6 +27,7 @@ public class CustomVerticalGridView extends VerticalGridView {
     }
 
     private List<View> views;
+    private View returnFocusView;
     private OnKeyInterceptor keyInterceptor;
     private boolean pressDown;
     private boolean pressUp;
@@ -59,6 +60,10 @@ public class CustomVerticalGridView extends VerticalGridView {
 
     public void setHeader(FragmentActivity activity, int... layoutIds) {
         if (activity != null) views = Arrays.stream(layoutIds).mapToObj(id -> (View) activity.findViewById(id)).filter(Objects::nonNull).toList();
+    }
+
+    public void setReturnFocusView(View view) {
+        returnFocusView = view;
     }
 
     public void setOnKeyInterceptor(OnKeyInterceptor interceptor) {
@@ -94,7 +99,12 @@ public class CustomVerticalGridView extends VerticalGridView {
 
     public boolean moveToTop() {
         if (views == null || getSelectedPosition() == 0 || getAdapter() == null || getAdapter().getItemCount() == 0) return false;
-        for (View view : views) if (view.getId() == R.id.recycler) view.requestFocus();
+        View target = returnFocusView;
+        if (target == null || target.getVisibility() != View.VISIBLE) {
+            target = null;
+            for (View view : views) if (view.getId() == R.id.recycler) target = view;
+        }
+        if (target == null || !target.requestFocus()) return false;
         scrollToPosition(0);
         showHeader();
         return true;

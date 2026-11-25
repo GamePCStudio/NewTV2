@@ -54,6 +54,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private Clock mClock;
     private Result mResult;
     private String[] size;
+    private String[] searchLayouts;
     /** 焦点切页是否已解除锁定：仅真实用户操作后才允许，避免启动 / 恢复时误触发。 */
     private boolean mNavSwitchArmed;
 
@@ -167,6 +168,8 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(Setting.getSwitch(Setting.isIncognito()));
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
+        searchLayouts = new String[]{getString(R.string.search_layout_horizontal), getString(R.string.search_layout_vertical)};
+        mBinding.searchLayoutText.setText(searchLayouts[Setting.getSearchLayout()]);
         setTmdbText();
         setNoticeText();
     }
@@ -219,6 +222,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.vod.setOnClickListener(this::onVod);
         mBinding.doh.setOnClickListener(this::setDoh);
         mBinding.size.setOnClickListener(this::setSize);
+        mBinding.searchLayout.setOnClickListener(this::setSearchLayout);
         mBinding.cache.setOnClickListener(this::onCache);
         mBinding.backup.setOnClickListener(this::onBackup);
         mBinding.player.setOnClickListener(this::onPlayer);
@@ -317,6 +321,12 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.sizeText.setText(size[index]);
         PlayerSetting.putSize(index);
         RefreshEvent.size();
+    }
+
+    private void setSearchLayout(View view) {
+        int index = (Setting.getSearchLayout() + 1) % searchLayouts.length;
+        Setting.putSearchLayout(index);
+        mBinding.searchLayoutText.setText(searchLayouts[index]);
     }
 
     private void setDoh(View view) {

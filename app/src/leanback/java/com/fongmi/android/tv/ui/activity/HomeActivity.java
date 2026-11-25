@@ -20,7 +20,6 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.splashscreen.SplashScreen;
 import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.FocusHighlight;
 import androidx.leanback.widget.HorizontalGridView;
@@ -132,8 +131,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     /** 只有「站点编辑」那一行显示的分割线：1dp 线 + 上下各 2dp 外边距。 */
     private static final int SITE_DIVIDER_DP = 1;
     private static final int SITE_DIVIDER_MARGIN_DP = 2;
-    /** 站源名字符预算：emoji 按 1 个字符计，截断「...」整体按 1 个字符计。 */
-    private static final int SITE_NAME_LIMIT = 6;
+    /** 站源名字符预算：emoji 按 1 个字符计，截断省略号「…」整体按 1 个字符计。 */
+    private static final int SITE_NAME_LIMIT = 16;
     /** 「最近观看」区块下沿距屏幕底边的距离：与顶栏上边距同值（16dp），视觉对称。 */
     private static final int HERO_BOTTOM_GAP_DP = 16;
     /** 列表行间距，必须与 setVerticalSpacing 同源。 */
@@ -231,14 +230,14 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     /** 海报网格素材落库后就地刷新，与首页其它行共用同一套解析与展示逻辑。 */
     private final ArtSource.Listener mArtListener = this::refreshArt;
     /**
-     * 首页四个分类模块（豆瓣热门电影 / 豆瓣热门剧集 / TMDB今日电影 / TMDB今日剧集）。
+     * 首页分类模块（豆瓣 / TMDB / 奈飞 / HBO / 迪士尼的电影与剧集）。
      *
-     * <p>按数组下标对应 {@link HomeBoard} 的四个分类；每格保存标题对象与内容行对象，
+     * <p>按数组下标对应 {@link HomeBoard} 的分类；每格保存标题对象与内容行对象，
      * 用对象身份定位，避免「推荐块重建 / 主视觉异步插入」导致下标错位。空列表时置 null 表示该行已收起。</p>
      */
     private final RowHeader[] mBoardHeaders = new RowHeader[HomeBoard.COUNT];
     private final ListRow[] mBoardRows = new ListRow[HomeBoard.COUNT];
-    /** 四个分类共用一个 Presenter；与站源行分开，站源 Style 变化时不影响分类行的海报样式。 */
+    /** 分类共用一个 Presenter；与站源行分开，站源 Style 变化时不影响分类行的海报样式。 */
     private VodPresenter mBoardPresenter;
     /** 「来自 · 站源名」的完整结果（已去黑名单）：首页只展示前 10 部，其余给「更多影片」页。 */
     private List<Vod> mRecommendItems = new ArrayList<>();
@@ -257,7 +256,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private boolean mHomeStarted;
     /**
      * 分类数据的启动延迟：主视觉的榜单请求在 initView 里就已经发出，
-     * 四个分类晚 800ms 再拉，避免首屏关键请求被这四份 JSON 抢带宽。
+     * 分类晚 800ms 再拉，避免首屏关键请求被这些榜单 JSON 抢带宽。
      */
     private static final long BOARD_DELAY_MS = 800;
 
@@ -474,7 +473,6 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     protected void onCreate(Bundle savedInstanceState) {
         ColdTrace.mark("home.onCreate.start");
         instanceCount++;
-        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         ColdTrace.mark("home.onCreate.end");
     }
@@ -507,7 +505,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /**
-     * 首页启动链路：检查更新、拉主视觉与四个分类、注册素材监听、放首帧焦点与启动画面。
+     * 首页启动链路：检查更新、拉主视觉与分类、注册素材监听并放首帧焦点。
      *
      * <p>单独成方法是为了让「免责声明未同意」时整条链路不执行 —— 声明弹窗关闭前
      * 主界面既不显示也不发请求；同意后从这里一次性补上，行为与冷启动完全一致。</p>
@@ -520,12 +518,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         ArtSource.register(mArtListener);
         checkPermission();
         loadDoubanHot();
-        // 四个分类模块跟在主视觉之后拉取，命中缓存时会立即挂行。
+        // 分类模块跟在主视觉之后拉取，命中缓存时会立即挂行。
         App.post(this::loadBoards, BOARD_DELAY_MS);
         ColdTrace.mark("home.hero.requested");
         installInitialFocus();
-        // 启动画面：静态品牌 banner（原始尺寸 50%、等比居中）显示片刻后自动淡出。
-        mBinding.splashBrand.play();
         startClock();
     }
 
@@ -540,7 +536,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         ViewTreeObserver observer = getWindow().getDecorView().getViewTreeObserver();
         observer.addOnGlobalFocusChangeListener(focusGuard);
         observer.addOnGlobalFocusChangeListener(toolbarFocusWatcher);
-        // 冷启动埋点：首页第一帧真正进入绘制（含启动画面）的时刻。
+        // 冷启动埋点：首页第一帧真正进入绘制的时刻。
         observer.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
@@ -1412,10 +1408,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /**
-     * 站源名限制为 6 个字符：用 ICU 的 character break 按<b>字形簇</b>切分，
+     * 站源名限制为 16 个字符：用 ICU 的 character break 按<b>字形簇</b>切分，
      * emoji（含 ZWJ 组合序列、肤色修饰符、变体选择符）整体算 1 个字符，不会被
-     * UTF-16 代理对拆成 2 个。超出时保留前 5 个簇再拼「...」——省略号整体按
-     * 1 个字符计入预算，因此总逻辑长度恒为 6。
+     * UTF-16 代理对拆成 2 个。超出时保留前 15 个簇再拼「…」——省略号整体按
+     * 1 个字符计入预算，因此总逻辑长度恒为 16。
      */
     private static String clampSiteName(String name) {
         if (TextUtils.isEmpty(name)) return "";
@@ -1429,7 +1425,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         if (clusters.size() <= SITE_NAME_LIMIT) return name;
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < SITE_NAME_LIMIT - 1; i++) sb.append(clusters.get(i));
-        return sb.append("...").toString();
+        return sb.append("…").toString();
     }
 
     private void initConfig() {
@@ -1604,7 +1600,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 }
                 if (ArtSource.apply(vod)) mAdapter.notifyArrayItemRangeChanged(i, 1);
             } else if (item instanceof ListRow) {
-                // 四个分类模块的片名/海报/评分都来自各自数据源，不参与站源素材回填与黑名单过滤。
+                // 分类模块的片名/海报/评分都来自各自数据源，不参与站源素材回填与黑名单过滤。
                 if (isBoardRow((ListRow) item)) continue;
                 Object adapter = ((ListRow) item).getAdapter();
                 if (!(adapter instanceof ArrayObjectAdapter)) continue;
@@ -1709,7 +1705,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         getHistory(true);
         // 「来自 · 站源名」：丢掉旧 presenter 与整块（标题 + 网格），按缓存结果重建。
         rebuildRecommend();
-        // 四个分类模块：共用 presenter 先置空，摘掉旧标题与旧行后按新尺寸重挂。
+        // 分类模块：共用 presenter 先置空，摘掉旧标题与旧行后按新尺寸重挂。
         mBoardPresenter = null;
         for (int board = 0; board < HomeBoard.COUNT; board++) removeBoard(board);
         loadBoards();
@@ -1734,7 +1730,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         }
     }
 
-    /** 拉取四个分类；命中 12 小时缓存会立即挂行，首次安装则走网络。 */
+    /** 拉取分类；命中 12 小时缓存会立即挂行，首次安装则走网络。 */
     private void loadBoards() {
         if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
         for (int board = 0; board < HomeBoard.COUNT; board++) {
@@ -1751,6 +1747,18 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                 return R.string.home_board_tmdb_movie;
             case HomeBoard.TMDB_TV:
                 return R.string.home_board_tmdb_tv;
+            case HomeBoard.NETFLIX_MOVIE:
+                return R.string.home_board_netflix_movie;
+            case HomeBoard.NETFLIX_TV:
+                return R.string.home_board_netflix_tv;
+            case HomeBoard.HBO_MOVIE:
+                return R.string.home_board_hbo_movie;
+            case HomeBoard.HBO_TV:
+                return R.string.home_board_hbo_tv;
+            case HomeBoard.DISNEY_MOVIE:
+                return R.string.home_board_disney_movie;
+            case HomeBoard.DISNEY_TV:
+                return R.string.home_board_disney_tv;
             default:
                 return R.string.home_board_douban_movie;
         }
@@ -1760,7 +1768,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 一个分类的数据到位：建「标题 + 单行横滑海报」，插在「来自 · 站源名」上方。
      *
      * <p>卡片只承载片名、海报、评分三项，没有站点与影片 id，点击按片名进搜索结果
-     * （见 {@link #onItemClick(Vod)}）。重复回调就地替换；空列表整行收起，不影响其它三行。</p>
+     * （见 {@link #onItemClick(Vod)}）。重复回调就地替换；空列表整行收起，不影响其它行。</p>
      */
     private void applyBoard(int board, List<HomeBoard.Item> items) {
         if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
@@ -1775,7 +1783,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             vod.setName(item.getTitle());
             vod.setArtPic(item.getPoster());
             // 评分不单独占字段：拼进备注，卡片按次标题统一渲染（与评分角标出现前一致）。
-            // 无评分 / 评分为 0 时不能整行收掉，四个分类模块统一显示「暂无评分」占位。
+            // 无评分 / 评分为 0 时不能整行收掉，分类模块统一显示「暂无评分」占位。
             String remark = ArtSource.scoreRemark("", item.getScore());
             vod.setRemarks(remark.isEmpty() ? getString(R.string.douban_hot_no_rating) : remark);
             vods.add(vod);
@@ -1875,7 +1883,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         return end;
     }
 
-    /** 这个位置是不是四个分类模块的标题或内容行（按对象身份判断）。 */
+    /** 这个位置是不是分类模块的标题或内容行（按对象身份判断）。 */
     private boolean isBoardSlot(int index) {
         if (index < 0 || index >= mAdapter.size()) return false;
         Object item = mAdapter.get(index);

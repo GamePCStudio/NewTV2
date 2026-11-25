@@ -479,6 +479,11 @@ public final class TmdbApi {
         });
     }
 
+    /** 首页分类榜单使用的原始 JSON 请求，复用同一套地址、密钥、节流与失败轮换。 */
+    public static String getJson(String path) throws IOException {
+        return getApi(path, TmdbLog.STAGE_SEARCH, "首页榜单").body;
+    }
+
     /** 统一失败出口：写一条「失败」日志，并把原因与失败类型回给调用方（如果有）。 */
     private static void reportFailure(FetchCallback callback, String keyword, String reason, int type) {
         String message = TextUtils.isEmpty(reason) ? "未知原因" : reason;

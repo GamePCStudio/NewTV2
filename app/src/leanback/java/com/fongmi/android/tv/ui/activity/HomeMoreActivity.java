@@ -35,7 +35,7 @@ import java.util.List;
  *
  * <p>两种入口共用一套渲染：</p>
  * <ul>
- *   <li>{@link #startBoard}：首页四个分类模块，数据回读 {@link HomeBoard}（内存 / 磁盘缓存，
+ *   <li>{@link #startBoard}：首页分类模块，数据回读 {@link HomeBoard}（内存 / 磁盘缓存，
  *       过期才联网）；</li>
  *   <li>{@link #startSite}：「来自 · 站源名」，条目直接取当前首页结果里被截断的那一段，
  *       带 site / vodId，所以点击能直接起播。</li>
@@ -134,7 +134,7 @@ public class HomeMoreActivity extends BaseActivity implements VodPresenter.OnCli
                 vod.setName(item.getTitle());
                 vod.setArtPic(item.getPoster());
                 // 评分不单独占字段：拼进备注，卡片按次标题统一渲染（与评分角标出现前一致）。
-                // 无评分 / 评分为 0 时统一显示「暂无评分」，与首页四个分类模块一致。
+                // 无评分 / 评分为 0 时统一显示「暂无评分」，与首页分类模块一致。
                 String remark = ArtSource.scoreRemark("", item.getScore());
                 vod.setRemarks(remark.isEmpty() ? getString(R.string.douban_hot_no_rating) : remark);
                 vods.add(vod);

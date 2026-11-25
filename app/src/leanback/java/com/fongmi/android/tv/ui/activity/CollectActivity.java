@@ -7,6 +7,7 @@ import android.os.Parcelable;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -28,6 +29,7 @@ import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.ActivityCollectBinding;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.CollectAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.PageGlowController;
@@ -40,9 +42,9 @@ public class CollectActivity extends BaseActivity {
 
     private ActivityCollectBinding mBinding;
     private CollectAdapter mAdapter;
+    private CollectAdapter mVerticalAdapter;
     private SiteViewModel mViewModel;
     private List<Site> mSites;
-    private View mOldView;
     /** 整页背景漫反射 + 焦点卡提亮（搜索结果页）。 */
     private PageGlowController mPageGlow;
     /** 从「最近观看」跨站点记录进来的待续播信息（JSON），选中同一部片时消费掉。 */
@@ -125,6 +127,8 @@ public class CollectActivity extends BaseActivity {
         // 否则从普通搜索进来还会沿用上一轮的旧记录去跳集数。
         if (!intent.hasExtra(EXTRA_RESUME)) getIntent().removeExtra(EXTRA_RESUME);
         mAdapter.clear();
+        mVerticalAdapter.clear();
+        setSearchLayout();
         setPager();
         search();
     }
@@ -135,6 +139,7 @@ public class CollectActivity extends BaseActivity {
         // 监听与事件订阅在 onStart/onStop 挂摘，后台页面不再耗资源。
         mPageGlow = new PageGlowController(this, mBinding.pageGlow);
         setRecyclerView();
+        setSearchLayout();
         setViewModel();
         // 凡经 CollectActivity.start() 进入结果页的关键词一律不写搜索历史；
         // 搜索页自身的记录走 SearchActivity.onSearch() 的 mRecordAdapter.add()，不受影响。
@@ -148,22 +153,41 @@ public class CollectActivity extends BaseActivity {
         mBinding.pager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
             @Override
             public void onPageSelected(int position) {
-                mBinding.recycler.setSelectedPosition(position);
-                mBinding.recycler.requestFocus();
+                syncSelection(position);
+                activeRecycler().requestFocus();
             }
         });
-        mBinding.recycler.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
-            @Override
-            public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-                onChildSelected(child);
-            }
-        });
+        mBinding.recycler.addOnChildViewHolderSelectedListener(new SelectionListener());
+        mBinding.verticalRecycler.addOnChildViewHolderSelectedListener(new SelectionListener());
+    }
+
+    private final class SelectionListener implements OnChildViewHolderSelectedListener {
+        @Override
+        public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
+            onChildSelected(child, position);
+        }
     }
 
     private void setRecyclerView() {
         mBinding.recycler.setHorizontalSpacing(ResUtil.dp2px(16));
-        mBinding.recycler.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
+        mBinding.recycler.setRowHeight(ResUtil.dp2px(56));
         mBinding.recycler.setAdapter(mAdapter = new CollectAdapter());
+        mBinding.verticalRecycler.setRowHeight(ResUtil.dp2px(48));
+        mBinding.verticalRecycler.setAdapter(mVerticalAdapter = new CollectAdapter());
+    }
+
+    private void setSearchLayout() {
+        boolean vertical = Setting.getSearchLayout() == 1;
+        mBinding.recycler.setVisibility(vertical ? View.GONE : View.VISIBLE);
+        mBinding.verticalRecycler.setVisibility(vertical ? View.VISIBLE : View.GONE);
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mBinding.pager.getLayoutParams();
+        params.leftMargin = vertical ? ResUtil.dp2px(196) : 0;
+        params.topMargin = vertical ? 0 : ResUtil.dp2px(56);
+        mBinding.pager.setLayoutParams(params);
+    }
+
+    private RecyclerView activeRecycler() {
+        return Setting.getSearchLayout() == 1 ? mBinding.verticalRecycler : mBinding.recycler;
     }
 
     private void setViewModel() {
@@ -171,7 +195,12 @@ public class CollectActivity extends BaseActivity {
         mViewModel.getSearch().observe(this, result -> {
             if (result.getList().isEmpty()) return;
             getFragment().addVideo(result.getList());
-            mAdapter.add(Collect.create(result.getList()));
+            Collect item = Collect.create(result.getList());
+            mAdapter.add(item);
+            mVerticalAdapter.add(item);
+            int hit = Math.max(0, mAdapter.getItemCount() - 1);
+            mAdapter.setCount(hit, mSites.size());
+            mVerticalAdapter.setCount(hit, mSites.size());
             mBinding.pager.getAdapter().notifyDataSetChanged();
         });
     }
@@ -187,24 +216,28 @@ public class CollectActivity extends BaseActivity {
     private void search() {
         if (mSites.isEmpty()) return;
         mAdapter.add(Collect.all());
+        mVerticalAdapter.add(Collect.all());
+        mAdapter.setCount(0, mSites.size());
+        mVerticalAdapter.setCount(0, mSites.size());
         mBinding.pager.getAdapter().notifyDataSetChanged();
         mBinding.result.setText(getString(R.string.collect_result, getKeyword()));
+        syncSelection(0);
+        activeRecycler().requestFocus();
         mViewModel.searchContent(mSites, getKeyword(), false);
     }
 
-    private void onChildSelected(@Nullable RecyclerView.ViewHolder child) {
-        if (mOldView != null) mOldView.setSelected(false);
-        if ((mOldView = child != null ? child.itemView : null) == null) return;
-        mOldView.setSelected(true);
-        App.post(mRunnable, 100);
+    private void syncSelection(int position) {
+        mAdapter.select(position);
+        mVerticalAdapter.select(position);
+        mBinding.recycler.setSelectedPosition(position);
+        mBinding.verticalRecycler.setSelectedPosition(position);
     }
 
-    private final Runnable mRunnable = new Runnable() {
-        @Override
-        public void run() {
-            mBinding.pager.setCurrentItem(mBinding.recycler.getSelectedPosition());
-        }
-    };
+    private void onChildSelected(@Nullable RecyclerView.ViewHolder child, int position) {
+        if (child == null) return;
+        syncSelection(position);
+        App.post(() -> mBinding.pager.setCurrentItem(position), 100);
+    }
 
     @Override
     protected void onBackInvoked() {

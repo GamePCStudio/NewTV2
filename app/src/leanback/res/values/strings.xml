@@ -12,6 +12,12 @@
     <string name="home_board_douban_series">Douban · Popular Series</string>
     <string name="home_board_tmdb_movie">TMDB · Today\'s Movies</string>
     <string name="home_board_tmdb_tv">TMDB · Today\'s Series</string>
+    <string name="home_board_netflix_movie">Netflix · Popular Movies</string>
+    <string name="home_board_netflix_tv">Netflix · Popular Series</string>
+    <string name="home_board_hbo_movie">HBO · Popular Movies</string>
+    <string name="home_board_hbo_tv">HBO · Popular Series</string>
+    <string name="home_board_disney_movie">Disney+ · Popular Movies</string>
+    <string name="home_board_disney_tv">Disney+ · Popular Series</string>
     <string name="home_board_more_title">View all</string>
     <string name="home_recommend_source">From · %1$s</string>
     <string name="hot_rank_tencent">Tencent Video · Hot Search</string>

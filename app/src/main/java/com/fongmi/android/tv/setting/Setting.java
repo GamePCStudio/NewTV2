@@ -12,6 +12,8 @@ public class Setting {
     private static final int MAX_SITE_MODE = 1;
     private static final int MIN_SYNC_MODE = 0;
     private static final int MAX_SYNC_MODE = 2;
+    private static final int MIN_SEARCH_LAYOUT = 0;
+    private static final int MAX_SEARCH_LAYOUT = 1;
 
     public static String getSwitch(boolean value) {
         return ResUtil.getString(value ? R.string.setting_on : R.string.setting_off);
@@ -80,6 +82,14 @@ public class Setting {
 
     public static void putSyncMode(int mode) {
         Prefers.put("sync_mode", Math.clamp(mode, MIN_SYNC_MODE, MAX_SYNC_MODE));
+    }
+
+    public static int getSearchLayout() {
+        return Math.clamp(Prefers.getInt("search_layout", MIN_SEARCH_LAYOUT), MIN_SEARCH_LAYOUT, MAX_SEARCH_LAYOUT);
+    }
+
+    public static void putSearchLayout(int layout) {
+        Prefers.put("search_layout", Math.clamp(layout, MIN_SEARCH_LAYOUT, MAX_SEARCH_LAYOUT));
     }
 
     public static boolean isIncognito() {

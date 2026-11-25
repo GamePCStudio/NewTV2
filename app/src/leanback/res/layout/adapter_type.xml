@@ -5,6 +5,7 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:background="@drawable/selector_type"
+    android:ellipsize="end"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:textColor="@color/selector_type_text"

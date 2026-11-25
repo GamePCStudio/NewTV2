@@ -26,7 +26,7 @@
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Splash"
+            android:theme="@style/Theme.App"
             android:windowSoftInputMode="adjustPan">
 
             <meta-data

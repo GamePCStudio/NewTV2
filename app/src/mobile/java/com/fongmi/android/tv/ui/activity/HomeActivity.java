@@ -8,7 +8,6 @@ import android.text.TextUtils;
 import android.view.MenuItem;
 
 import androidx.annotation.NonNull;
-import androidx.core.splashscreen.SplashScreen;
 import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
@@ -85,7 +84,6 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         instanceCount++;
-        SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
     }
 

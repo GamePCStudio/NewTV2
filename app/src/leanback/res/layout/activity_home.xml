@@ -19,9 +19,6 @@
     L3  siteSheet（elevation 16dp，最后一个子 View）
         FocusTrapFrameLayout：显示期间把方向焦点搜索截断在容器内部；内容为站源列表。
         原品牌入口的功能 sheet（moreSheet）已随 logo 弹窗菜单一并移除。
-    L4  splashBrand（elevation 32dp）
-        启动画面 banner：静态显示 640×360（原始 1280×720 的 50%）等比居中，
-        约 600ms 后自动淡出隐藏。
 
   层级保证：sheet > toolbar > topScrim > recycler。浮层控件全部叠加在主视觉之上，
   不占用列表行。toolbar/sheet 是 ProgressLayout 的兄弟节点，因此
@@ -148,17 +145,5 @@
     <include
         android:id="@+id/siteSheet"
         layout="@layout/view_site_sheet" />
-
-    <!-- L4：欢迎页（静态品牌图 splash_brand.png 1920×1080，等比居中、
-         不足铺满时同色 #0C1219 补边），约 600ms 后自动淡出隐藏；
-         不参与焦点与点击，elevation 最高。 -->
-    <com.fongmi.android.tv.ui.custom.SplashBrandView
-        android:id="@+id/splashBrand"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="true"
-        android:elevation="32dp"
-        android:focusable="false"
-        android:importantForAccessibility="no" />
 
 </FrameLayout>

@@ -21,6 +21,7 @@ import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.FragmentTypeBinding;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.CollectActivity;
 import com.fongmi.android.tv.ui.activity.VideoActivity;
 import com.fongmi.android.tv.ui.activity.VodActivity;
@@ -80,7 +81,10 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         selector.addPresenter(ListRow.class, new CustomRowPresenter(Product.POSTER_SPACING_DP), VodPresenter.class);
         mBinding.recycler.setAdapter(new ItemBridgeAdapter(mAdapter = new ArrayObjectAdapter(selector)));
         mBinding.recycler.addOnScrollListener(mScroller = new CustomScroller(this));
-        mBinding.recycler.setHeader(getActivity(), R.id.result, R.id.recycler);
+        boolean vertical = Setting.getSearchLayout() == 1;
+        mBinding.recycler.setHeader(getActivity(), vertical ? new int[]{R.id.result} : new int[]{R.id.result, R.id.recycler});
+        mBinding.recycler.setFocusOutSideStart(vertical);
+        mBinding.recycler.setReturnFocusView(requireActivity().findViewById(vertical ? R.id.verticalRecycler : R.id.recycler));
         mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(16));
     }
 
