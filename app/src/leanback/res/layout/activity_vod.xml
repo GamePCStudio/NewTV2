@@ -5,7 +5,7 @@
   布局结构（自下而上）：
     L0  topScrim   顶部渐变遮罩，垫在最底层：高度 = 工具栏底边 + 5dp（代码设置）。
     L1  LinearLayout（垂直流式，match_parent）
-        ① <include view_home_toolbar>  —— 整条顶栏（搜索圆钮 + 6 导航（含「我的」设置入口）+ 站源 + 时钟，
+        ① <include view_home_toolbar>  —— 整条顶栏（搜索圆钮 + 首页 / 片库 2 导航 + 站源 + 设置图标 + 时钟，
            单行 64dp），样式 / 间距 / 焦点反馈与首页完全一致，只维护
            view_home_toolbar.xml 一份；
         ② <HorizontalGridView recycler> —— 分类胶囊（原第 0 项，现排顶栏下方，二者不重叠）；

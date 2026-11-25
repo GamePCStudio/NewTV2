@@ -76,7 +76,7 @@ public class PosterStackPresenter extends Presenter {
         // 卡片本身只排在这段高度的顶部，视觉块高度恰好等于周边画框。
         lp.height = size[1] + textBlock;
         binding.getRoot().setLayoutParams(lp);
-        // 焦点反馈完全复用海报卡：整卡 1.04 缩放 + selector_vod 白描边 + 120ms。
+        // 焦点反馈完全复用海报卡：整卡按 PosterFocusAnimator.FOCUS_SCALE_CARD 缩放 + selector_vod 白描边 + 120ms。
         // 矩形卡 elevate=false（与 VodRectHolder 一致），不抬升只缩放。
         // 白框挂在 layers 上，呼吸动画也作用在那一层（不是控件根）。
         PosterFrameBreath breath = new PosterFrameBreath(binding.getRoot().getGlowFrame());

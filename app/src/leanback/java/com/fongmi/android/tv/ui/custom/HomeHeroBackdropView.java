@@ -23,14 +23,17 @@ import androidx.recyclerview.widget.RecyclerView;
  * 与播放详情页的整页背景（{@code DetailBackdropView}）<b>同源同值</b>：
  *
  * <ul>
- *   <li><b>布局</b>：宽度铺满、水平居中、顶部贴齐后上移 {@link BackdropStyle#TOP_SHIFT_RATIO}；</li>
+ *   <li><b>布局</b>：宽度铺满、水平居中，剧照顶部与屏幕顶对齐（不上移、不裁顶部，
+ *       整张图只做平移，底部完整保留）；</li>
  *   <li><b>尺寸</b>：向父布局<b>报告</b> {@link BackdropStyle#measuredHeight(View, int)}
  *       —— 固定 {@link BackdropStyle#HEIGHT_DP} dp（<b>绝对高度</b>，1080p 下 880px），
  *       这决定了本行在列表里的槽位；</li>
- *   <li><b>向下溢出</b>：剧照与羽化实际按「报告高度 + {@link BackdropStyle#HOME_BOTTOM_BLEED_DP}」
- *       绘制，越过本行底边铺到「最近观看」标题上方，行槽位与焦点链不变；</li>
+ *   <li><b>向下溢出</b>：剧照绘制高度 = 报告高度 + {@link BackdropStyle#HOME_BOTTOM_BLEED_DP}，
+ *       羽化终点则延伸到视口底（= 顶对齐后 16:9 剧照的底边），两者都不改报告高度，
+ *       行槽位与焦点链不变；</li>
  *   <li><b>羽化</b>：{@link BackdropStyle#fadePaint(View, int)} 的底部 smootherstep 渐隐
- *       （21 档、C2 连续、350dp 半径），终点是纯 {@code #101114}；</li>
+ *       （21 档、C2 连续、350dp 半径），人眼可视收尾线（alpha≈240）落在「最近观看」副标题
+ *       下沿再往下 8dp（1080p 下 y=1064px），渐变参数终点按此反推到屏幕底之下；</li>
  *   <li><b>透明度</b>：剧照层统一 {@link BackdropStyle#IMAGE_ALPHA}。</li>
  * </ul>
  *
@@ -84,11 +87,12 @@ public class HomeHeroBackdropView extends FrameLayout {
     }
 
     /**
-     * 底部羽化 scrim 绘制下沿在屏幕中的绝对 y（含向下溢出段）。
+     * 整页光效的「纯不透明挡板下沿」在屏幕中的绝对 y（含向下溢出段）。
      *
-     * <p>scrim 末端是纯不透明 #101114，会盖住整页背景光层；首页按这个值把光的渐入起点
-     * 精确对齐到挡板下沿，交界处光强为 0、与 scrim 同色，避免水平断层。主视觉行随列表
-     * 滚动，所以每次都要实时取。</p>
+     * <p>注意这不是羽化矩形的实际绘制终点（那个已延伸到视口底）：这里返回的是羽化带
+     * 收敛到纯 {@code #101114} 的位置，也就是整页背景光必须从其之下才渐入的边界。
+     * 两者刻意分离 —— 若把本值也推到视口底，光效绘制区间会被夹成零高度而整体消失。
+     * 主视觉行随列表滚动，所以每次都要实时取。</p>
      */
     public int getScrimBottomOnScreen() {
         int[] loc = new int[2];
@@ -122,7 +126,7 @@ public class HomeHeroBackdropView extends FrameLayout {
         @Override
         public void setImageDrawable(@Nullable Drawable drawable) {
             super.setImageDrawable(drawable);
-            BackdropStyle.applyMatrix(this);
+            BackdropStyle.applyMatrix(this, 0f);
         }
     }
 
@@ -136,8 +140,9 @@ public class HomeHeroBackdropView extends FrameLayout {
 
     /** drawable 换了之后重算矩阵；未 layout 时内部安全返回，由 {@link #onLayout} 兜底。 */
     public void applyMatrices() {
-        BackdropStyle.applyMatrix(imageA);
-        BackdropStyle.applyMatrix(imageB);
+        // 首页零偏移：剧照顶对齐画框顶（即屏幕顶），不再上移裁掉顶部。
+        BackdropStyle.applyMatrix(imageA, 0f);
+        BackdropStyle.applyMatrix(imageB, 0f);
     }
 
     /**
@@ -153,6 +158,17 @@ public class HomeHeroBackdropView extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        // 只有仍挂在列表 item 里时才需要「越界绘制 + 负 Z」这套处理；
+        // 抽到页面级（activity_home 的 heroBackdrop）后父链上没有 RecyclerView，
+        // 此时若照旧给根布局设 translationZ=-1，会把整页内容压到窗口其它图层之下。
+        boolean inList = false;
+        for (ViewParent p = getParent(); p instanceof ViewGroup; p = p.getParent()) {
+            if (p instanceof RecyclerView) {
+                inList = true;
+                break;
+            }
+        }
+        if (!inList) return;
         ViewParent parent = getParent();
         int guard = 0;
         while (parent instanceof ViewGroup group && guard++ < 8) {
@@ -176,9 +192,33 @@ public class HomeHeroBackdropView extends FrameLayout {
      */
     private int drawHeight(int reportedHeight) {
         int bleed = BackdropStyle.dp(this, BackdropStyle.HOME_BOTTOM_BLEED_DP);
-        int viewport = getResources().getDisplayMetrics().heightPixels;
+        int viewport = viewportHeight();
         bleed = Math.max(0, Math.min(bleed, viewport - reportedHeight));
         return reportedHeight + bleed;
+    }
+
+    /** 视口高度（px）：羽化矩形的绘制下沿；渐变末端色由 CLAMP 从终点继续铺到这里。 */
+    private int viewportHeight() {
+        return getResources().getDisplayMetrics().heightPixels;
+    }
+
+    /**
+     * 羽化渐变的参数终点（相对本 View 顶）：由<b>可视收满线</b>反推。
+     *
+     * <p>可视线 = {@code 视口底 − HOME_FADE_END_GAP_DP}，即「最近观看」副标题下沿再往下 8dp
+     * （1080p 下 1064px）。肉眼在 alpha≈240（u=0.8）判定收尾，那条边在参数终点前约
+     * 20% 渐变带长度（140px），所以参数终点 = 1064 + 140 = 1204px。</p>
+     *
+     * <p>上一版按 u=0.95 只补 5%（35px），可视边停在 959px（历史卡片图片下沿附近），
+     * 改了 35px 全落在 240→255 这段不可分辨区间 —— 这正是「调了没变化」的根因。</p>
+     *
+     * <p>矩形仍画到视口底；该处 alpha≈244（剧照残留约 4%），不会回到未羽化的亮带。
+     * 半径 / 曲线 / 色标 / 占比全部沿用原值。</p>
+     */
+    private int fadeEndPx() {
+        int visibleEnd = viewportHeight() - BackdropStyle.dp(this, BackdropStyle.HOME_FADE_END_GAP_DP);
+        int fade = BackdropStyle.fadeLength(this, visibleEnd, BackdropStyle.HOME_FADE_MAX_RATIO);
+        return visibleEnd + Math.round(fade * (1f - BackdropStyle.HOME_FADE_VISUAL_END));
     }
 
     @Override
@@ -215,9 +255,9 @@ public class HomeHeroBackdropView extends FrameLayout {
             bottomScrim = null;
             return;
         }
-        // 羽化终点跟剧照一起下移到溢出末端，收尾处仍是纯 #101114，与窗口底色同值、
-        // 边界像素恒等；画框变高后 350dp 半径不再被 0.6 占比压缩，过渡更长更柔。
-        bottomScrim = BackdropStyle.fadePaint(this, drawHeight(height), BackdropStyle.HOME_FADE_MAX_RATIO);
+        // 参数终点由人眼可视收尾线（副标题下沿再往下 8dp）反推，补偿 20% 渐变带长度。
+        // 半径 / 21 档 smootherstep 色标 / 0.9 占比全部不变。
+        bottomScrim = BackdropStyle.fadePaint(this, fadeEndPx(), BackdropStyle.HOME_FADE_MAX_RATIO);
     }
 
     @Override
@@ -227,7 +267,8 @@ public class HomeHeroBackdropView extends FrameLayout {
         int height = getHeight();
         if (width <= 0 || height <= 0) return;
         // 只画底部羽化，其余区域保持剧照原始色彩、不叠加任何横向遮罩。
-        // 矩形画到绘制高度（越过本 View 底边），把渐隐一直拖到「最近观看」标题上方。
-        if (bottomScrim != null) canvas.drawRect(0, 0, width, drawHeight(height), bottomScrim);
+        // 矩形仍画到视口底：该处 alpha≈244，剧照只剩约 4% 残留，不会回到未羽化亮带。
+        // clipChildren=false 允许越界绘制，不改变行槽位或焦点链。
+        if (bottomScrim != null) canvas.drawRect(0, 0, width, viewportHeight(), bottomScrim);
     }
 }

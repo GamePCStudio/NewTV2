@@ -91,7 +91,7 @@ public class KeepAdapter extends BaseDiffAdapter<Keep, KeepAdapter.ViewHolder> {
         public ViewHolder(@NonNull AdapterVodBinding binding) {
             super(binding.getRoot());
             this.binding = binding;
-            // 与其它海报卡共用 120ms / 1.04 缩放口径，替换旧的 150ms / 1.1 倍私有动画。
+            // 与其它海报卡共用 120ms / PosterFocusAnimator.FOCUS_SCALE_CARD 缩放口径，替换旧的 150ms / 1.1 倍私有动画。
             PosterFocusAnimator.bind(itemView, false, (card, focused) -> PosterFocusAnimator.marquee(binding.name, focused));
         }
     }

@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.view.animation.DecelerateInterpolator;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -39,9 +40,11 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.TmdbStore;
 import com.fongmi.android.tv.bean.DoubanHotItem;
 import com.fongmi.android.tv.bean.DoubanHotRow;
+import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.TmdbArt;
 import com.fongmi.android.tv.databinding.AdapterDoubanHotBinding;
 import com.fongmi.android.tv.ui.custom.BackdropStyle;
+import com.fongmi.android.tv.ui.custom.HomeHeroBackdropView;
 import com.fongmi.android.tv.utils.ColdTrace;
 import com.fongmi.android.tv.utils.HeroGlowColor;
 import com.fongmi.android.tv.utils.RankLatest;
@@ -94,6 +97,9 @@ public class DoubanHotPresenter extends Presenter {
 
     private static final long AUTO_DELAY = 7_000;
     private static final long IMAGE_FADE = 600;
+    /** 文字层收起：整体上滑 24dp + 渐隐 220ms。只改 translationY / alpha，不触发布局。 */
+    private static final int DETAILS_SHIFT_DP = 24;
+    private static final long DETAILS_ANIM_MS = 220;
     /** ic_tmdb 的 viewport 宽高比：图标高度对齐文字后，宽度按此比例等比缩放，避免拉扁 logo。 */
     private static final float TMDB_ICON_RATIO = 185.04f / 133.4f;
     /**
@@ -128,6 +134,25 @@ public class DoubanHotPresenter extends Presenter {
     });
 
     private final OnClickListener listener;
+    /**
+     * 页面级背景层（activity_home 的 @id/heroBackdrop）。
+     *
+     * <p>背景已不在 item 内：它是固定图层，不随列表滚动，由 Activity 注入并负责按焦点显隐。
+     * 列表里的主视觉行只保留文字层与占位高度。所有背景操作都从这里取目标视图。</p>
+     */
+    private HomeHeroBackdropView backdrop;
+    /** 当前正在显示的那一层剧照（页面级唯一，不能放在 Holder 里，Holder 会因滚动回收重建）。 */
+    private ImageView front;
+    /** 轮换游标，同样必须跨 Holder 复用存活。 */
+    private int index;
+    /** 背景是否处于「可轮换」状态，由 Activity 的显隐控制驱动；默认可见即可轮换。 */
+    private boolean active = true;
+    /** 文字层（片名 / 评分 / 简介 / 按钮 / 指示点）是否收起（焦点进入「最近观看」时）。 */
+    private boolean detailsHidden;
+    /** 当前接管背景的历史记录；非空 = 暂停榜单轮换，由这条记录的横版剧照驱动背景。 */
+    private History externalItem;
+    /** 屏幕上这一帧是否来自历史记录（与 {@link #externalItem} 分开：离开后帧还在）。 */
+    private boolean externalFrame;
 
     public interface OnClickListener {
 
@@ -138,6 +163,68 @@ public class DoubanHotPresenter extends Presenter {
     public DoubanHotPresenter(OnClickListener listener) {
         this.listener = listener;
     }
+
+    /** 注入页面级背景层；必须在首次绑定前调用。 */
+    public void setBackdrop(HomeHeroBackdropView view) {
+        this.backdrop = view;
+        this.front = view == null ? null : view.getImageA();
+    }
+
+    /** 显示 / 隐藏驱动轮换：隐藏时停表，显示时恢复（从当前游标继续）。 */
+    public void setActive(boolean active) {
+        if (this.active == active) return;
+        this.active = active;
+        if (active && current != null) current.attach();
+    }
+
+    /**
+     * 收起 / 放回文字层（片名、评分、演职员、简介、「查看详情」与轮换指示点）。
+     *
+     * <p>收起动效是「整体上滑 + 渐隐」，不改变行高、不影响背景层与列表位置；
+     * 状态存在 presenter 上，Holder 因滚动被回收重建后由 {@code bind} 无动画地补齐。</p>
+     */
+    public void setDetailsHidden(boolean hidden) {
+        if (detailsHidden == hidden) return;
+        detailsHidden = hidden;
+        if (current != null) current.applyDetailsState(true);
+    }
+
+    /**
+     * 焦点落在「最近观看」的某条记录上：背景立刻切成该记录的横版剧照。
+     *
+     * <p>没刮到剧照的记录不保留上一部的图 —— 需求要求「不存在则不显示对应素材」，
+     * 两层一起淡出露出纯底色。轮换在此期间停表，避免几秒后又被榜单抢回背景。</p>
+     */
+    public void showHistoryBackdrop(History history) {
+        if (history == null) return;
+        /*
+         * 重复上报（Holder 复用 / 重新绑定时补发）只在「屏幕上已经是这一条」时才跳过。
+         * 不能用 externalItem 判断：主视觉行滚出屏幕被回收后 current 为 null，
+         * 那时只会记下 externalItem 而画不出图；此时若继续按 externalItem 判重，
+         * 后续再上报同一条就被吞掉，背景会一直停在上一次 bind 出来的榜单第 1 条。
+         */
+        boolean same = externalFrame && externalItem != null && TextUtils.equals(externalItem.getKey(), history.getKey());
+        externalItem = history;
+        if (same || current == null) return;
+        current.showExternal(history);
+    }
+
+    /**
+     * 离开「最近观看」。
+     *
+     * @param reset {@code true} = 回到主视觉行，从第 1 条重新开始轮换；
+     *              {@code false} = 向下进入内容区，停表并保留最后看过的那一帧
+     */
+    public void exitHistoryBackdrop(boolean reset) {
+        boolean was = externalItem != null || externalFrame;
+        externalItem = null;
+        if (!was || current == null) return;
+        if (reset) current.resetToFirst();
+        else current.stop();
+    }
+
+    /** 当前挂载的 Holder：滚动回收后为 null，轮换随之停摆，回来时由 bind 重建。 */
+    private Holder current;
 
     @NonNull
     @Override
@@ -180,11 +267,13 @@ public class DoubanHotPresenter extends Presenter {
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder viewHolder, Object item) {
+        current = (Holder) viewHolder;
         ((Holder) viewHolder).bind((DoubanHotRow) item);
     }
 
     @Override
     public void onUnbindViewHolder(@NonNull ViewHolder viewHolder) {
+        if (current == viewHolder) current = null;
         ((Holder) viewHolder).unbind();
     }
 
@@ -200,7 +289,7 @@ public class DoubanHotPresenter extends Presenter {
         super.onViewDetachedFromWindow(viewHolder);
     }
 
-    private static final class Holder extends ViewHolder {
+    private final class Holder extends ViewHolder {
 
         private final AdapterDoubanHotBinding binding;
         private final OnClickListener listener;
@@ -211,8 +300,6 @@ public class DoubanHotPresenter extends Presenter {
         private final List<DoubanHotItem> items = new ArrayList<>();
         /** 剧照解码失败的片名：本次会话不再加入轮播，避免反复重试造成闪动。 */
         private final Set<String> blocked = new HashSet<>();
-        private ImageView front;
-        private int index;
         /** 每次切换自增：晚到的 Glide 回调据此丢弃，避免旧图覆盖新图。 */
         private int generation;
         /** logo 单独一套序号：网络 logo 是异步的，晚到回调不能盖住下一条的片名层。 */
@@ -249,9 +336,8 @@ public class DoubanHotPresenter extends Presenter {
             super(binding.getRoot());
             this.binding = binding;
             this.listener = listener;
-            this.front = binding.backdrop.getImageA();
             this.rotate = () -> {
-                if (binding.getRoot().hasWindowFocus()) show(index + 1, true);
+                if (active && binding.getRoot().hasWindowFocus()) show(index + 1, true);
                 schedule();
             };
             this.textFallback = () -> {
@@ -365,7 +451,25 @@ public class DoubanHotPresenter extends Presenter {
                 if (item != null && item.hasBackdrop()) { first = item; break; }
             }
             if (first != null) warmLogo(first);
+            /*
+             * Holder 被回收后重建（主视觉行顶部露出来一截就会重建）：如果当前处于
+             * 「最近观看」接管态，必须直接恢复那条记录的剧照。否则 bind() 里的
+             * index=0 + 预取会把背景刷成榜单第 1 条，用户看到的就是「回到最近观看
+             * 时背景变成主视觉轮换的第一张」。
+             */
+            if (externalItem != null) showExternal(externalItem);
+            /*
+             * 预取与「接管态」必须并行，不能二选一。
+             *
+             * <p>以前这里是 {@code else if}：接管期间重建 Holder 就只恢复历史剧照、不进预取，
+             * {@link #items} 一直是空的。等焦点回到主视觉行、{@link #resetToFirst()} 想 show(0)
+             * 时因池子为空直接 return，而预取的触发点也在 bind 里 —— 于是再也没有人来填池，
+             * 主视觉永久空白。这正是「从底部快速上移，主视觉加载不出来」的成因。</p>
+             */
             if (!queue.isEmpty()) prefetchNext();
+            // Holder 可能是滚动回收后重建的：把「文字层是否收起」这个页面级状态无动画补齐，
+            // 否则回到首页时文字层会先冒出来再收回去。
+            applyDetailsState(false);
         }
 
         /**
@@ -476,7 +580,12 @@ public class DoubanHotPresenter extends Presenter {
             items.add(item);
             bindDots(items.size());
             ColdTrace.mark("hero.pool.add", "n=" + items.size() + ", title=" + item.getTitle());
-            if (!shownOnce) {
+            /*
+             * 「最近观看」接管背景期间只入池、不上屏：否则预取一完成就会把用户正在看的
+             * 那张历史剧照抢成榜单首图。shownOnce 也保持 false，接管结束后由
+             * resetToFirst() 或下一次预取完成补上展示。
+             */
+            if (!shownOnce && externalItem == null) {
                 shownOnce = true;
                 show(0, false);
             }
@@ -531,13 +640,115 @@ public class DoubanHotPresenter extends Presenter {
         }
 
         private void resetLayers() {
-            binding.backdrop.getImageA().animate().cancel();
-            binding.backdrop.getImageB().animate().cancel();
-            binding.backdrop.getImageA().setAlpha(IMAGE_ALPHA);
-            binding.backdrop.getImageA().setVisibility(View.VISIBLE);
-            binding.backdrop.getImageB().setAlpha(0f);
-            binding.backdrop.getImageB().setVisibility(View.GONE);
-            front = binding.backdrop.getImageA();
+            if (backdrop == null) return;
+            backdrop.getImageA().animate().cancel();
+            backdrop.getImageB().animate().cancel();
+            backdrop.getImageA().setAlpha(IMAGE_ALPHA);
+            backdrop.getImageA().setVisibility(View.VISIBLE);
+            backdrop.getImageB().setAlpha(0f);
+            backdrop.getImageB().setVisibility(View.GONE);
+            front = backdrop.getImageA();
+        }
+
+        /**
+         * 文字层收起 / 放回。
+         *
+         * <p>上滑 24dp + 渐隐 220ms：只改 {@code translationY} 与 {@code alpha}，不碰布局
+         * （行高、背景层位置、列表滚动都不受影响）。轮换指示点跟着一起淡，避免「文字没了
+         * 还留几个点」。</p>
+         */
+        private void applyDetailsState(boolean animate) {
+            float alpha = detailsHidden ? 0f : 1f;
+            float shift = detailsHidden ? -ResUtil.dp2px(DETAILS_SHIFT_DP) : 0f;
+            View details = binding.details;
+            View dots = binding.indicator;
+            details.animate().cancel();
+            dots.animate().cancel();
+            if (!animate) {
+                details.setAlpha(alpha);
+                details.setTranslationY(shift);
+                dots.setAlpha(alpha);
+                return;
+            }
+            details.animate().alpha(alpha).translationY(shift)
+                    .setDuration(DETAILS_ANIM_MS).setInterpolator(new DecelerateInterpolator()).start();
+            dots.animate().alpha(alpha)
+                    .setDuration(DETAILS_ANIM_MS).setInterpolator(new DecelerateInterpolator()).start();
+        }
+
+        /**
+         * 用「最近观看」某条记录的横版剧照接管背景。
+         *
+         * <p>与榜单轮换共用同一套双层交叉淡入（600ms），但数据源是本地 TMDB 剧照文件
+         * （{@link TmdbArt#getBackdropFile()}），不走榜单的相对路径拼接。换图前 {@code ++generation}
+         * 让所有在途的榜单加载失效 —— 否则预取完成的回调会在几秒后把背景抢回榜单。</p>
+         */
+        private void showExternal(History history) {
+            if (backdrop == null) return;
+            externalFrame = true;
+            int gen = ++generation;
+            stop();
+            TmdbArt art = TmdbStore.find(history.getVodName());
+            File file = art != null && art.hasBackdrop() ? art.getBackdropFile() : null;
+            if (file == null) {
+                hideBackdrop();
+                return;
+            }
+            ImageView old = front;
+            ImageView next = front == backdrop.getImageB() ? backdrop.getImageA() : backdrop.getImageB();
+            RequestManager manager = glide(next);
+            if (manager == null) return;
+            manager.clear(next);
+            next.animate().cancel();
+            next.setAlpha(0f);
+            next.setVisibility(View.INVISIBLE);
+            front = next;
+            manager.load(file)
+                    .dontTransform()
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, @NonNull Target<Drawable> target, boolean first) {
+                            if (gen != generation) return true;
+                            hideBackdrop();
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(@NonNull Drawable resource, @NonNull Object model, Target<Drawable> target, @NonNull DataSource source, boolean first) {
+                            if (gen != generation) return true;
+                            backdrop.applyMatrices();
+                            reveal(next, old, true);
+                            HeroGlowColor.load(history.getVodName(), resource, color -> {
+                                if (gen != generation || backdrop == null) return;
+                                backdrop.setGlowColor(color);
+                            });
+                            return false;
+                        }
+                    })
+                    .into(next);
+        }
+
+        /** 该记录没有横版剧照：两层一起淡出，露出纯页面底色（不保留上一部的图）。 */
+        private void hideBackdrop() {
+            if (backdrop == null) return;
+            generation++;
+            ImageView a = backdrop.getImageA();
+            ImageView b = backdrop.getImageB();
+            for (ImageView layer : new ImageView[]{a, b}) {
+                layer.animate().cancel();
+                layer.animate().alpha(0f).setDuration(DETAILS_ANIM_MS).start();
+            }
+            front = a;
+            // 主色漫反射一并熄灭，否则空背景上会残留上一部片子的光。
+            backdrop.setGlowColor(Color.TRANSPARENT);
+        }
+
+        /** 回到主视觉行：从第 1 条重新开始轮换（需求：向上离开「最近观看」后复位）。 */
+        private void resetToFirst() {
+            externalFrame = false;
+            index = 0;
+            show(0, true);
+            restart();
         }
 
         /** 一条都没有：整块文字层隐藏，只留同色底，不显示占位图也不闪残留文字。 */
@@ -559,12 +770,24 @@ public class DoubanHotPresenter extends Presenter {
             binding.action.setVisibility(View.GONE);
             binding.indicator.setVisibility(View.GONE);
             // 内容清空时一并淡出主色漫反射，避免空状态残留上一部的光。
-            binding.backdrop.setGlowColor(Color.TRANSPARENT);
+            if (backdrop != null) backdrop.setGlowColor(Color.TRANSPARENT);
         }
 
         private void show(int position, boolean animate) {
-            if (items.isEmpty()) return;
+            if (items.isEmpty() || backdrop == null || front == null) {
+                /*
+                 * 池子还没填好（预取未完成 / 刚被 unbind 清空）：把「还没展示过」的状态
+                 * 放回去，等 onPrefetched 拿到第一条时补一次，避免这次 show 被静默吞掉后
+                 * 再也没人触发。
+                 */
+                if (items.isEmpty()) shownOnce = false;
+                return;
+            }
+            // 真正上屏了才算「展示过」：否则后续每次预取完成都会把轮换重置回第 0 条。
+            shownOnce = true;
             index = Math.floorMod(position, items.size());
+            // 榜单重新接管背景：之后的复位判断不再把这一帧当成「历史记录帧」。
+            externalFrame = false;
             DoubanHotItem item = current();
             if (item == null) return;
             ColdTrace.mark("hero.show", "pos=" + index + ", items=" + items.size() + ", animate=" + animate);
@@ -575,7 +798,7 @@ public class DoubanHotPresenter extends Presenter {
             updateDots();
             int gen = ++generation;
             if (!animate) {
-                ImageView back = front == binding.backdrop.getImageA() ? binding.backdrop.getImageB() : binding.backdrop.getImageA();
+                ImageView back = front == backdrop.getImageA() ? backdrop.getImageB() : backdrop.getImageA();
                 RequestManager manager = glide(back);
                 if (manager != null) manager.clear(back);
                 back.setVisibility(View.GONE);
@@ -584,7 +807,7 @@ public class DoubanHotPresenter extends Presenter {
                 loadArtwork(item, front, null, false, gen);
                 return;
             }
-            ImageView next = front == binding.backdrop.getImageA() ? binding.backdrop.getImageB() : binding.backdrop.getImageA();
+            ImageView next = front == backdrop.getImageA() ? backdrop.getImageB() : backdrop.getImageA();
             ImageView old = front;
             next.animate().cancel();
             RequestManager manager = glide(next);
@@ -643,13 +866,13 @@ public class DoubanHotPresenter extends Presenter {
                             ColdTrace.mark("hero.painted", "title=" + item.getTitle() + ", source=" + source
                                     + ", animate=" + animate + ", size=" + resource.getIntrinsicWidth() + "x" + resource.getIntrinsicHeight());
                             // drawable 已就位，先按新图尺寸重算矩阵再淡入，避免第一帧错位
-                            binding.backdrop.applyMatrices();
+                            if (backdrop != null) backdrop.applyMatrices();
                             reveal(target, old, animate);
                             // 主色漫反射：提色异步，回调里再判 generation，旧图颜色晚到也不会盖住新片；
                             // 提色失败回透明，Compose 叶子淡出到不画。
                             HeroGlowColor.load(item.getBackdrop(), resource, color -> {
                                 if (gen != generation) return;
-                                binding.backdrop.setGlowColor(color);
+                                if (backdrop != null) backdrop.setGlowColor(color);
                             });
                             return false;
                         }
@@ -1019,7 +1242,8 @@ public class DoubanHotPresenter extends Presenter {
 
         private void schedule() {
             handler.removeCallbacks(rotate);
-            if (items.size() > 1 && binding.getRoot().isAttachedToWindow()) handler.postDelayed(rotate, AUTO_DELAY);
+            // 背景正被「最近观看」的记录接管时不排轮换，否则几秒后会被榜单抢回去。
+            if (active && externalItem == null && items.size() > 1 && binding.getRoot().isAttachedToWindow()) handler.postDelayed(rotate, AUTO_DELAY);
         }
 
         private void stop() {
@@ -1028,6 +1252,8 @@ public class DoubanHotPresenter extends Presenter {
 
         private void unbind() {
             detach();
+            // 视图已经回收，屏幕上的那一帧不再由本 Holder 维护，判重标记一并清掉。
+            externalFrame = false;
             generation++;
             prefetchGeneration++;
             prefetching = false;
@@ -1043,10 +1269,7 @@ public class DoubanHotPresenter extends Presenter {
             styleAction(false);
             binding.action.setVisibility(View.VISIBLE);
             clearContent();
-            RequestManager imageA = glide(binding.backdrop.getImageA());
-            if (imageA != null) imageA.clear(binding.backdrop.getImageA());
-            RequestManager imageB = glide(binding.backdrop.getImageB());
-            if (imageB != null) imageB.clear(binding.backdrop.getImageB());
+            // 背景是页面级图层：这里不清图，否则主视觉行被回收时会把整页背景刷空。
             RequestManager logo = glide(binding.logo);
             if (logo != null) logo.clear(binding.logo);
         }

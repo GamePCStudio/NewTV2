@@ -211,7 +211,7 @@
             android:layout_marginTop="16dp"
             android:orientation="horizontal">
 
-            <!-- 模块管理入口按产品要求隐藏，面板代码保留 -->
+            <!-- 模块管理入口按产品要求隐藏，Activity 与三项面板保留 -->
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/module"
                 android:layout_width="0dp"

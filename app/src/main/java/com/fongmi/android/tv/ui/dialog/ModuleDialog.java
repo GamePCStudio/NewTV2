@@ -34,6 +34,14 @@ public class ModuleDialog extends BaseAlertDialog {
     private long progressBytes;
     private long transferSpeed;
 
+    public static ModuleDialog create(RuntimeModule module) {
+        Bundle args = new Bundle();
+        args.putString("module", module.name());
+        ModuleDialog dialog = new ModuleDialog();
+        dialog.setArguments(args);
+        return dialog;
+    }
+
     public static ModuleDialog create(int index) {
         Bundle args = new Bundle();
         args.putInt("index", index);
@@ -74,11 +82,17 @@ public class ModuleDialog extends BaseAlertDialog {
 
     @Override
     protected void initView() {
-        int index = requireArguments().getInt("index");
-        model = ModuleViewModel.get(requireActivity(), index == 0 ? RuntimeModule.BDJ : RuntimeModule.values()[index - 1]);
+        Bundle args = requireArguments();
+        String name = args.getString("module");
+        int index = args.getInt("index");
+        model = ModuleViewModel.get(requireActivity(), name == null ? legacy(index) : RuntimeModule.valueOf(name));
         binding.title.setText(model.getTitle());
         model.getState().observe(this, this::render);
         model.getHealth().observe(this, health -> render(model.getState().getValue()));
+    }
+
+    private static RuntimeModule legacy(int index) {
+        return index == 0 ? RuntimeModule.BDJ : RuntimeModule.values()[index - 1];
     }
 
     @Override

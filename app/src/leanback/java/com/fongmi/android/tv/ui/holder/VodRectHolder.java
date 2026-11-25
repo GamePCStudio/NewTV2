@@ -32,7 +32,7 @@ public class VodRectHolder extends BaseVodHolder {
         this.listener = listener;
         // 卡片内不再挂任何绘制层：可见光统一由整页背景层提供，这里只保留提色 / 几何上报。
         breath = new PosterFrameBreath(binding.poster);
-        // 卡片根只做 1.04 缩放；聚焦时展开元数据行、跑马灯并点亮背景光。
+        // 卡片根只做 PosterFocusAnimator.FOCUS_SCALE_CARD 缩放；聚焦时展开元数据行、跑马灯并点亮背景光。
         PosterFocusAnimator.bind(binding.getRoot(), false, (card, focused) -> {
             int visibility = focused ? View.VISIBLE : View.INVISIBLE;
             if (binding.metadata.getVisibility() != visibility) binding.metadata.setVisibility(visibility);

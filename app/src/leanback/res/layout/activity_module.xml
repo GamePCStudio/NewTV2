@@ -53,24 +53,10 @@
             android:paddingBottom="24dp">
 
             <include
-                android:id="@+id/mpv"
-                layout="@layout/item_module"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <include
-                android:id="@+id/bdj"
-                layout="@layout/item_module"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" />
-
-            <include
                 android:id="@+id/python"
                 layout="@layout/item_module"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" />
+                android:layout_height="wrap_content" />
 
             <include
                 android:id="@+id/nodejs"
@@ -81,13 +67,6 @@
 
             <include
                 android:id="@+id/quickjs"
-                layout="@layout/item_module"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp" />
-
-            <include
-                android:id="@+id/thunder"
                 layout="@layout/item_module"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

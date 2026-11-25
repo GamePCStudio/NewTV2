@@ -19,6 +19,8 @@ import com.github.catvod.utils.RuntimeModule;
 
 public class ModuleActivity extends BaseActivity {
 
+    private static final RuntimeModule[] MODULES = {RuntimeModule.PYTHON, RuntimeModule.NODEJS, RuntimeModule.QUICKJS};
+
     private ActivityModuleBinding mBinding;
     private ModuleViewModel[] models;
     private ItemModuleBinding[] items;
@@ -34,8 +36,9 @@ public class ModuleActivity extends BaseActivity {
 
     @Override
     protected void initView(Bundle savedInstanceState) {
-        models = new ModuleViewModel[]{ModuleViewModel.get(this, RuntimeModule.BDJ), ModuleViewModel.get(this, RuntimeModule.PYTHON), ModuleViewModel.get(this, RuntimeModule.NODEJS), ModuleViewModel.get(this, RuntimeModule.QUICKJS), ModuleViewModel.get(this, RuntimeModule.THUNDER), ModuleViewModel.get(this, RuntimeModule.MPV)};
-        items = new ItemModuleBinding[]{mBinding.bdj, mBinding.python, mBinding.nodejs, mBinding.quickjs, mBinding.thunder, mBinding.mpv};
+        models = new ModuleViewModel[MODULES.length];
+        for (int i = 0; i < MODULES.length; i++) models[i] = ModuleViewModel.get(this, MODULES[i]);
+        items = new ItemModuleBinding[]{mBinding.python, mBinding.nodejs, mBinding.quickjs};
         for (int i = 0; i < items.length; i++) bind(items[i], models[i], i);
         mBinding.check.requestFocus();
     }
@@ -62,7 +65,7 @@ public class ModuleActivity extends BaseActivity {
         ModuleViewModel.State state = model.getState().getValue();
         if (state.isPending()) confirmInstallation(model, state);
         else if (state.canInstall()) model.install();
-        else ModuleDialog.create(index).show(this);
+        else ModuleDialog.create(MODULES[index]).show(this);
     }
 
     private void confirmInstallation(ModuleViewModel model, ModuleViewModel.State state) {

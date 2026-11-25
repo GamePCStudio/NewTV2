@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   右上角站源下拉入口。
-  常态：<b>完全透明</b>，不画胶囊容器也不画描边 —— 只保留站源名与三角本身；
-  聚焦：才出现半透明胶囊 + 1dp 白描边作为焦点反馈。
+  常态：完全透明，不画胶囊容器也不画描边 —— 只保留站源名与三角本身；
+  聚焦：纯白实心胶囊（18dp 圆角 = 半高），文字与三角同步转黑，
+        与首页 / 片库导航胶囊的聚焦态完全一致。
   不用 setEnabled 置灰，避免丢焦点 / 断走位。
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
@@ -10,10 +11,7 @@
     <item android:state_focused="true">
         <shape android:shape="rectangle">
             <corners android:radius="18dp" />
-            <solid android:color="@color/white_20" />
-            <stroke
-                android:width="1dp"
-                android:color="@color/white" />
+            <solid android:color="#FFFFFFFF" />
         </shape>
     </item>
 

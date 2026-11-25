@@ -9,8 +9,8 @@
     - 宿主必须存在 id 为 recycler 的可聚焦列表，工具栏各控件的 nextFocusDown 指向它。
 
   结构（单行，行高 64dp）：
-    搜索圆钮（放大镜）→ 3 个导航按钮（首页 / 片库 / 我的）
-    → 弹性空白 → 站源下拉入口 → 时钟。
+    搜索圆钮（放大镜）→ 2 个导航按钮（首页 / 片库）
+    → 弹性空白 → 站源下拉入口 → 设置图标 → 时钟。
 
   <b>尺寸口径</b>：导航与站源名 16sp 加粗，时钟 18sp；
   导航选中框 / 搜索圆钮 / 站源入口 统一 36dp 高，焦点胶囊圆角 18dp（= 半高）。
@@ -62,14 +62,14 @@
         android:tint="@color/selector_logo_tint" />
 
     <!--
-      频道导航：3 个文字按钮，16sp 加粗。
+      频道导航：2 个文字按钮，16sp 加粗。
       顺序即焦点顺序（未写 nextFocusLeft/Right，交给布局顺序自动串联）：
-      首页 → 片库 → 我的。
+      首页 → 片库。
       「首页」是 index 0，启动 / setFocus() / 返回「回首页」都指向它。
       <b>不写 focusedByDefault</b>：默认焦点会让新页面先亮一下「首页」再跳到
       「片库」，视觉上像焦点从旧位置飞过来；改由各页在首次布局完成、绘制之前
       显式投放焦点（见 HomeActivity / VodActivity 的 installInitialFocus）。
-      「片库」进 VodActivity；「我的」在最后，作为设置入口（SettingActivity）。
+      「片库」进 VodActivity；原「我的」已移除，设置入口改为时间左侧的设置图标（与时间互换过位置）。
 
       尺寸统一：固定 36dp 高（与搜索圆钮、站源入口同高）、
       最小宽 64dp（2 个汉字 16sp = 32dp + 左右各 16dp 内边距）、间距 8dp、圆角 18dp（半高）。
@@ -127,26 +127,6 @@
             android:textSize="@dimen/text_body"
             android:textStyle="bold" />
 
-        <!-- 我的：导航组最后一项，设置入口；组内最后一项不再留右边距 -->
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/navMine"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:background="@drawable/selector_nav_button"
-            android:ellipsize="end"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:gravity="center"
-            android:maxLines="1"
-            android:minWidth="64dp"
-            android:nextFocusDown="@id/recycler"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="@string/home_nav_mine"
-            android:textColor="@color/selector_nav_text"
-            android:textSize="@dimen/text_body"
-            android:textStyle="bold" />
-
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <!-- 中间撑开：把右侧组推到屏幕右缘；自身不可聚焦 -->
@@ -190,10 +170,11 @@
                 android:id="@+id/siteName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:duplicateParentState="true"
                 android:includeFontPadding="false"
                 android:maxLines="1"
                 android:singleLine="true"
-                android:textColor="@color/white"
+                android:textColor="@color/selector_site_entry_content"
                 android:textSize="@dimen/text_label"
                 tools:text="配置|中心" />
 
@@ -203,15 +184,46 @@
                 android:layout_width="14dp"
                 android:layout_height="8dp"
                 android:layout_marginStart="8dp"
-                android:src="@drawable/ic_site_chevron" />
+                android:duplicateParentState="true"
+                android:src="@drawable/ic_site_chevron"
+                android:tint="@color/selector_site_entry_content" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 时间：HH:mm 无秒，18sp 加粗，位于顶栏最右（全局时钟统一口径） -->
+        <!--
+          设置入口：替代原导航胶囊「我的」，白色线条矢量图标（ic_setting_line，由 24×24 SVG
+          转 VectorDrawable），位于时间左侧（与时间互换位置，时间回到顶栏最右）。
+
+          容器 36dp（toolbar_setting_box）= 搜索圆钮直径：聚焦白底 selector_setting_bg
+          与搜索按钮选中态背景完全一致（同直径正圆）；内边距 (36−26.4)/2 = 4.8dp，
+          让矢量图标的可视边长 = 26.4dp = 原 22dp × 120%，1:1 + fitCenter 不拉伸。
+          rightGroup 的 center_vertical 保证它与 22dp 的时钟共用同一条中心线
+          （不再要求等高等宽，图标上下各比时钟多出 7dp）。
+          焦点反馈仍是反色：白色圆底 + selector_setting_tint 黑线；常态透明底白线。
+        -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/settingEntry"
+            android:layout_width="@dimen/toolbar_setting_box"
+            android:layout_height="@dimen/toolbar_setting_box"
+            android:background="@drawable/selector_setting_bg"
+            android:clickable="true"
+            android:contentDescription="@string/home_setting"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/recycler"
+            android:padding="4.8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_setting_line"
+            android:tint="@color/selector_setting_tint" />
+
+        <!-- 时间：HH:mm 无秒，18sp 加粗（全局时钟统一口径），位于顶栏最右。
+             固定行高 22dp；设置图标容器比它大，靠 rightGroup 的 center_vertical 共用中心线。 -->
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/clock"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/toolbar_time_row"
+            android:layout_marginStart="12dp"
+            android:gravity="center_vertical"
             android:includeFontPadding="false"
             android:textColor="@color/white"
             android:textSize="@dimen/text_heading"

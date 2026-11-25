@@ -20,8 +20,9 @@ import android.widget.ImageView;
  *
  * <p>五项参数：</p>
  * <ul>
- *   <li><b>布局</b>：{@link #applyMatrix(ImageView)} —— 宽度铺满、水平居中、顶部贴齐后再上移
- *       {@link #TOP_SHIFT_RATIO}（不用 {@code CENTER_CROP}，它垂直居中会上下各裁一截）；</li>
+ *   <li><b>布局</b>：{@link #applyMatrix(ImageView, float)} —— 宽度铺满、水平居中、按传入比例
+ *       上移；首页主视觉传 0（顶部与画框顶对齐、不裁顶部），详情页传 {@link #TOP_SHIFT_RATIO}
+ *       （不用 {@code CENTER_CROP}，它垂直居中会上下各裁一截）；</li>
  *   <li><b>尺寸</b>：{@link #measuredHeight(View, int)} —— 固定 {@link #HEIGHT_DP}（dp 绝对值，
  *       不用屏高百分比），并给底边留 {@link #BOTTOM_GAP_DP} 呼吸位；</li>
  *   <li><b>向下溢出</b>：{@link #HOME_BOTTOM_BLEED_DP} —— 首页主视觉专用，剧照画框在报告高度
@@ -74,6 +75,11 @@ public final class BackdropStyle {
      *
      * <p>80dp（1080p/density 2.0 = 160px）覆盖 16dp 行间距后还能向下铺一截，
      * 让渐隐一直拖到「最近观看」标题上方。详情页不使用本值。</p>
+     *
+     * <p><b>不要再为「羽化盖不到图片底」而调大本值。</b>本值同时被
+     * {@link HomeHeroBackdropView#getScrimBottomOnScreen()} 用作整页光效的挡板下沿；顶对齐
+     * 后 16:9 图片底落到屏幕底 y=1080，若本值加到 100dp，挡板下沿也变成 1080px，光效的
+     * 绘制区间会被夹成零高度、整页光消失。羽化终点改由绘制层单独延伸到视口底。</p>
      */
     public static final int HOME_BOTTOM_BLEED_DP = 80;
 
@@ -90,16 +96,46 @@ public final class BackdropStyle {
      */
     public static final int BOTTOM_FADE_DP = 350;
 
+    /**
+     * 首页羽化<b>可视收满线</b>距视口底的距离（dp）：「最近观看」副标题下沿贴屏底 16dp，
+     * 再往下 8dp —— 肉眼看到渐变收成纯 {@code #101114} 的那条线落在这里。
+     *
+     * <p>注意这不是传给 {@link #fadePaint(View, int, float)} 的参数终点：肉眼在 alpha≈240
+     * （{@link #HOME_FADE_VISUAL_END}，u=0.8）就判定收尾，那条边在参数终点前约
+     * 20% 渐变带长度（140px）。{@link HomeHeroBackdropView#fadeEndPx()} 按此反推，
+     * 而不是按 u=0.95 的物理收满点（后者只补 35px、落在不可分辨区间，画面看着毫无变化）。</p>
+     *
+     * <p>参数终点因此落在屏幕底之下（1080p 下 1204px）：屏幕可见区最底一行 alpha≈244，
+     * 剧照已被压到约 4% 残留，不再出现未羽化亮带。半径 / 曲线 / 色标 / 占比全部沿用原值。</p>
+     */
+    public static final int HOME_FADE_END_GAP_DP = 8;
+
+    /** 羽化色标中第一个满不透明档（u=0.95）：其后 5% 渐变带也是纯色。 */
+    public static final float FADE_SOLID_START = 0.95f;
+
+    /**
+     * <b>人眼</b>判定渐变收尾的档位：smootherstep(0.8)=0.942 → alpha≈240/255。
+     * 240→255 这 15/255 铺在同色底上分辨不出，所以「看到的那条边」在参数终点前约
+     * {@code (1 − 0.8) × 渐变带长度}（350dp 带 = 140px），<b>不是</b>物理收满点 u=0.95
+     * （只差 35px，落在不可分辨区间里，改了看不见）。调可视边缘必须按本值反推。
+     */
+    public static final float HOME_FADE_VISUAL_END = 0.8f;
+
+
     /** 详情页的羽化占比上限（沿用原值，避免本次首页调整牵动详情页）。 */
     public static final float BOTTOM_FADE_MAX_RATIO = 0.6f;
 
     /**
      * 首页主视觉的羽化占比上限：放宽到 0.9，让 {@link #BOTTOM_FADE_DP} 的 350dp 半径
-     * 在加高后的画框上<b>完整生效</b>（1040px × 0.9 = 936px &gt; 700px）。
+     * 在 440dp 画框（+80dp 溢出 = 1040px）上<b>完整生效</b>（1040px × 0.9 = 936px &gt; 700px）。
      *
      * <p>原来 0.6 会把 880px 画框的羽化压到 528px（264dp），剧照下半部过早变暗、
-     * 形成明显分界；现在 700px 的渐变一路铺到「最近观看」标题上方，起点与原来接近
-     * （y≈340px vs 352px），但长度增加 33%、曲线更缓。</p>
+     * 形成明显分界；现在 700px 的渐变可视收满线落在副标题下沿再往下 8dp（1080p 下 y=1064px），
+     * 起点约 y=399px，长度增加 33%、曲线更缓。</p>
+     *
+     * <p><b>不要再按「矮画框」调小本值</b>：主视觉行高必须固定 440dp（它决定片名 / 评分 /
+     * 简介 /「查看详情」的绝对位置），「最近观看」贴屏底是靠滚动列表实现的，
+     * 不是靠压缩主视觉 —— 详见 {@code HomeActivity.alignHistoryBlockBottom()}。</p>
      */
     public static final float HOME_FADE_MAX_RATIO = 0.9f;
 
@@ -140,17 +176,28 @@ public final class BackdropStyle {
     }
 
     /**
-     * 摆放剧照：<b>宽度铺满、水平居中、垂直向上偏移 {@link #TOP_SHIFT_RATIO}</b>。
+     * 摆放剧照（详情页原有口径）：按 {@link #TOP_SHIFT_RATIO} 上移。
+     */
+    public static void applyMatrix(ImageView image) {
+        applyMatrix(image, TOP_SHIFT_RATIO);
+    }
+
+    /**
+     * 摆放剧照：<b>宽度铺满、水平居中、垂直向上偏移 {@code topShiftRatio × 画框高}</b>。
      *
      * <p>{@code CENTER_CROP} 的 scale 取 {@code max(w比, h比)} 后<b>垂直居中</b>，在宽画框里
      * 放 16:9 素材会上下各裁一大截。这里以宽度为基准缩放（左右正好压到画框边缘），
-     * 垂直方向从 {@code dy = -画框高 × TOP_SHIFT_RATIO} 开始，溢出的部分沉到画框下方、
+     * 垂直方向从 {@code dy = -画框高 × topShiftRatio} 开始，溢出的部分沉到画框下方、
      * 由底部羽化收掉。</p>
+     *
+     * <p><b>首页主视觉传 0</b>：剧照顶部与画框顶（也即屏幕顶）对齐，整张图只做平移；
+     * 素材高于画框时多出来的部分全部沉到画框下方、完整保留，不裁切、不缩放、不拉伸。
+     * 详情页仍传 {@link #TOP_SHIFT_RATIO}，两处互不影响。</p>
      *
      * <p>唯一例外是素材比画框还宽扁（缩放后高度不足），此时改按高度铺满并水平居中，
      * 富余高度为 0、上移量夹到 0 —— 宁可裁左右也不露底。</p>
      */
-    public static void applyMatrix(ImageView image) {
+    public static void applyMatrix(ImageView image, float topShiftRatio) {
         if (image == null) return;
         Drawable drawable = image.getDrawable();
         int viewWidth = image.getWidth();
@@ -165,7 +212,7 @@ public final class BackdropStyle {
         float dx = (viewWidth - imageWidth * scale) / 2f;
         float displayH = imageHeight * scale;
         float maxUp = Math.max(0f, displayH - viewHeight);
-        float dy = -Math.min(TOP_SHIFT_RATIO * viewHeight, maxUp);
+        float dy = -Math.min(topShiftRatio * viewHeight, maxUp);
         Matrix matrix = new Matrix();
         matrix.setScale(scale, scale);
         matrix.postTranslate(dx, dy);
@@ -177,11 +224,11 @@ public final class BackdropStyle {
      *
      * <p><b>{@code UNSPECIFIED} 的 size 没有任何意义，必须当 0 处理。</b>leanback 的
      * {@code GridLayoutManager.measureChild()} 给纵向列表的 item 传的是
-     * {@code MeasureSpec.makeMeasureSpec(0, UNSPECIFIED)}，FrameLayout 转发给子 View 时按
-     * {@code size = 0 − (topMargin + bottomMargin)} 算 —— 首页主视觉为了让剧照贴屏幕顶边用了
-     * <b>负的 topMargin</b>，于是 size 变成了正数 {@code 16}。它只是「负 margin 的绝对值」，
-     * 跟视口没有半点关系：照抄成视口后 {@code measuredHeight()} 会算出
-     * {@code min(440dp, 16 − 24dp)} → <b>1px</b>，整块剧照背景直接不可见（只剩文字层）。</p>
+     * {@code MeasureSpec.makeMeasureSpec(0, UNSPECIFIED)}。历史上首页主视觉为了贴屏幕顶边用
+     * 过负 topMargin，FrameLayout 按 {@code size = 0 − (topMargin + bottomMargin)} 转发后
+     * size 变成「负 margin 的绝对值」{@code 16}，跟视口没有半点关系；照抄成视口会让
+     * {@code measuredHeight()} 算出 {@code min(440dp, 16 − 24dp)} → <b>1px</b>，整块背景消失。
+     * 现在首页 marginTop 已改为 0，UNSPECIFIED 的 size 本身就是 0，但这条守卫仍必须保留。</p>
      *
      * @param specSize {@code MeasureSpec.getSize(...)}
      * @param specMode {@code MeasureSpec.getMode(...)}
@@ -222,16 +269,21 @@ public final class BackdropStyle {
      * 底部羽化画笔（首页主视觉用）：占比上限放宽到 {@link #HOME_FADE_MAX_RATIO}，
      * 让 350dp 半径完整生效，不再被 0.6 压缩。
      *
-     * @param height 剧照<b>实际绘制高度</b>（px）。首页传「报告行高 + {@link #HOME_BOTTOM_BLEED_DP}」，
-     *               让羽化终点落在溢出末端，正好铺到「最近观看」标题上方。
+     * @param height 渐变的<b>参数终点</b>（px，相对画框顶）。详情页传剧照实际绘制高度；
+     *               首页传 {@link HomeHeroBackdropView#fadeEndPx()}（由人眼可视收尾线反推）。
      */
     public static Paint fadePaint(View host, int height, float maxRatio) {
-        int fade = Math.max(1, Math.min(dp(host, BOTTOM_FADE_DP), Math.round(height * maxRatio)));
+        int fade = fadeLength(host, height, maxRatio);
         Paint paint = new Paint();
         paint.setShader(new LinearGradient(0, height - fade, 0, height,
                 FADE_COLORS, FADE_STOPS, Shader.TileMode.CLAMP));
         paint.setDither(true);
         return paint;
+    }
+
+    /** 羽化带实际长度（px）：固定 {@link #BOTTOM_FADE_DP}，再受占比上限夹取。 */
+    public static int fadeLength(View host, int height, float maxRatio) {
+        return Math.max(1, Math.min(dp(host, BOTTOM_FADE_DP), Math.round(height * maxRatio)));
     }
 
     public static int dp(View host, int value) {

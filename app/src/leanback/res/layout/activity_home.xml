@@ -14,8 +14,8 @@
     L2  homeToolbar（elevation 8dp）
         屏幕顶部一条 64dp 单行工具栏（导航 16sp 加粗、垂直居中对齐、无文字投影）：
         最左是搜索圆钮（36dp 深色圆 + 白色放大镜，点击进搜索页）；
-        其次 3 个导航文字按钮（首页 / 片库 / 我的——「我的」是设置入口）；
-        右侧依次是 站源下拉入口 → 时钟。
+        其次 2 个导航文字按钮（首页 / 片库）；
+        右侧依次是 站源下拉入口 → 设置图标（白色线条，替代「我的」）→ 时钟。
     L3  siteSheet（elevation 16dp，最后一个子 View）
         FocusTrapFrameLayout：显示期间把方向焦点搜索截断在容器内部；内容为站源列表。
         原品牌入口的功能 sheet（moreSheet）已随 logo 弹窗菜单一并移除。
@@ -43,6 +43,17 @@
         android:focusable="false"
         android:importantForAccessibility="no" />
 
+    <!-- L-0：主视觉背景层（剧照轮换）。固定在页面顶部、不随列表滚动；
+         显隐由 HomeActivity 按焦点控制（顶栏 / 主视觉 / 最近观看可见，其余隐藏）。
+         放在 recycler 之下：主视觉行的 item 背景已改为透明，剧照才能透上来。
+         marginTop=0：剧照顶部与屏幕顶对齐，不再用负 margin 把顶部顶出屏幕。 -->
+    <com.fongmi.android.tv.ui.custom.HomeHeroBackdropView
+        android:id="@+id/heroBackdrop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginTop="0dp" />
+
     <!-- L0：列表内容（主视觉是它的第 0 行） -->
     <com.fongmi.android.tv.ui.custom.ProgressLayout
         android:id="@+id/progressLayout"
@@ -63,6 +74,59 @@
             app:focusOutFront="true" />
 
     </com.fongmi.android.tv.ui.custom.ProgressLayout>
+
+    <!-- L0.5：「最近观看」的悬浮片名（页面级，不随列表滚动）。
+         焦点停在「最近观看」行内时显示，离开即淡出；水平贴屏幕左侧内容边距，
+         竖直由代码贴到该行标题容器的上沿之上（间距 26dp），尺寸约束与主视觉
+         titleBox 同源（高 120dp、宽不超过 300dp、fitCenter）。
+         focusable/clickable 全关，不参与焦点与点击，纯粹是一层视觉。
+
+         外层 anchor 只负责 Y 定位（滚动时逐帧 setY），内层 historyLogo 只负责
+         alpha / translationY 动画 —— 两者分开，滚动纠偏不会打断入场动画。 -->
+    <FrameLayout
+        android:id="@+id/historyLogoAnchor"
+        android:layout_width="wrap_content"
+        android:layout_height="120dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="48dp"
+        android:clickable="false"
+        android:clipChildren="false"
+        android:focusable="false"
+        android:importantForAccessibility="no">
+
+        <FrameLayout
+            android:id="@+id/historyLogo"
+            android:layout_width="wrap_content"
+            android:layout_height="120dp"
+            android:alpha="0"
+            android:clipChildren="false"
+            android:importantForAccessibility="no"
+            android:visibility="invisible">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/historyLogoImage"
+                android:layout_width="wrap_content"
+                android:layout_height="120dp"
+                android:layout_gravity="bottom|start"
+                android:scaleType="fitCenter"
+                android:visibility="invisible" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/historyLogoText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:lineSpacingMultiplier="1.15"
+                android:maxLines="2"
+                android:maxWidth="300dp"
+                android:textColor="@color/white"
+                android:textSize="@dimen/text_display"
+                android:textStyle="bold"
+                android:visibility="invisible" />
+        </FrameLayout>
+    </FrameLayout>
 
     <!-- L1：顶部渐变遮罩（高度由代码设置；不参与焦点与点击） -->
     <View

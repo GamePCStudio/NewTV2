@@ -38,6 +38,12 @@
     <dimen name="text_heading">18sp</dimen>
     <dimen name="text_label">14sp</dimen>
 
+    <!-- 顶栏时钟行高（设置图标只与它共用中心线，不再要求等高） -->
+    <dimen name="toolbar_time_row">22dp</dimen>
+    <!-- 顶栏设置图标：容器 36dp = 搜索圆钮直径（聚焦白底同尺寸）；线条区 26.4dp = 原 22dp × 120% -->
+    <dimen name="toolbar_setting_box">36dp</dimen>
+    <dimen name="toolbar_setting_icon">26.4dp</dimen>
+
     <!-- ===== 卡片本体 ===== -->
     <dimen name="stack_card_max_width">300dp</dimen>
     <item name="stack_card_ratio" type="dimen" format="float">1.3294</item>
@@ -88,5 +94,9 @@
     <!-- ===== 示例页尺寸：卡片 300x399 时视觉块 315x431，item 315x487 ===== -->
     <dimen name="stack_demo_width">315dp</dimen>
     <dimen name="stack_demo_height">487dp</dimen>
+
+    <!-- 主视觉背景层高度，必须与 BackdropStyle.HEIGHT_DP 保持一致：
+         背景已抽到页面级，列表里的主视觉行只靠它占位（不再有 backdrop 子 View）。 -->
+    <dimen name="hero_backdrop_height">440dp</dimen>
 
 </resources>

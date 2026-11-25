@@ -45,8 +45,14 @@ public class PlayerSetting {
         if (DecodeSetting.isTunnel() && getRender() == RENDER_TEXTURE) DecodeSetting.putTunnel(false);
     }
 
+    /**
+     * 海报尺寸档位（0=小 / 1=中 / 2=大 / 3=特大）。
+     *
+     * <p>默认取「中」(1)。这里只改<b>默认值</b>、不写回偏好：已装机但未手动改过尺寸的用户
+     * 没有 {@code size} 键，读到的就是新默认值「中」；手动设置过的用户键已存在，保持其选择。</p>
+     */
     public static int getSize() {
-        return Math.clamp(Prefers.getInt("size", 2), MIN_SIZE, MAX_SIZE);
+        return Math.clamp(Prefers.getInt("size", 1), MIN_SIZE, MAX_SIZE);
     }
 
     public static void putSize(int size) {
