@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  顶栏站点下拉入口的文字与三角颜色：
+    聚焦 → 纯黑（配纯白胶囊，与首页 / 片库导航胶囊的聚焦态一致）
+    其余 → 纯白（透明底，压在剧照上）
+  只服务顶栏 siteEntry，不涉及下拉 sheet 列表。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:color="@color/black" android:state_focused="true" />
+    <item android:color="@color/white" />
+
+</selector>

@@ -101,6 +101,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
      * 之后从搜索 / 设置等页面返回则保留用户原来的落点，不再重投。
      */
     private boolean mInitialFocusDone;
+    /** 焦点切页是否已解除锁定：仅真实用户操作后才允许，避免启动 / 恢复时误触发。 */
+    private boolean mNavSwitchArmed;
     /** 分类数据是否已至少应用过一次：用于区分「首次进页」与「换站源」。 */
     private boolean mTypesApplied;
 
@@ -199,10 +201,10 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     // ------------------------------------------------------------ 顶栏接线（与首页一致）
 
     /**
-     * 顶栏接线：站点切换下拉 / 四个功能图标 / 导航按钮的聚焦记忆。
+     * 顶栏接线：站点切换下拉 / 功能图标 / 导航按钮的聚焦记忆。
      * 结构与首页 {@code HomeActivity.setToolbar()} 一一对应，差别只在两个导航按钮的去向：
      * 「首页」回到首页、「片库」回到第一个分类（本页即片库首页）。顶栏只有
-     * 「首页 / 片库 / 我的」三项。
+     * 「首页 / 片库」两项，原「我的」已换成时间左侧的设置图标。
      */
     private void setToolbar() {
         mToolbar.navHome.setOnClickListener(v -> exitToHome());
@@ -217,16 +219,36 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         mSheet.siteList.setItemAnimator(null);
         // 8 行站源 + 2 个固定入口，正好整行数，超出部分在面板内滚动。
         mSheet.siteList.setMaxHeight(siteListHeight());
-        // 搜索圆钮（放大镜，占原品牌位）：点击进搜索页；「我的」= 设置入口。
+        // 搜索圆钮（放大镜，占原品牌位）：点击进搜索页；时间左侧图标 = 设置入口。
         mToolbar.brandEntry.setOnClickListener(v -> SearchActivity.start(this));
-        mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this));
+        mToolbar.settingEntry.setOnClickListener(v -> SettingActivity.start(this));
         // 当前所在页 = 片库：50% 透明黑胶囊 + 白字（焦点离开后仍保留）。
         mToolbar.navVod.setSelected(true);
-        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.navMine};
+        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.settingEntry};
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
-            if (hasFocus) mLastNav = view;
+            if (!hasFocus) return;
+            mLastNav = view;
+            /*
+             * 切页只看焦点归属：焦点落到「首页」就回首页，不再看它是从哪个方向来。
+             * 本页「片库」获得焦点不做动作；sheet 展开期间由面板守卫接管。
+             */
+            if (view != mToolbar.navHome) return;
+            if (isFinishing() || isDestroyed() || isVisible(mSheet.getRoot())) return;
+            // 启动 / 进程恢复时的自动焦点还原不算用户操作：退回本页「片库」，不退出页面。
+            if (!mNavSwitchArmed) {
+                mToolbar.navVod.requestFocus();
+                return;
+            }
+            exitToHome();
         });
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener(focusGuard);
+    }
+
+    @Override
+    public void onUserInteraction() {
+        super.onUserInteraction();
+        // 只有真实遥控器 / 触摸操作之后，焦点切页才生效；启动期的自动焦点还原不算。
+        mNavSwitchArmed = true;
     }
 
     /** 「首页」按钮：回到首页（栈里有首页就直接回退，否则新起一个）。 */
@@ -791,7 +813,7 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     /**
      * 首帧焦点由 {@link #installInitialFocus()} 在布局阶段完成；这里只做兜底：
      * 万一布局监听没跑到（极端时序），窗口拿到焦点时再投一次。
-     * 之后每次重新回到本页时，若焦点停在别的导航项上（例如从「我的」返回），
+     * 之后每次重新回到本页时，若焦点停在别的导航项上（例如从设置图标返回），
      * 归位到本页对应的「片库」。
      */
     @Override

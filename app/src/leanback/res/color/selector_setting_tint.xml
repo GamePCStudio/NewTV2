@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  顶栏设置图标的线条颜色：常态纯白；聚焦时纯黑，配合 selector_logo_bg 的白色圆底
+  实现与搜索圆钮一致的「反色」焦点反馈。这里不定义 selected 态——当前页标记由
+  各 Activity 自行处理，不要扩大到常态显示黑线。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:color="@color/black" android:state_focused="true" />
+    <item android:color="@color/white" />
+
+</selector>

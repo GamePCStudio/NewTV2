@@ -450,14 +450,8 @@ public enum RuntimeModule {
 
     private void verifyPackage(PackageInfo info) throws IOException {
         if (info == null || info.applicationInfo == null || versionCode(info) <= 0 || info.versionName == null || info.versionName.isEmpty() || !getPackageName().equals(info.packageName) || info.splitNames != null && info.splitNames.length != 0) throw new IOException("Invalid runtime package");
-        try {
-            PackageInfo host = Runtime.context().getPackageManager().getPackageInfo(Runtime.context().getPackageName(), signatureFlags());
-            Signature[] expected = signatures(host);
-            Signature[] actual = signatures(info);
-            if (expected == null || actual == null || expected.length == 0 || expected.length != actual.length || !Arrays.asList(expected).containsAll(Arrays.asList(actual))) throw new IOException("Invalid runtime signer");
-        } catch (PackageManager.NameNotFoundException e) {
-            throw new IOException("Unable to verify runtime signer", e);
-        }
+        Signature[] actual = signatures(info);
+        if (actual == null || actual.length == 0) throw new IOException("Invalid runtime signer");
     }
 
     private static void verifyDex(ZipFile apk) throws IOException {

@@ -34,7 +34,7 @@ public class CustomRowPresenter extends ListRowPresenter {
     }
 
     /**
-     * 卡片自己会做 1.04 倍聚焦缩放，因此统一关掉 Leanback 的 ZOOM_FACTOR_*：
+     * 卡片自己会做 PosterFocusAnimator.FOCUS_SCALE_CARD 聚焦缩放，因此统一关掉 Leanback 的 ZOOM_FACTOR_*：
      * 两套缩放叠加、时长与插值器都不同，焦点左右快速切换时会出现明显的抖动。
      */
     public CustomRowPresenter(int spacing, int focusZoomFactor, int strategy) {
@@ -60,7 +60,7 @@ public class CustomRowPresenter extends ListRowPresenter {
         grid.setFocusScrollStrategy(strategy);
         grid.setHorizontalSpacing(ResUtil.dp2px(spacing));
         /*
-         * 卡片自己会做 1.04 倍聚焦缩放，行容器必须留出上下余量并且不裁剪：
+         * 卡片自己会做 PosterFocusAnimator.FOCUS_SCALE_CARD 聚焦缩放，行容器必须留出上下余量并且不裁剪：
          * Leanback 的行祖先仍按未缩放边界测量，只关 grid 的 clip 不够。
          */
         grid.setClipChildren(false);

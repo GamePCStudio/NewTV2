@@ -56,7 +56,7 @@ import java.util.List;
  * 描边右/下边界正好贴合顶层海报的右/下边缘，左/上边界贴合底部海报的左/上边缘。</p>
  *
  * <p><b>焦点</b>：本控件不再自行处理焦点动画，由 Presenter 调用
- * {@link PosterFocusAnimator#bind(View, boolean)} 统一提供 1.04 缩放 + 白描边 + 120ms 反馈，
+ * {@link PosterFocusAnimator#bind(View, boolean)} 统一提供聚焦缩放 + 白描边 + 120ms 反馈，
  * 因此选中 / 未选中的视觉与行为与左侧海报卡完全一致。</p>
  */
 public class PosterStackView extends FrameLayout {

@@ -20,9 +20,10 @@ import java.util.WeakHashMap;
 /**
  * 海报卡片统一的聚焦动效（参照 JetStream / Apple TV 风格）。
  *
- * <p>所有海报卡片（网格矩形 / 圆形 / 列表 / 收藏 / 历史）共用这一组参数，避免各页面
- * 各自为政：聚焦 = 1.04 倍缩放 + 12dp 抬升（仅圆形与列表卡）+ 阴影着色，
- * 120ms、DecelerateInterpolator(1.8f)；缩放幅度小，配合 20dp 行间距不会互相遮挡。</p>
+ * <p>所有海报卡片（网格矩形 / 圆形 / 列表 / 收藏 / 历史 / 查看全部）共用这一组参数，避免各页面
+ * 各自为政：聚焦 = {@link #FOCUS_SCALE_CARD} 倍缩放 + 12dp 抬升（仅圆形与列表卡）+ 阴影着色，
+ * 120ms、DecelerateInterpolator(1.8f)。放大幅度由最初的 4% 连续两次 ×140% 提到 7.84%
+ * （1.04 → 1.056 → 1.0784）；行间距 20dp 需装机确认放大后相邻卡片不遮挡。</p>
  *
  * <p><b>为什么要区分 elevate</b>：矩形卡片根是透明容器，边界还包含海报下方的片名与
  * 元数据行。若给它抬升，平台阴影会沿这个矩形边界画出硬边、不跟随海报圆角，
@@ -35,7 +36,8 @@ import java.util.WeakHashMap;
 public final class PosterFocusAnimator {
 
     public static final long FOCUS_DURATION = 120L;
-    public static final float FOCUS_SCALE_CARD = 1.04f;
+    /** 聚焦放大：当前 1.056（放大 5.6%）× 140% = 放大 7.84% → 1.0784。 */
+    public static final float FOCUS_SCALE_CARD = 1.0784f;
 
     private static final int ELEVATION_DP = 12;
     private static final int SHADOW_COLOR = 0x40000000;

@@ -68,6 +68,15 @@ public class HistoryPresenter extends Presenter {
 
         void onItemDelete(History item);
 
+        /**
+         * 焦点落在某条记录上（行内横移 / 首次进入该行）。
+         *
+         * <p>首页用它把主视觉背景切成这条记录的横版剧照；没有剧照的记录由页面决定
+         * 退回纯底色。只在「获得焦点」时回调，失焦不回调 —— 离开整行的处理由页面
+         * 按行号判定，避免行内横移时先清空再重填。</p>
+         */
+        void onItemFocus(History item);
+
         boolean onLongClick();
     }
 
@@ -119,6 +128,8 @@ public class HistoryPresenter extends Presenter {
         private String boundPercent = "";
         /** 聚焦态：剧照异步加载完成时据此决定是否补提色。 */
         private boolean focused = false;
+        /** 当前绑定的记录：获得焦点时要把「哪一条」推给页面（主视觉背景按它切图）。 */
+        private History boundItem;
 
         private Holder(@NonNull AdapterVodHistoryBinding binding, OnClickListener listener) {
             super(binding.getRoot());
@@ -135,6 +146,8 @@ public class HistoryPresenter extends Presenter {
                     // 提色是异步的，先把局部提亮的圆心推到这张卡，避免光滞留在上一张卡上。
                     CardGlowComposeView.reportPageGlowCenter(binding.poster);
                     extractGlow(binding.image.getDrawable());
+                    // 主视觉背景跟着这一条走（首页据此换成它的横版剧照）。
+                    if (listener != null && boundItem != null) listener.onItemFocus(boundItem);
                 }
             });
         }
@@ -164,6 +177,7 @@ public class HistoryPresenter extends Presenter {
 
         private void bind(History item, boolean delete) {
             boundKey = item.getKey();
+            boundItem = item;
             /*
              * 行末卡片是横向滚动时才被复用绑定的：此时它已经持有焦点，但焦点回调不会
              * 为「本来就在聚焦」的 View 再触发一次。若这里无脑置 false，glowReady() 的
@@ -190,6 +204,7 @@ public class HistoryPresenter extends Presenter {
                 CardGlowComposeView.reportPageGlowCenter(binding.poster);
                 Drawable ready = binding.image.getDrawable();
                 if (ready != null) extractGlow(ready);
+                if (listener != null) listener.onItemFocus(item);
             }
         }
 

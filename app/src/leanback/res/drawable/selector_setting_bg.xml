@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  顶栏设置图标的焦点底：常态全透明，不画任何容器；聚焦时纯白正圆，
+  配合 selector_setting_tint 把白线切成黑线，得到与搜索圆钮一致的「反色」反馈。
+  只定义 focused 与常态两态，selected 不产生样式（当前页标记另由各页处理）。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+</selector>

@@ -1,34 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  主视觉：整行横版剧照 + 片名（优先 logo，取不到回退文字）+ 评分 + 剧情简介 + 详情按钮。
+  主视觉行：只承载文字层（片名 logo / 评分 / 简介 / 详情按钮）与轮换指示点。
 
-  背景层（HomeHeroBackdropView）的铺图方式、高度、底部羽化与不透明度全部来自 BackdropStyle，
-  与播放详情页的整页剧照背景同源同值：宽度铺满 + 顶部贴齐 + 上移 5%，行占位高度 440dp 绝对
-  高度（1080p 下 880px），再向下溢出 80dp 画到「最近观看」标题上方；底部 350dp 半径、
-  21 档 smootherstep 渐隐到 #101114，剧照层 0.58 不透明度。
+  剧照背景已抽到 activity_home 的 @id/heroBackdrop —— 它是页面级固定图层，不随列表滚动，
+  由 HomeActivity 按焦点显隐。本行仍用 minHeight 顶出与背景等高的占位（440dp，与
+  BackdropStyle.HEIGHT_DP 同值）：行高<b>必须固定</b>，它决定行内 bottom 对齐的片名 / 评分 /
+  简介 /「查看详情」的绝对位置。「最近观看」贴屏底 16dp 是靠滚动列表实现的，
+  不能反过来压缩本行（详见 HomeActivity.alignHistoryBlockBottom）。
 
   控件整体下移 10dp：details 的 paddingBottom 与 indicator 的 marginBottom 同步 32dp → 22dp
   （两者都是 bottom 对齐，减小底部留白即整体下沉，彼此相对位置不变）。
 
-  根布局保留 @color/app_background 同色背景：避免系统默认焦点高亮绘制，
-  并保证画框边缘像素与窗口底色逐像素一致。聚焦放大动画已取消。
+  根背景必须透明：页面级剧照层在 recycler 之下，任何不透明底色都会把它盖死。
+  这里不需要 @color/app_background —— 主视觉行不参与 Leanback 焦点高亮（无 FocusHighlight），
+  底色由页面根布局与 heroBackdrop 的羽化共同决定。
 
-  文字层是背景层的兄弟节点（压在羽化之上），所以底部渐隐不会吃掉文字。
+  文字层压在页面级背景之上（recycler 在 heroBackdrop 之后绘制），底部渐变不会吃掉文字。
   「来自 · 站源名」标签在主视觉上方单独渲染。
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/app_background"
+    android:background="@android:color/transparent"
     android:clipChildren="false"
     android:focusable="true"
-    android:focusableInTouchMode="true">
+    android:focusableInTouchMode="true"
+    android:minHeight="@dimen/hero_backdrop_height">
 
-    <com.fongmi.android.tv.ui.custom.HomeHeroBackdropView
-        android:id="@+id/backdrop"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+    <!--
+      剧照背景已抽到 activity_home 的 @id/heroBackdrop（页面级、不随滚动），
+      本行只负责占位与文字层：minHeight 与 BackdropStyle.HEIGHT_DP 同值，
+      保证行高、"最近观看"位置与文字层坐标全部不变。
+      根背景必须透明，否则会盖住页面级的剧照层。
+    -->
 
     <!--
       文字层：layout_gravity=bottom 让它沉到画框底边。

@@ -3,10 +3,12 @@ package com.fongmi.android.tv.ui.activity;
 import android.annotation.SuppressLint;
 import android.app.SearchManager;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.icu.text.BreakIterator;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -77,6 +79,7 @@ import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.HeroInset;
+import com.fongmi.android.tv.ui.custom.HeroRowScroll;
 import com.fongmi.android.tv.ui.custom.HomeHeroBackdropView;
 import com.fongmi.android.tv.ui.custom.HeroTransition;
 import com.fongmi.android.tv.ui.custom.PageGlowComposeView;
@@ -107,10 +110,13 @@ import com.github.catvod.net.OkHttp;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class HomeActivity extends BaseActivity implements SiteListener, VodPresenter.OnClickListener, HistoryPresenter.OnClickListener {
 
@@ -128,6 +134,19 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private static final int SITE_DIVIDER_MARGIN_DP = 2;
     /** 站源名字符预算：emoji 按 1 个字符计，截断「...」整体按 1 个字符计。 */
     private static final int SITE_NAME_LIMIT = 6;
+    /** 「最近观看」区块下沿距屏幕底边的距离：与顶栏上边距同值（16dp），视觉对称。 */
+    private static final int HERO_BOTTOM_GAP_DP = 16;
+    /** 列表行间距，必须与 setVerticalSpacing 同源。 */
+    private static final int HERO_ROW_SPACING_DP = 16;
+    /** 「最近观看」悬浮片名：容器高、宽上限、与标题行的间距、滑入行程。 */
+    private static final int HISTORY_LOGO_HEIGHT_DP = 120;
+    private static final int HISTORY_LOGO_MAX_WIDTH_DP = 300;
+    /** logo 底边与「最近观看」标题上沿的净间距。 */
+    private static final int HISTORY_LOGO_GAP_DP = 26;
+    private static final int HISTORY_LOGO_SLIDE_DP = 132;
+    /** 悬浮片名进入 / 退出时长（毫秒）。 */
+    private static final long HISTORY_LOGO_IN_MS = 280;
+    private static final long HISTORY_LOGO_OUT_MS = 160;
     /** 「首页」按钮连按两次退出的时间窗口（毫秒），窗口内再按一次才真正退出。 */
     private static final long BACK_EXIT_WINDOW = 2000L;
     private static volatile int instanceCount;
@@ -171,8 +190,35 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     private long mLastBackAt;
     /** 首次窗口焦点是否已纠正到「首页」：只生效一次，避免从其它页面返回时抢走用户焦点。 */
     private boolean mInitialFocusDone;
+    /**
+     * 焦点切页是否已解除锁定：只有真实用户操作（按键 / 触摸）之后才允许按焦点切页。
+     * 冷启动 / 进程恢复时系统可能把焦点还原到「片库」，此时 mResult 还是空的，
+     * 若直接切页会因 types 为空被 VodActivity.start 静默拒绝，焦点就停在「片库」不动。
+     */
+    private boolean mNavSwitchArmed;
+    /** 用户已把焦点移到「片库」，但站点配置还没加载完：数据就绪后补切一次。 */
+    private boolean mPendingVodSwitch;
     /** 顶栏当前是否可见：只作动画去重，避免同一状态反复启动属性动画。 */
     private boolean mToolbarVisible = true;
+    /** 主视觉背景层 presenter：背景已抽到页面级，由它驱动轮换与切图。 */
+    private DoubanHotPresenter mHeroPresenter;
+    /** 主视觉背景层当前是否可见（只作动画去重）。 */
+    private boolean mHeroVisible = true;
+    /** 焦点落定后按「最近观看」行内实际选中项同步背景（卡片回调可能报的是过渡中的旧项）。 */
+    private final Runnable syncHistoryTask = this::syncHistoryBackdrop;
+    /** 「最近观看」悬浮片名当前展示的记录 key；同一部片重复上报不重播入场动画。 */
+    private String mHistoryLogoKey;
+    /** 悬浮片名当前是否在屏上。 */
+    private boolean mHistoryLogoVisible;
+    /** 进入「最近观看」的来向：true = 从上方（主视觉）下来 → 从标题下方上滑入场。 */
+    private boolean mHistoryLogoFromAbove = true;
+    /** 上一次解析出的焦点行号：用于判断进入「最近观看」的方向。 */
+    private int mLastFocusedRow = -1;
+    /** 已发起过 logo 补抓的片名：同一条记录反复获焦不重复排队。 */
+    private final Set<String> mHistoryLogoRequested = new HashSet<>();
+    /** 焦点行号短暂解不出时的补帧计数：快速换行最后一帧可能落在中间态，不补就永远卡住。 */
+    private int mHeroStateTries;
+    private final Runnable heroStateTask = () -> updateHeroState(getCurrentFocus());
     /**
      * 用户是否进入过内容区（列表）：主视觉异步插入后是否需要把视口钉回顶部，
      * 用「是否已经浏览过」区分冷启动与浏览中途刷新，避免把用户从下面拽回首页。
@@ -252,6 +298,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
                  */
                 if (inContent) scheduleGlowCenter();
                 updateToolbar(newFocus);
+                updateHeroState(newFocus);
             };
 
     /** 延后一帧按当前焦点重新取几何，去重后每帧至多一次。 */
@@ -284,6 +331,9 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
              */
             recyclerView.removeCallbacks(glowCenterTask);
             recyclerView.post(glowCenterTask);
+            // 悬浮片名锚在标题行原位：滚动途中标题在动，它必须逐帧跟随。
+            // 悬浮片名锚在标题行上沿：滚动途中标题在动，它必须逐帧跟随。
+            if (mHistoryLogoVisible) positionHistoryLogo();
         }
 
         @Override
@@ -293,6 +343,15 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                 recyclerView.removeCallbacks(glowCenterTask);
                 recyclerView.post(glowCenterTask);
+                /*
+                 * 焦点状态也补一次：快速连续换行时，最后一次 OnGlobalFocusChange 可能
+                 * 早于布局收敛（focusedRow 取到 NO_POSITION、只排了补帧），也可能被
+                 * Leanback 自己的滚动覆盖。滚动停稳后再判定一次，保证背景显隐、
+                 * 文字层状态与最终焦点一致。
+                 */
+                mHeroStateTries = 0;
+                recyclerView.removeCallbacks(heroStateTask);
+                recyclerView.post(heroStateTask);
             }
         }
     };
@@ -350,15 +409,26 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 把主视觉羽化 scrim 的绘制下沿换算成整屏归一化 y，交给整页背景光层作为渐入起点。
      *
      * <p>scrim 末端是纯不透明 #101114，会挡住光层；光必须严格从这条边之下才渐入，
-     * 交界处光强为 0、上下同为页面底色，才不会出现水平断层。主视觉行随列表滚动，
-     * 所以每次滚动 / 焦点变化都要重算；行还没布局时退回 0（整屏可画，此时也无挡板）。</p>
+     * 交界处光强为 0、上下同为页面底色，才不会出现水平断层。</p>
+     *
+     * <p><b>主视觉隐去时必须整块关掉遮挡，而不是继续按它的下沿裁。</b>背景抽成页面级固定
+     * 图层后，这条下沿不再随列表滚动上移（以前滚下去就露出光，现在永远停在距底十几 dp 处），
+     * 若照旧取值，整页光会被裁成屏幕最下沿一条细线、等价于熄灭 —— 这正是「海报卡片漫反射
+     * 消失」的成因。挡板本身已经淡出，就没有需要避让的遮挡物，光应从屏幕顶端铺满。</p>
+     *
+     * <p>{@code mHeroVisible} 由 {@link #updateHeroState(View)} 维护，两处必须同步：
+     * 这里读它决定裁不裁，那里在状态翻转时立刻调本方法，避免等下一帧的几何任务。</p>
      */
     private void updatePageGlowEdge() {
         if (mPageGlow == null || mBinding == null) return;
-        int hero = indexOfHero();
-        RecyclerView.ViewHolder holder = hero >= 0 ? mBinding.recycler.findViewHolderForAdapterPosition(hero) : null;
-        View row = holder == null ? null : holder.itemView;
-        HomeHeroBackdropView backdrop = row == null ? null : row.findViewById(R.id.backdrop);
+        if (!mHeroVisible) {
+            mPageGlow.setScrimEnabled(false);
+            mPageGlow.setScrimEdge(0f);
+            return;
+        }
+        mPageGlow.setScrimEnabled(true);
+        // 背景是页面级固定图层：直接取它的绘制下沿，不再按行查找（也不会随滚动漂移）。
+        HomeHeroBackdropView backdrop = mBinding.heroBackdrop;
         if (backdrop == null || backdrop.getHeight() <= 0) {
             mPageGlow.setScrimEdge(0f);
             return;
@@ -509,17 +579,25 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         selector.addPresenter(RowHeader.class, header);
         selector.addPresenter(String.class, new ProgressPresenter());
         selector.addPresenter(Vod.class, new VodPresenter(this, Style.list()));
-        // 卡片自带 1.04 倍聚焦缩放，必须关掉 Leanback 的 ZOOM_FACTOR_*，否则两套缩放
+        // 卡片自带 PosterFocusAnimator 聚焦缩放，必须关掉 Leanback 的 ZOOM_FACTOR_*，否则两套缩放
         // 叠加会让焦点左右切换时抖动。行内 grid 左右 padding 显式归零（末参 0），
         // 页面级 48dp 安全区由 recycler 提供，卡片宽度也按双边 96dp 计算，正好铺满不溢出。
-        // 「更新推荐」用 FOCUS_SCROLL_ITEM（只在贴边时滚动），「最近观看」保留 ALIGNED。
+        // 两行都用 FOCUS_SCROLL_ITEM（只在贴边时滚动）。
+        // 「最近观看」原来是 FOCUS_SCROLL_ALIGNED：ALIGNED 会让 VerticalGridView 在<b>每次</b>
+        // 布局时把该行重新拉回 ItemAlignment 指定的位置，页面算好的「下沿贴屏底 16dp」
+        // 会被立刻覆盖（实测差 125px 收敛不了）。改 ITEM 后父网格只在「贴边时」滚最小距离，
+        // 配合 recycler 的 paddingBottom=16dp，它自己就停在目标位置上（见 HeroRowScroll）。
         selector.addPresenter(ListRow.class, new CustomRowPresenter(Product.POSTER_SPACING_DP, FocusHighlight.ZOOM_FACTOR_NONE, HorizontalGridView.FOCUS_SCROLL_ITEM, 0), VodPresenter.class);
-        selector.addPresenter(ListRow.class, new CustomRowPresenter(Product.POSTER_SPACING_DP, FocusHighlight.ZOOM_FACTOR_NONE, HorizontalGridView.FOCUS_SCROLL_ALIGNED, 0), HistoryPresenter.class);
+        selector.addPresenter(ListRow.class, new CustomRowPresenter(Product.POSTER_SPACING_DP, FocusHighlight.ZOOM_FACTOR_NONE, HorizontalGridView.FOCUS_SCROLL_ITEM, 0), HistoryPresenter.class);
         // 首页主视觉：不是 ListRow，而是整行单条的自定义 Presenter，
         // 与参照实现（FeaturedVodRow / FeaturedVodPresenter）同构。
-        selector.addPresenter(DoubanHotRow.class, new DoubanHotPresenter(this::onDoubanHotClick));
+        // 剧照背景已抽到页面级 heroBackdrop，这里把视图注入给 presenter；
+        // 列表里的主视觉行只保留文字层与占位高度。
+        mHeroPresenter = new DoubanHotPresenter(this::onDoubanHotClick);
+        mHeroPresenter.setBackdrop(mBinding.heroBackdrop);
+        selector.addPresenter(DoubanHotRow.class, mHeroPresenter);
         mBinding.recycler.setAdapter(new ItemBridgeAdapter(mAdapter = new ArrayObjectAdapter(selector)));
-        mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(16));
+        mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(HERO_ROW_SPACING_DP));
         /*
          * 关闭 Leanback 的「焦点行置顶」绘制顺序，固定为按 adapter 顺序绘制。
          *
@@ -534,7 +612,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
          * 「标题与海报背后的底色」；标题文字、海报图片后画，天然压在它之上。
          * 该顺序由列表结构决定，与焦点位置、滚动位置、屏幕尺寸/density 无关。
          *
-         * 行间距 20dp 远大于海报聚焦放大幅度（PosterFocusAnimator 的 1.04 倍），且 recycler
+         * 行间距 20dp 远大于海报聚焦放大幅度（PosterFocusAnimator.FOCUS_SCALE_CARD），且 recycler
          * 已 clipChildren=false，关闭置顶不会造成焦点卡片边缘被相邻行裁掉。
          */
         mBinding.recycler.setFocusDrawingOrderEnabled(false);
@@ -556,22 +634,25 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /**
      * 顶部工具栏：单行、行高 64dp；导航与站源名 16sp 加粗，时钟 18sp（全局统一字号）。
-     * 自左至右为：搜索圆钮（放大镜）→ 3 个导航 → 站源入口 → 时钟。
+     * 自左至右为：搜索圆钮（放大镜）→ 2 个导航 → 站源入口 → 设置图标 → 时钟。
      *
-     * <p>导航文字按钮按序为「首页 / 片库 / 我的」共 <b>3</b> 项：
-     * 「首页」刷新首页内容并回到列表顶部；「片库」进 VodActivity；「我的」进设置页。
+     * <p>导航文字按钮按序为「首页 / 片库」共 <b>2</b> 项：
+     * 「首页」刷新首页内容并回到列表顶部；「片库」进 VodActivity。
      * 左右走位未写死 nextFocusLeft/Right，完全由布局顺序决定；「首页」仍是 index 0，
-     * 启动 / setFocus() / 返回「回首页」都指向它。</p>
+     * 启动 / setFocus() / 返回「回首页」都指向它。
+     * <b>切页改由焦点驱动</b>：任意入口获得「片库」焦点就进 VodActivity，VodActivity 的
+     * 「首页」获得焦点就回首页，设置页同理；不再按左右键方向判定，也不再要求确认。</p>
      *
      * <p>选中态：导航项统一使用 36dp 高胶囊（selector_nav_button）。聚焦 = 纯白底 + 黑字；
      * <b>当前所在页</b>未聚焦 = 50% 透明黑底 + 白字（{@link #mToolbar}.navHome.setSelected(true)）；
      * 其余 = 透明底 + 白字。左侧原本的品牌 logo 位改成<b>放大镜圆钮</b>
-     * （{@code brandEntry}，点击进 SearchActivity），原搜索框按钮已移除。</p>
+     * （{@code brandEntry}，点击进 SearchActivity），原搜索框按钮已移除。
+     * 原「我的」胶囊已删除，设置入口改为时间左侧白色线条图标 {@code settingEntry}。</p>
      */
     private void setToolbar() {
         mToolbar.navHome.setOnClickListener(v -> refreshHome());
         mToolbar.navVod.setOnClickListener(v -> VodActivity.start(this, mResult));
-        mToolbar.navMine.setOnClickListener(v -> SettingActivity.start(this, mResult));
+        mToolbar.settingEntry.setOnClickListener(v -> SettingActivity.start(this, mResult));
         mToolbar.siteEntry.setOnClickListener(v -> showSiteSheet());
         mSheet.siteScrim.setOnClickListener(v -> hideSiteSheet());
         mSheet.siteList.setLayoutManager(new LinearLayoutManager(this));
@@ -582,13 +663,81 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mToolbar.brandEntry.setOnClickListener(v -> SearchActivity.start(this));
         // 当前所在页 = 首页：常亮 50% 黑胶囊 + 白字（焦点离开后仍保留）。
         mToolbar.navHome.setSelected(true);
-        // 记住最后聚焦的导航按钮：内容区 / 右侧动作区按返回时焦点回到它。
-        // 这里的顺序即导航索引顺序，必须与 view_home_toolbar.xml 的 navButtons 子项顺序一致（3 项）。
+        // 记住最后聚焦的顶栏入口：内容区 / 右侧动作区按返回时焦点回到它。
+        // 这里的顺序与 view_home_toolbar.xml 从左至右的可聚焦入口一致（2 个导航 + 设置图标）。
         // 注意 mLastNav 存的是 View 引用而非下标，增删项不会留下错位索引。
-        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.navMine};
+        View[] navs = {mToolbar.navHome, mToolbar.navVod, mToolbar.settingEntry};
         for (View nav : navs) nav.setOnFocusChangeListener((view, hasFocus) -> {
-            if (hasFocus) mLastNav = view;
+            if (!hasFocus) return;
+            mLastNav = view;
+            /*
+             * 切页只看焦点归属：焦点落到「片库」就进片库，不再看它是从哪个方向来。
+             * 本页「首页」获得焦点不做动作（已在本页）；返回后由 onWindowFocusChanged 归位。
+             * sheet 展开期间焦点被面板守卫接管，不参与切页。
+             */
+            if (view != mToolbar.navVod) {
+                mPendingVodSwitch = false;
+                return;
+            }
+            if (isFinishing() || isDestroyed() || isVisible(mSheet.getRoot())) return;
+            // 冷启动 / 进程恢复时系统可能自动把焦点还原到「片库」：未发生真实操作前退回「首页」，
+            // 否则会在数据加载前误触发一次切页（VodActivity.start 因 types 为空静默返回）。
+            if (!mNavSwitchArmed) {
+                mToolbar.navHome.requestFocus();
+                return;
+            }
+            mPendingVodSwitch = true;
+            trySwitchToVod();
         });
+        updateNavVodVisibility();
+    }
+
+    /**
+     * 「片库」导航胶囊只在站点配置 / 分类数据就绪后显示：
+     * 用 GONE 彻底隐藏；右侧组由弹性空白撑住，不会因它消失而跳动；隐藏期间同时关掉可聚焦，
+     * 防止启动加载阶段焦点落上去触发一次注定失败的切页。
+     */
+    private void updateNavVodVisibility() {
+        if (mToolbar == null) return;
+        boolean ready = isVodReady();
+        mToolbar.navVod.setVisibility(ready ? View.VISIBLE : View.GONE);
+        mToolbar.navVod.setFocusable(ready);
+        mToolbar.navVod.setFocusableInTouchMode(ready);
+        if (!ready && mToolbar.navVod.hasFocus()) mToolbar.navHome.requestFocus();
+    }
+
+    /**
+     * 「片库」是否可用：结果无错误、分类非空、站点表已加载且 home 站点有效。
+     * 站点配置错误 / 为空 / 尚未加载完成三种情况都必须返回 false，不能只看 mResult。
+     */
+    private boolean isVodReady() {
+        if (mResult == null || !mResult.getMsg().isEmpty() || mResult.getTypes().isEmpty()) return false;
+        if (VodConfig.get().getSites().isEmpty()) return false;
+        Site home = VodConfig.get().getHome();
+        return home != null && !home.getKey().isEmpty();
+    }
+
+    /**
+     * 补切片库：用户已把焦点移到「片库」但站点配置尚未就绪时挂起，等 onResult 写入
+     * mResult 后再切一次；期间焦点若已离开「片库」则直接作废，不抢用户的后续操作。
+     */
+    private void trySwitchToVod() {
+        if (!mPendingVodSwitch) return;
+        if (isFinishing() || isDestroyed()) return;
+        if (!mToolbar.navVod.hasFocus()) {
+            mPendingVodSwitch = false;
+            return;
+        }
+        if (!isVodReady()) return;
+        mPendingVodSwitch = false;
+        VodActivity.start(this, mResult);
+    }
+
+    @Override
+    public void onUserInteraction() {
+        super.onUserInteraction();
+        // 只有真实遥控器 / 触摸操作之后，焦点切页才生效；启动期的自动焦点还原不算。
+        mNavSwitchArmed = true;
     }
 
     /**
@@ -609,20 +758,24 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /**
      * 焦点所在列表行（adapter position）。从焦点沿父链找到 recycler 的<b>直接子 View</b>，
-     * 再用 {@code getChildAdapterPosition} 取行号；包装层 / 复用 / 焦点落空时退回 Leanback
-     * 自己维护的 {@code getSelectedPosition()}，保证永远拿得到一个有效行号。
+     * 再用 {@code getChildAdapterPosition} 取行号。
+     *
+     * <p>解不出来时返回 <b>-1</b>，绝不退回 {@code getSelectedPosition()}：行快速切换的
+     * 中间帧里 {@code getChildAdapterPosition} 会短暂返回 {@code NO_POSITION}，而
+     * {@code getSelectedPosition()} 可能还停在 0 —— 那会被上层当成「焦点在第 0 行（主视觉）」，
+     * 触发一次 {@code resetToFirst()}，背景就变成榜单第 1 条并且再也回不来。</p>
      */
     private int focusedRow(View focus) {
-        int fallback = mBinding.recycler.getSelectedPosition();
+        if (focus == null) return -1;
         View child = focus;
         while (child != null && child.getParent() != mBinding.recycler) {
             ViewParent parent = child.getParent();
-            if (!(parent instanceof View)) return fallback;
+            if (!(parent instanceof View)) return -1;
             child = (View) parent;
         }
-        if (child == null) return fallback;
+        if (child == null) return -1;
         int position = mBinding.recycler.getChildAdapterPosition(child);
-        return position == RecyclerView.NO_POSITION ? fallback : position;
+        return position == RecyclerView.NO_POSITION ? -1 : position;
     }
 
     /**
@@ -641,9 +794,207 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             animateToolbar(true);
             return;
         }
-        boolean belowHero = isDescendant(focus, mBinding.recycler)
-                && focusedRow(focus) > getDoubanHotIndex();
+        // 「最近观看」行：主视觉与顶栏位置都必须不动，这里无条件保持显示
+        // （无论列表此刻停在哪、行是否已经贴边）。此行为仅限该行，
+        // 焦点继续下移到分类行时仍走下面的既有隐藏逻辑。
+        boolean inList = isDescendant(focus, mBinding.recycler);
+        int row = inList ? focusedRow(focus) : -1;
+        // 快速换行的中间帧里行号可能解不出来：保持现状，别让顶栏闪一下。
+        if (inList && row < 0) return;
+        int history = historyRowIndex();
+        if (history >= 0 && row == history) {
+            animateToolbar(true);
+            return;
+        }
+        boolean belowHero = row > getDoubanHotIndex();
         animateToolbar(!(belowHero && !isHeroAtTop()));
+    }
+
+    /**
+     * 主视觉在焦点变化时的唯一处理点：背景显隐、文字层收放、轮换 / 历史记录接管。
+     *
+     * <p>3 条需求在这里汇合：</p>
+     * <ul>
+     *   <li><b>位置不动</b>：背景是页面级固定图层（activity_home 的 heroBackdrop），
+     *       本来就不随列表滚动；顶栏由 {@link #updateToolbar(View)} 在历史行强制显示。</li>
+     *   <li><b>文字层收起</b>：焦点进入「最近观看」及其以下时，片名 / 评分 / 演职员 / 简介 /
+     *       「查看详情」整体上滑 + 渐隐；回到主视觉行或顶栏时反向放回。</li>
+     *   <li><b>背景接管</b>：历史行内横移时由 {@link #onItemFocus(History)} 推送具体记录，
+     *       这里只负责进入 / 离开整行时的轮换状态。</li>
+     * </ul>
+     */
+    private void updateHeroState(View focus) {
+        if (mBinding == null || mHeroPresenter == null || focus == null) return;
+        boolean inList = isDescendant(focus, mBinding.recycler);
+        int row = inList ? focusedRow(focus) : -1;
+        /*
+         * 行号解不出来（快速换行的中间帧，getChildAdapterPosition 会短暂返回 NO_POSITION）：
+         * 先保持现状，但必须补一次重试 —— 快速上移时最后一帧很可能正好落在这个中间态，
+         * 事件就此结束、再没有新的焦点变化来纠正，背景就会一直停在底部时的 alpha=0，
+         * 表现为「主视觉加载不出来」。以前这里直接 return，正是这个卡死的入口。
+         *
+         * 也不能退回 getSelectedPosition（常常是 0）当主视觉行：那会触发
+         * exitHistoryBackdrop(true) → resetToFirst()，背景瞬间变成榜单第 1 条。
+         */
+        if (inList && row < 0) {
+            if (mHeroStateTries++ < 6) mBinding.recycler.post(heroStateTask);
+            return;
+        }
+        mHeroStateTries = 0;
+        boolean show = shouldShowHero(focus);
+        int hero = getDoubanHotIndex();
+        int history = historyRowIndex();
+        boolean inHistory = history >= 0 && row == history;
+        // 进入方向只在这里判定一次：上一次停留的行在「最近观看」之上 → 向下进来。
+        boolean fromAbove = mLastFocusedRow <= history;
+        mLastFocusedRow = row;
+        // 「最近观看」及其以下收起文字层；顶栏与主视觉行保持常驻。
+        mHeroPresenter.setDetailsHidden(history >= 0 && row >= history);
+        if (inHistory) mHistoryLogoFromAbove = fromAbove;
+        else hideHistoryLogo();
+        if (!show) {
+            // 焦点进入历史行以下的内容：背景淡出并停表，保留最后看过的那一帧。
+            // 同时还原「行下沿贴屏底」的对齐方式，后面的分类行仍按 Leanback 默认居中走。
+            mHeroPresenter.setActive(false);
+            mHeroPresenter.exitHistoryBackdrop(false);
+        } else if (row < hero) {
+            // 顶栏：保持当前帧，轮换停表（等回到主视觉行再复位）。
+            mHeroPresenter.setActive(true);
+            mHeroPresenter.exitHistoryBackdrop(false);
+        } else if (row == hero && indexOfHero() >= 0) {
+            // 回到主视觉行：从第 1 条重新开始轮换，并把列表复位到顶部 ——
+            // 文字层（含「查看详情」）的绝对位置由行高 440dp 决定，列表停在中间位置时
+            // 它会被整体上推，那就不是「原有布局位置关系」了。
+            mHeroPresenter.setActive(true);
+            mHeroPresenter.exitHistoryBackdrop(true);
+            // 预先切到「行下沿贴屏底」的对齐方式：下一次按向下键时，Leanback 自己那一段
+            // 焦点滚动就会直接滚到目标位置，不会先居中再被纠回来。
+            HeroRowScroll.arm(mBinding.recycler, ResUtil.dp2px(HERO_BOTTOM_GAP_DP));
+            HeroRowScroll.ensureTop(mBinding.recycler, hero);
+        } else if (inHistory) {
+            // 「最近观看」：具体剧照由卡片焦点回调推送；同时把区块下沿对齐到屏底 16dp。
+            mHeroPresenter.setActive(true);
+            // 兜底再 arm 一次：从恢复的焦点直接进来时可能没经过主视觉行。
+            HeroRowScroll.arm(mBinding.recycler, ResUtil.dp2px(HERO_BOTTOM_GAP_DP));
+            HeroRowScroll.ensureBottom(mBinding.recycler, history, ResUtil.dp2px(HERO_BOTTOM_GAP_DP));
+            /*
+             * 卡片的焦点回调会在快速换行时先报一张旧的（焦点先进到记住的那张、再被
+             * selectedPosition 归零拽到第一张），等真正稳定下来那张反而没回调。
+             * 这里在焦点落定后再按行内实际选中项同步一次，谁最后说话谁说了算。
+             */
+            mBinding.recycler.removeCallbacks(syncHistoryTask);
+            mBinding.recycler.postDelayed(syncHistoryTask, 60);
+        } else {
+            mHeroPresenter.setActive(true);
+            mHeroPresenter.exitHistoryBackdrop(false);
+        }
+        if (show == mHeroVisible) return;
+        mHeroVisible = show;
+        mBinding.heroBackdrop.animate().cancel();
+        mBinding.heroBackdrop.animate()
+                .alpha(show ? 1f : 0f)
+                .setDuration(show ? 260 : 180)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+        // 主视觉的羽化挡板是整页光效的裁剪边：显隐一变就要重算，否则光会被挡死或穿帮。
+        updatePageGlowEdge();
+    }
+
+    private boolean shouldShowHero(View focus) {
+        if (isDescendant(focus, mToolbar.getRoot())) return true;
+        if (!isDescendant(focus, mBinding.recycler)) return true;
+        int row = focusedRow(focus);
+        if (row == getDoubanHotIndex()) return true;
+        int history = historyRowIndex();
+        return history >= 0 && row == history;
+    }
+
+    /** 「最近观看」内容行的 adapter position：标题行之后那一行；没有记录时返回 -1。 */
+    private int historyRowIndex() {
+        int header = indexOfHeader(R.string.home_history);
+        return header >= 0 ? header + 1 : -1;
+    }
+
+    private View rowItemView(int position) {
+        RecyclerView.ViewHolder holder = mBinding.recycler.findViewHolderForAdapterPosition(position);
+        return holder == null ? null : holder.itemView;
+    }
+
+    /**
+     * 把「最近观看」行的选中项归零，让焦点进入该行时落在最左边那张海报上。
+     *
+     * <p>只改行的 selectedPosition，不动焦点：真正的焦点移动仍由 Leanback 完成，
+     * 所以不会出现「先聚焦旧卡再滚回行首」的跳动。</p>
+     */
+    private boolean focusFirstHistoryCard() {
+        int history = historyRowIndex();
+        if (history < 0) return false;
+        View row = rowItemView(history);
+        HorizontalGridView grid = row == null ? null : findHorizontalGrid(row);
+        if (grid == null) return false;
+        if (grid.getSelectedPosition() != 0) grid.setSelectedPosition(0);
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            View child = grid.getChildAt(i);
+            if (grid.getChildAdapterPosition(child) == 0) return child.requestFocus();
+        }
+        return false;
+    }
+
+    /**
+     * 按「最近观看」行内<b>实际选中项</b>同步背景剧照。
+     *
+     * <p>卡片的焦点回调在快速换行时会先报一次过渡项（焦点先进到 Leanback 记住的那张，
+     * 再被 selectedPosition 归零拽到第一张），真正稳定下来那张反而不发回调。
+     * 所以焦点落定后补这一次，以行内选中项为准。</p>
+     */
+    private void syncHistoryBackdrop() {
+        if (mBinding == null || mHeroPresenter == null) return;
+        int history = historyRowIndex();
+        if (history < 0) return;
+        View row = rowItemView(history);
+        HorizontalGridView grid = row == null ? null : findHorizontalGrid(row);
+        if (grid == null) return;
+        /*
+         * 必须按「真正持有焦点的那个子项」取，不能用 grid.getSelectedPosition()：
+         * 从主视觉行下移时，焦点先落在 Leanback 记住的那张（这里是第 3 张），我们随后
+         * 把 selectedPosition 归零、焦点被拽到第 1 张 —— 但 getSelectedPosition() 会滞后，
+         * 仍然报第 3 张，背景就换成了用户没在看的那个。
+         */
+        int position = focusedCardPosition(grid);
+        // 焦点还停在行容器上（尚未转发给卡片）时按选中项兜底，否则片名 / 剧照都不会显示。
+        if (position < 0) position = grid.getSelectedPosition();
+        if (mHistoryAdapter == null || position < 0 || position >= mHistoryAdapter.size()) return;
+        Object item = mHistoryAdapter.get(position);
+        if (item instanceof History) {
+            mHeroPresenter.showHistoryBackdrop((History) item);
+            // 悬浮片名走同一份「真正持有焦点的卡片」数据，两者永远同步。
+            applyHistoryLogo((History) item);
+        }
+    }
+
+    /** 行内网格中真正持有焦点的子项位置；焦点不在该行时返回 -1。 */
+    private int focusedCardPosition(HorizontalGridView grid) {
+        View child = getCurrentFocus();
+        while (child != null && child.getParent() != grid) {
+            ViewParent parent = child.getParent();
+            if (!(parent instanceof View)) return -1;
+            child = (View) parent;
+        }
+        if (child == null) return -1;
+        int position = grid.getChildAdapterPosition(child);
+        return position == RecyclerView.NO_POSITION ? -1 : position;
+    }
+
+    /** 行容器里的横向网格：ListRow 的 itemView 包着一层 HorizontalGridView。 */
+    private HorizontalGridView findHorizontalGrid(View view) {
+        if (view instanceof HorizontalGridView) return (HorizontalGridView) view;
+        if (!(view instanceof ViewGroup)) return null;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            HorizontalGridView found = findHorizontalGrid(group.getChildAt(i));
+            if (found != null) return found;
+        }
+        return null;
     }
 
     /**
@@ -1023,6 +1374,9 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         mAdapter.remove("progress");
         addVideo(mResult = result);
         Cache.clear().put(result);
+        // 站点配置就绪：显示「片库」胶囊，再补完可能被挂起的切页。
+        updateNavVodVisibility();
+        trySwitchToVod();
     }
 
     private void setAdapter() {
@@ -1673,8 +2027,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         if (index < 0) {
             applyContentInset(false);
             return;
-        }
-        boolean focused = mBinding.recycler.getSelectedPosition() == index;
+        }        boolean focused = mBinding.recycler.getSelectedPosition() == index;
         int anchorPosition = firstVisiblePosition();
         int anchorTop = firstVisibleTop();
         mAdapter.removeItems(index, 1);
@@ -1886,6 +2239,159 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         return true;
     }
 
+    /**
+     * 「最近观看」某条记录获得焦点：把它的横版剧照推给页面级背景层。
+     *
+     * <p>只在进入记录（或在该行内横移）时触发，不在失焦时清空 —— 离开整行的处理交给
+     * {@link #updateHeroState(View)} 按行号判定。没有刮到剧照的记录，presenter 会把两层
+     * 剧照一起淡出、露出纯底色，不会退回上一部的图。</p>
+     */
+    @Override
+    public void onItemFocus(History item) {
+        if (mHeroPresenter == null || item == null) return;
+        mHeroPresenter.showHistoryBackdrop(item);
+        applyHistoryLogo(item);
+    }
+
+    /**
+     * 「最近观看」的悬浮片名：内容随焦点卡片切换，并按进入方向播放入场动画。
+     *
+     * <p>位置固定在标题行上方（页面级图层，不随列表滚动）。从主视觉下来时从标题
+     * <b>下方</b>上滑到位，从下方内容区上来时从<b>上方</b>下滑到位 —— 两个方向都收在
+     * 「标题上方」这个终点，动画方向与焦点移动方向一致。</p>
+     *
+     * <p>内容优先用 TMDB 的片名 logo；没有 logo 的退回文字片名，并顺带补抓一次
+     * （只抓 {@code TmdbStore} 里完全没有记录的片名，已抓过的不再重复请求）。</p>
+     */
+    private void applyHistoryLogo(History item) {
+        if (mBinding == null || item == null) return;
+        int history = historyRowIndex();
+        // 焦点可能已经离开（延迟回调）：只在当前确实停在「最近观看」行内时才动。
+        // -1 是快速换行的中间态（行号暂时解不出），不能据此判定「已离开」，否则会漏显示。
+        int current = focusedRow(getCurrentFocus());
+        if (history < 0 || (current >= 0 && current != history)) return;
+        String key = item.getKey();
+        boolean same = mHistoryLogoVisible && TextUtils.equals(key, mHistoryLogoKey);
+        mHistoryLogoKey = key;
+        bindHistoryLogoArt(item);
+        if (same) return;
+        View logo = mBinding.historyLogo;
+        logo.animate().cancel();
+        if (!mHistoryLogoVisible) {
+            mHistoryLogoVisible = true;
+            logo.setVisibility(View.VISIBLE);
+            logo.setAlpha(0f);
+            positionHistoryLogo();
+            logo.setTranslationY(ResUtil.dp2px(mHistoryLogoFromAbove ? HISTORY_LOGO_SLIDE_DP : -HISTORY_LOGO_SLIDE_DP));
+            logo.animate().alpha(1f).translationY(0f)
+                    .setDuration(HISTORY_LOGO_IN_MS)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .start();
+        } else {
+            // 行内横移 / 从隐藏态恢复：只做一次短淡入，不重播位移。
+            logo.setAlpha(0.25f);
+            logo.animate().alpha(1f).setDuration(140).start();
+        }
+    }
+
+    /** 悬浮片名的内容：logo 优先、文字回退；尺寸规则与主视觉 titleBox 同源。 */
+    private void bindHistoryLogoArt(History item) {
+        if (mBinding == null) return;
+        String name = item.getVodName();
+        TmdbArt art = TmdbStore.find(name);
+        File file = art == null ? null : art.getLogoFile();
+        Bitmap bitmap = file != null && file.exists() && file.length() > 0 ? TmdbStore.logoBitmap(file.getName()) : null;
+        if (bitmap != null) {
+            /*
+             * 尺寸分档与主视觉 titleBox 完全同源：竖版（宽/高 &lt; 1/1.6）200dp、
+             * 类正方形（&le; 1/1）120dp、其余横版 80dp；宽度按比例自适应，
+             * 上限取「300dp」与「屏宽去掉左右内容边距」中的小者。
+             */
+            float ratio = bitmap.getWidth() / (float) bitmap.getHeight();
+            int heightDp;
+            if (ratio < 1f / 1.6f) heightDp = 200;
+            else if (ratio <= 1f) heightDp = 120;
+            else heightDp = 80;
+            int maxWidth = Math.min(ResUtil.dp2px(HISTORY_LOGO_MAX_WIDTH_DP),
+                    ResUtil.getScreenWidth() - ResUtil.dp2px(96));
+            int height = ResUtil.dp2px(heightDp);
+            int width = Math.round(height * ratio);
+            if (width > maxWidth) {
+                width = maxWidth;
+                height = Math.round(width / Math.max(ratio, 0.01f));
+            }
+            ViewGroup.LayoutParams params = mBinding.historyLogoImage.getLayoutParams();
+            if (params.width != width || params.height != height) {
+                params.width = width;
+                params.height = height;
+                mBinding.historyLogoImage.setLayoutParams(params);
+            }
+            mBinding.historyLogoImage.setImageBitmap(bitmap);
+            mBinding.historyLogoImage.setVisibility(View.VISIBLE);
+            mBinding.historyLogoText.setVisibility(View.GONE);
+            return;
+        }
+        mBinding.historyLogoImage.setImageDrawable(null);
+        mBinding.historyLogoImage.setVisibility(View.GONE);
+        mBinding.historyLogoText.setText(name);
+        mBinding.historyLogoText.setVisibility(View.VISIBLE);
+        if (art == null) requestHistoryLogo(item);
+    }
+
+    /** 本地没有这部片子的任何刮削记录：补抓一次，成功后原地换成 logo。 */
+    private void requestHistoryLogo(History item) {
+        String name = item.getVodName();
+        if (TextUtils.isEmpty(name) || !mHistoryLogoRequested.add(name)) return;
+        ArtSource.fetch(name, ArtSource.CAT_AUTO, new ArtSource.Callback() {
+            @Override
+            public void onSuccess(TmdbArt art) {
+                // 抓取链路的回调不保证在主线程：统一切回来再碰视图。
+                App.post(() -> {
+                    if (mBinding == null || isFinishing() || isDestroyed()) return;
+                    // 焦点已经换到别的记录：不覆盖当前内容。
+                    if (!TextUtils.equals(mHistoryLogoKey, item.getKey())) return;
+                    bindHistoryLogoArt(item);
+                });
+            }
+
+            @Override
+            public void onFailure(String reason) {
+            }
+        });
+    }
+
+    /** 把悬浮片名贴到「最近观看」标题行的上沿（减去间距与自身高度）。 */
+    private void positionHistoryLogo() {
+        if (mBinding == null) return;
+        int header = indexOfHeader(R.string.home_history);
+        View head = header >= 0 ? rowItemView(header) : null;
+        if (head == null) return;
+        int[] headLoc = new int[2];
+        head.getLocationOnScreen(headLoc);
+        int[] rootLoc = new int[2];
+        mBinding.getRoot().getLocationOnScreen(rootLoc);
+        int height = mBinding.historyLogoAnchor.getHeight();
+        if (height <= 0) height = ResUtil.dp2px(HISTORY_LOGO_HEIGHT_DP);
+        int baseY = headLoc[1] - rootLoc[1] - ResUtil.dp2px(HISTORY_LOGO_GAP_DP) - height;
+        // 定位只写锚点层；内层的 translationY 留给入场动画，两者互不覆盖。
+        mBinding.historyLogoAnchor.setY(baseY);
+    }
+
+    /** 离开「最近观看」：整体淡出并轻微下沉，随后置为不可见。 */
+    private void hideHistoryLogo() {
+        if (mBinding == null || !mHistoryLogoVisible) return;
+        mHistoryLogoVisible = false;
+        View logo = mBinding.historyLogo;
+        logo.animate().cancel();
+        logo.animate().alpha(0f).translationY(ResUtil.dp2px(12))
+                .setDuration(HISTORY_LOGO_OUT_MS)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> {
+                    if (!mHistoryLogoVisible) logo.setVisibility(View.INVISIBLE);
+                })
+                .start();
+    }
+
     @Override
     public void onItemClick(History item) {
         if (belongsToCurrentConfig(item)) {
@@ -1960,6 +2466,19 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             // 主视觉是通栏 item，几何上「向上找焦点」永不成立，这里显式把焦点交给导航按钮。
             if (KeyUtil.isUpKey(event) && mBinding.recycler.getSelectedPosition() == 0 && mBinding.recycler.hasFocus()) {
                 focusNav();
+                return true;
+            }
+            /*
+             * 从「查看详情」按 ↓：焦点必须落在「最近观看」最左边那张海报上。
+             *
+             * <p>只把行的 selectedPosition 归零不够：Leanback 内部还维护一个「回到该网格时
+             * 该聚焦谁」的位置，实测 selectedPosition 已经是 0，焦点仍然落在上次看的那张上
+             * （日志里 old=0，但聚焦的是第 3 张）。所以这里直接把焦点交给第 1 张卡并吞掉
+             * 这次按键，不走 Leanback 的焦点搜索。</p>
+             */
+            if (KeyUtil.isDownKey(event) && mBinding.recycler.hasFocus()
+                    && focusedRow(getCurrentFocus()) == getDoubanHotIndex()
+                    && focusFirstHistoryCard()) {
                 return true;
             }
         }
@@ -2170,13 +2689,14 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /**
-     * 焦点是否在顶栏的「动作区」：搜索圆钮（原品牌位）或站源下拉入口。
-     * 设置已并入导航「我的」，搜索框按钮已移除，这里只保留这两个非导航控件。
+     * 焦点是否在顶栏的「动作区」：搜索圆钮（原品牌位）、站源下拉入口或时间左侧的设置图标。
+     * 搜索框按钮已移除，这里只保留这三个非导航控件。
      */
     private boolean isToolbarActionFocused() {
         View focus = getCurrentFocus();
         return isDescendant(focus, mToolbar.brandEntry)
-                || isDescendant(focus, mToolbar.siteEntry);
+                || isDescendant(focus, mToolbar.siteEntry)
+                || isDescendant(focus, mToolbar.settingEntry);
     }
 
     /** 焦点是否在左侧导航文字按钮组。 */
@@ -2240,6 +2760,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         observer.removeOnGlobalFocusChangeListener(focusGuard);
         observer.removeOnGlobalFocusChangeListener(toolbarFocusWatcher);
         mBinding.recycler.removeOnScrollListener(toolbarScrollWatcher);
+        // 取消在途的列表定位协程，避免它持有即将销毁的 recycler。
+        HeroRowScroll.cancel();
         if (--instanceCount == 0 && !isChangingConfigurations()) {
             BackupManager.backup();
             releaseResources();
