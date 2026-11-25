@@ -137,7 +137,7 @@ public class Updater {
     private void checkRelease() {
         try {
             String abi = PackageAbi.get().replace('-', '_');
-            // 共存版（com.ctowl2018.android.newtv2）用独立资产名，避免与原版在同一 Release 里
+            // 共存版（com.newtv.android.exo）用独立资产名，避免与原版在同一 Release 里
             // 互相抓错安装包；原版前缀为空，文件名与历史版本保持一致。
             String filename = BuildConfig.UPDATE_ASSET_PREFIX + BuildConfig.FLAVOR + "-" + abi + ".apk";
             JSONObject release = Github.getUpdate(new JSONArray(OkHttp.string(Github.getReleases())), BuildConfig.VERSION_NAME, filename);

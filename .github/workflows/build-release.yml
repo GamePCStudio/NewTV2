@@ -2,12 +2,12 @@ name: Build & Release (leanback)
 
 # 每次 push 到 main 即构建 release 版并发布 GitHub Release。
 # 同一 Release 发布两套：原版 com.fongmi.android.tv（leanback-*.apk）与
-# 共存版 com.ctowl2018.android.newtv2（newtv2-leanback-*.apk），可在设备同时安装。
+# 共存版 com.newtv.android.exo（newtv2-leanback-*.apk），可在设备同时安装。
 # 版本号规则：<上游版本号>.NewTV2.<YYYYMMDD>.<HHMMSS>
 #   例：5.8.7.NewTV2.20261113.173045（UPSTREAM_VERSION 在下方 Compute version 步骤维护）
 #   <YYYYMMDD> / <HHMMSS> 均为北京时间（UTC+8），非 UTC。
 # versionCode 用「Unix 秒 - 1700000000」保证单调递增且不超 int 上限。
-# 应用内更新检查（Github.REPO = ctowl2018/NewTV2）按 语义版本 + 时间戳 判定更新。
+# 应用内更新检查（Github.REPO = GamePCStudio/NewTV2）按 语义版本 + 时间戳 判定更新。
 # stats/** 是每日统计快照的自动提交，不参与构建，否则每天都会产出一个 Release。
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
           cp app/build/outputs/apk/leanback/release/*.apk release-apks/stock/
           # 共存版：仅改设备标识，源码 namespace 不变；资产名加 newtv2- 前缀隔离更新。
           ./gradlew :app:assembleLeanbackRelease \
-            -PappApplicationId=com.ctowl2018.android.newtv2 \
+            -PappApplicationId=com.newtv.android.exo \
             -PappVersionName="${{ steps.ver.outputs.version_name }}" \
             -PappVersionCode="${{ steps.ver.outputs.version_code }}" \
             $COMMON_ARGS
@@ -115,7 +115,7 @@ jobs:
           body=$(git log -1 --format=%b)
           if [ -z "$body" ]; then body=$(git log -1 --format=%B); fi
           {
-            echo "Automated leanback (TV) release built from http://github.com/ctowl2018/NewTV2"
+            echo "Automated leanback (TV) release built from https://github.com/GamePCStudio/NewTV2"
             echo ""
             echo "$body"
           } > release_notes.md
