@@ -2,7 +2,9 @@ package com.fongmi.android.tv.ui.fragment;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -31,6 +33,7 @@ import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomScroller;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.presenter.VodPresenter;
+import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.common.collect.Lists;
 
@@ -83,9 +86,27 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         mBinding.recycler.addOnScrollListener(mScroller = new CustomScroller(this));
         boolean vertical = Setting.getSearchLayout() == 1;
         mBinding.recycler.setHeader(getActivity(), vertical ? new int[]{R.id.result} : new int[]{R.id.result, R.id.recycler});
-        mBinding.recycler.setFocusOutSideStart(vertical);
         mBinding.recycler.setReturnFocusView(requireActivity().findViewById(vertical ? R.id.verticalRecycler : R.id.recycler));
+        mBinding.recycler.setOnKeyInterceptor(this::onGridKeyDown);
         mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(16));
+    }
+
+    private boolean onGridKeyDown(KeyEvent event) {
+        if (Setting.getSearchLayout() != 1 || !KeyUtil.isLeftKey(event)) return false;
+        View focused = requireActivity().getCurrentFocus();
+        View next = focused == null ? null : focused.focusSearch(View.FOCUS_LEFT);
+        if (next != null && !isInsideGrid(next)) return next.requestFocus();
+        View source = requireActivity().findViewById(R.id.verticalRecycler);
+        return source != null && source.requestFocus();
+    }
+
+    private boolean isInsideGrid(View view) {
+        View current = view;
+        while (current != null) {
+            if (current == mBinding.recycler) return true;
+            current = current.getParent() instanceof View ? (View) current.getParent() : null;
+        }
+        return false;
     }
 
     private void setViewModel() {

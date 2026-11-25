@@ -161,7 +161,7 @@ public class CollectActivity extends BaseActivity {
         mBinding.verticalRecycler.addOnChildViewHolderSelectedListener(new SelectionListener());
     }
 
-    private final class SelectionListener implements OnChildViewHolderSelectedListener {
+    private final class SelectionListener extends OnChildViewHolderSelectedListener {
         @Override
         public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
             onChildSelected(child, position);
@@ -172,7 +172,6 @@ public class CollectActivity extends BaseActivity {
         mBinding.recycler.setHorizontalSpacing(ResUtil.dp2px(16));
         mBinding.recycler.setRowHeight(ResUtil.dp2px(56));
         mBinding.recycler.setAdapter(mAdapter = new CollectAdapter());
-        mBinding.verticalRecycler.setRowHeight(ResUtil.dp2px(48));
         mBinding.verticalRecycler.setAdapter(mVerticalAdapter = new CollectAdapter());
     }
 
