@@ -6,6 +6,7 @@ import androidx.annotation.NonNull;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.TmdbApi;
+import com.fongmi.android.tv.setting.TmdbSetting;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 import com.google.gson.JsonArray;
@@ -38,12 +39,13 @@ import java.util.concurrent.Executors;
  * {@link #HOME_LIMIT} 条，其余进「更多影片」页；缺失片名或海报的条目直接跳过，
  * 保证整行都是可用海报。</p>
  *
- * <p><b>缓存</b>：内存 + {@code files/home_board_<n>.json}，TTL 12 小时，与主视觉榜单同口径。
+ * <p><b>缓存</b>：内存 + {@code files/home_board_v2_<n>.json}，TTL 12 小时，与主视觉榜单同口径。
  * 过期时重新拉取；拉取失败继续用旧数据，只有「从未成功过」才回空列表，由展示层收起基础榜单或显示平台提示。</p>
  *
  * <p><b>海报地址</b>：豆瓣图床有防盗链（无 Referer 直接 418），请求头由
  * {@link ImgUtil#getUrl(String)} 统一补；TMDB 相对路径在这里拼成
- * {@code {base}/t/p/w500{path}}，{@code base} 跟随全局 TMDB 连接方式。</p>
+ * {@code image.tmdb.org/t/p/w342{path}}。默认 API 反代只负责取数，图片走独立 CDN，
+ * 避免图片请求挤占反代链路；自定义连接仍沿用其图片地址。w342 的下载体积约为 w500 的一半。</p>
  */
 public final class HomeBoard {
 
@@ -59,7 +61,10 @@ public final class HomeBoard {
     public static final int DISNEY_TV = 9;
     public static final int COUNT = 10;
 
+    /** 剧集 Discover 使用制作/播出网络；电影 Discover 不支持该参数。 */
     private static final int[] NETWORKS = {0, 0, 0, 0, 213, 213, 49, 49, 2739, 2739};
+    /** 电影按美国区播放供应商筛选：Netflix / HBO Max / Disney+。 */
+    private static final int[] MOVIE_PROVIDERS = {0, 0, 0, 0, 8, 0, 1899, 0, 337, 0};
 
     /** 首页每行最多展示的影片数；到 10 部时末尾追加「查看全部」卡片。 */
     public static final int HOME_LIMIT = 10;
@@ -79,10 +84,11 @@ public final class HomeBoard {
             "/trending/movie",
             "/trending/tv"
     };
-    private static final String CACHE_PREFIX = "home_board_";
+    /** v2 同时失效旧的电影筛选结果和 w500 海报地址，避免升级后继续命中旧缓存。 */
+    private static final String CACHE_PREFIX = "home_board_v2_";
     private static final long TTL = 12L * 60 * 60 * 1000;
-    /** 豆瓣海报尺寸：卡片最宽约 300dp，w500 足够且比 w780 省一半流量。 */
-    private static final String POSTER_SIZE = "w500";
+    /** 首页卡片无需 w500；w342 体积约为其一半，加载更快。 */
+    private static final String POSTER_SIZE = "w342";
 
     // 平台榜单不能排在前四个基础榜单之后；独立线程池让两组请求互不阻塞。
     private static final ExecutorService BASE_EXECUTOR = newExecutor("HomeBoardBase", 4);
@@ -210,7 +216,10 @@ public final class HomeBoard {
         if (board <= TMDB_TV) return fetch(BASE + PATHS[board]);
         boolean movie = board % 2 == 0;
         String type = movie ? "movie" : "tv";
-        String filter = "with_networks=" + NETWORKS[board];
+        // TMDB 电影 Discover 会忽略 with_networks；必须用播放供应商才能区分平台。
+        String filter = movie
+                ? "watch_region=US&with_watch_providers=" + MOVIE_PROVIDERS[board]
+                : "with_networks=" + NETWORKS[board];
         String path = "/3/discover/" + type + "?language=zh-CN&page=1&sort_by=popularity.desc"
                 + "&vote_count.gte=" + (movie ? 50 : 10) + "&include_adult=false&" + filter;
         try {
@@ -240,6 +249,8 @@ public final class HomeBoard {
             else if (root.has("results") && root.get("results").isJsonArray()) array = root.getAsJsonArray("results");
             if (array == null) return Collections.emptyList();
             boolean douban = board == DOUBAN_MOVIE || board == DOUBAN_SERIES;
+            String posterBase = TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM
+                    ? RankLatest.imageBase() : RankLatest.DEFAULT_IMAGE_BASE;
             List<Item> out = new ArrayList<>(MAX_ITEMS);
             for (JsonElement element : array) {
                 if (out.size() >= MAX_ITEMS) break;
@@ -250,7 +261,7 @@ public final class HomeBoard {
                 String poster = optString(json1, douban ? "posterPath" : "poster_path");
                 if (TextUtils.isEmpty(title) || TextUtils.isEmpty(poster)) continue;
                 double rating = optDouble(json1, douban ? "rating" : "vote_average");
-                out.add(new Item(title.trim(), absolute(poster), ratingText(rating)));
+                out.add(new Item(title.trim(), absolute(poster, posterBase), ratingText(rating)));
             }
             return out;
         } catch (Exception e) {
@@ -258,11 +269,11 @@ public final class HomeBoard {
         }
     }
 
-    /** 豆瓣给的是绝对地址；TMDB 只给相对路径，按全局连接方式拼图片基地址。 */
-    private static String absolute(String poster) {
+    /** 豆瓣给的是绝对地址；TMDB 相对路径按默认 CDN 或自定义图片地址拼接。 */
+    private static String absolute(String poster, String posterBase) {
         if (poster.startsWith("http://") || poster.startsWith("https://")) return poster;
         String path = poster.startsWith("/") ? poster : "/" + poster;
-        return RankLatest.imageBase() + "/t/p/" + POSTER_SIZE + path;
+        return posterBase + "/t/p/" + POSTER_SIZE + path;
     }
 
     /** 评分统一走 ArtRating：10 分制固定一位小数（9 → 9.0），无效值返回空串不显示角标。 */
