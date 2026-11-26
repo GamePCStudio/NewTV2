@@ -29,13 +29,19 @@ import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.ActivityCollectBinding;
+import com.fongmi.android.tv.event.ConfigEvent;
+import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.CollectAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.PageGlowController;
 import com.fongmi.android.tv.ui.fragment.CollectFragment;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.util.List;
 
@@ -46,6 +52,7 @@ public class CollectActivity extends BaseActivity {
     private CollectAdapter mVerticalAdapter;
     private SiteViewModel mViewModel;
     private List<Site> mSites;
+    private boolean mLoadRequested;
     /** 整页背景漫反射 + 焦点卡提亮（搜索结果页）。 */
     private PageGlowController mPageGlow;
     /** 从「最近观看」跨站点记录进来的待续播信息（JSON），选中同一部片时消费掉。 */
@@ -128,8 +135,10 @@ public class CollectActivity extends BaseActivity {
         // 否则从普通搜索进来还会沿用上一轮的旧记录去跳集数。
         if (!intent.hasExtra(EXTRA_RESUME)) getIntent().removeExtra(EXTRA_RESUME);
         App.removeCallbacks(mSwitchPage);
+        mViewModel.stopSearch();
         mAdapter.clear();
         mVerticalAdapter.clear();
+        mLoadRequested = false;
         setSearchLayout();
         setPager();
         search();
@@ -145,7 +154,6 @@ public class CollectActivity extends BaseActivity {
         setViewModel();
         // 凡经 CollectActivity.start() 进入结果页的关键词一律不写搜索历史；
         // 搜索页自身的记录走 SearchActivity.onSearch() 的 mRecordAdapter.add()，不受影响。
-        setSites();
         setPager();
         search();
     }
@@ -215,7 +223,17 @@ public class CollectActivity extends BaseActivity {
     }
 
     private void search() {
-        if (mSites.isEmpty()) return;
+        setSites();
+        if (mSites.isEmpty()) {
+            mBinding.result.setText(R.string.collect_loading_sites);
+            loadSites();
+            return;
+        }
+        mLoadRequested = false;
+        startSearch();
+    }
+
+    private void startSearch() {
         mAdapter.add(Collect.all());
         mVerticalAdapter.add(Collect.all());
         mAdapter.setCount(0, mSites.size());
@@ -225,6 +243,40 @@ public class CollectActivity extends BaseActivity {
         syncSelection(0);
         activeRecycler().requestFocus();
         mViewModel.searchContent(mSites, getKeyword(), false);
+    }
+
+    private void loadSites() {
+        if (mLoadRequested || VodConfig.get().isLoading()) return;
+        mLoadRequested = true;
+        VodConfig.get().init().load(new Callback() {
+            @Override
+            public void success() {
+                onSitesLoaded();
+            }
+
+            @Override
+            public void error(String msg) {
+                if (!TextUtils.isEmpty(msg)) Notify.show(msg);
+                onSitesLoaded();
+            }
+        });
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onConfigEvent(ConfigEvent event) {
+        if (event.type() != ConfigEvent.Type.COMMON || mAdapter.getItemCount() > 0) return;
+        mLoadRequested = false;
+        onSitesLoaded();
+    }
+
+    private void onSitesLoaded() {
+        if (isFinishing() || isDestroyed() || mAdapter.getItemCount() > 0) return;
+        setSites();
+        if (mSites.isEmpty()) {
+            mBinding.result.setText(R.string.collect_no_sites);
+            return;
+        }
+        startSearch();
     }
 
     private void syncSelection(int position) {

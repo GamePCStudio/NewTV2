@@ -47,6 +47,8 @@
 
     <!-- Collect -->
     <string name="collect_result">Search results for <xliff:g name="name">%s</xliff:g></string>
+    <string name="collect_loading_sites">Loading sites…</string>
+    <string name="collect_no_sites">No searchable sites. Check the site configuration or search settings.</string>
 
     <string name="dialog_action_site_searchable">Choose searchable sites</string>
     <string name="dialog_action_site_changeable">Choose switchable sites</string>

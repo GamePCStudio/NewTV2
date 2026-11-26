@@ -72,6 +72,10 @@ abstract class BaseConfig {
         return config == null ? defaultConfig() : config;
     }
 
+    public boolean isLoading() {
+        return future != null && !future.isDone();
+    }
+
     protected void setHeaders(List<Header> headers) {
         OkHttp.responseInterceptor().addAll(headers);
     }

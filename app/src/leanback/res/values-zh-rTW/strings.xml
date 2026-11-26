@@ -47,6 +47,8 @@
 
     <!-- Collect -->
     <string name="collect_result">「<xliff:g name="name">%s</xliff:g>」的搜尋結果</string>
+    <string name="collect_loading_sites">正在載入站源…</string>
+    <string name="collect_no_sites">暫無可搜尋站源，請檢查站源設定或搜尋設定</string>
 
     <string name="dialog_action_site_searchable">設定可搜尋站源</string>
     <string name="dialog_action_site_changeable">設定可換源站源</string>
