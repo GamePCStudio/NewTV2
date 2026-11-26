@@ -233,12 +233,17 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 首页分类模块（豆瓣 / TMDB / 奈飞 / HBO / 迪士尼的电影与剧集）。
      *
      * <p>按数组下标对应 {@link HomeBoard} 的分类；每格保存标题对象与内容行对象，
-     * 用对象身份定位，避免「推荐块重建 / 主视觉异步插入」导致下标错位。空列表时置 null 表示该行已收起。</p>
+     * 用对象身份定位，避免「推荐块重建 / 主视觉异步插入」导致下标错位。平台榜单拉取失败时
+     * 保留标题与提示卡，其余分类仍在空列表时收起。</p>
      */
     private final RowHeader[] mBoardHeaders = new RowHeader[HomeBoard.COUNT];
     private final ListRow[] mBoardRows = new ListRow[HomeBoard.COUNT];
+    /** 平台榜单空数据时的提示卡；按对象身份识别点击，不进入影片搜索。 */
+    private final Vod[] mBoardNotices = new Vod[HomeBoard.COUNT];
     /** 分类共用一个 Presenter；与站源行分开，站源 Style 变化时不影响分类行的海报样式。 */
     private VodPresenter mBoardPresenter;
+    /** 空数据提示使用横向列表卡，不占用海报卡尺寸。 */
+    private VodPresenter mBoardNoticePresenter;
     /** 「来自 · 站源名」的完整结果（已去黑名单）：首页只展示前 10 部，其余给「更多影片」页。 */
     private List<Vod> mRecommendItems = new ArrayList<>();
     private Style mRecommendStyle = Style.rect();
@@ -1768,12 +1773,13 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      * 一个分类的数据到位：建「标题 + 单行横滑海报」，插在「来自 · 站源名」上方。
      *
      * <p>卡片只承载片名、海报、评分三项，没有站点与影片 id，点击按片名进搜索结果
-     * （见 {@link #onItemClick(Vod)}）。重复回调就地替换；空列表整行收起，不影响其它行。</p>
+     * （见 {@link #onItemClick(Vod)}）。重复回调就地替换；平台榜单没有数据时显示可点击的
+     * TMDB 设置提示，豆瓣与 TMDB 基础榜单仍在空列表时收起。</p>
      */
     private void applyBoard(int board, List<HomeBoard.Item> items) {
         if (mBinding == null || mAdapter == null || isFinishing() || isDestroyed()) return;
         if (items == null || items.isEmpty()) {
-            removeBoard(board);
+            emptyBoard(board);
             return;
         }
         List<Vod> vods = new ArrayList<>(items.size());
@@ -1789,7 +1795,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             vods.add(vod);
         }
         if (vods.isEmpty()) {
-            removeBoard(board);
+            emptyBoard(board);
             return;
         }
         if (mBoardPresenter == null) mBoardPresenter = new VodPresenter(this, Style.rect());
@@ -1803,8 +1809,33 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         ArrayObjectAdapter adapter = new ArrayObjectAdapter(
                 new StackRowSelector(mBoardPresenter, new PosterStackPresenter(this::openMore, style, this)));
         adapter.addAll(0, cards);
+        mBoardNotices[board] = null;
         RowHeader header = new RowHeader(boardTitleRes(board), getString(boardTitleRes(board)));
-        ListRow row = new ListRow(adapter);
+        setBoardRow(board, header, new ListRow(adapter));
+    }
+
+    /** 平台榜单无数据时保留入口并引导补全 TMDB 配置；基础榜单维持原来的隐藏行为。 */
+    private void emptyBoard(int board) {
+        if (board >= HomeBoard.NETFLIX_MOVIE) showBoardNotice(board);
+        else removeBoard(board);
+    }
+
+    private void showBoardNotice(int board) {
+        Vod notice = new Vod();
+        notice.setName(getString(TextUtils.isEmpty(TmdbSetting.getApiKey())
+                ? R.string.home_board_tmdb_key_required : R.string.home_board_tmdb_unavailable));
+        notice.setRemarks(getString(R.string.home_board_tmdb_notice));
+        notice.setArtPic("android.resource://" + getPackageName() + "/" + R.drawable.ic_tmdb);
+        if (mBoardNoticePresenter == null) mBoardNoticePresenter = new VodPresenter(this, Style.list());
+        ArrayObjectAdapter adapter = new ArrayObjectAdapter(mBoardNoticePresenter);
+        adapter.add(notice);
+        mBoardNotices[board] = notice;
+        int title = boardTitleRes(board);
+        setBoardRow(board, new RowHeader(title, getString(title)), new ListRow(adapter));
+    }
+
+    /** 分类行统一按标题对象定位后替换，提示行与真实海报行可以互相切换。 */
+    private void setBoardRow(int board, RowHeader header, ListRow row) {
         RowHeader oldHeader = mBoardHeaders[board];
         ListRow oldRow = mBoardRows[board];
         int headerAt = oldHeader == null ? -1 : mAdapter.indexOf(oldHeader);
@@ -1850,15 +1881,24 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     /** 收起某个分类：先删内容行再删标题，重复调用安全。 */
     private void removeBoard(int board) {
-        if (mAdapter == null) return;
         ListRow row = mBoardRows[board];
         RowHeader header = mBoardHeaders[board];
+        mBoardNotices[board] = null;
         mBoardHeaders[board] = null;
         mBoardRows[board] = null;
+        if (mAdapter == null) return;
         int rowAt = row == null ? -1 : mAdapter.indexOf(row);
         if (rowAt >= 0) mAdapter.removeItems(rowAt, 1);
         int headerAt = header == null ? -1 : mAdapter.indexOf(header);
         if (headerAt >= 0) mAdapter.removeItems(headerAt, 1);
+    }
+
+    private boolean isBoardNotice(Vod item) {
+        if (item == null) return false;
+        for (int board = HomeBoard.NETFLIX_MOVIE; board < HomeBoard.COUNT; board++) {
+            if (item == mBoardNotices[board]) return true;
+        }
+        return false;
     }
 
     /**
@@ -2233,7 +2273,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     @Override
     public void onItemClick(Vod item) {
         // 列表样式下的「查看全部」哑条目：不进搜索，直接开更多页。
-        if (item == mRecommendMore) openMore(ViewAllItem.site());
+        if (isBoardNotice(item)) SettingTmdbActivity.start(this);
+        else if (item == mRecommendMore) openMore(ViewAllItem.site());
         else if (item.isAction()) mViewModel.action(getHome().getKey(), item.getAction());
         // 分类模块的卡片没有站点与影片 id（只有片名/海报/评分），按片名进搜索结果。
         else if (item.getSite() == null || getHome().isIndex()) openCollect(item.getName());
@@ -2242,7 +2283,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
 
     @Override
     public boolean onLongClick(Vod item) {
-        if (item == mRecommendMore || item.isAction()) return false;
+        if (isBoardNotice(item) || item == mRecommendMore || item.isAction()) return false;
         openCollect(item.getName());
         return true;
     }

@@ -19,6 +19,9 @@
     <string name="home_board_disney_movie">迪士尼·热门电影</string>
     <string name="home_board_disney_tv">迪士尼·热门剧集</string>
     <string name="home_board_more_title">查看全部</string>
+    <string name="home_board_tmdb_key_required">请设置 TMDB API 密钥</string>
+    <string name="home_board_tmdb_unavailable">热门榜单暂不可用</string>
+    <string name="home_board_tmdb_notice">按确认键前往影片刮削设置</string>
     <string name="home_recommend_source">来自 · %1$s</string>
     <string name="hot_rank_tencent">腾讯视频·热搜榜</string>
     <string name="hot_rank_iqiyi">爱奇艺·热搜榜</string>

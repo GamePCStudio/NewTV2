@@ -19,6 +19,9 @@
     <string name="home_board_disney_movie">Disney+·熱門電影</string>
     <string name="home_board_disney_tv">Disney+·熱門劇集</string>
     <string name="home_board_more_title">查看全部</string>
+    <string name="home_board_tmdb_key_required">請設定 TMDB API 金鑰</string>
+    <string name="home_board_tmdb_unavailable">熱門榜單暫時無法使用</string>
+    <string name="home_board_tmdb_notice">按確認鍵前往影片刮削設定</string>
     <string name="home_recommend_source">來自 · %1$s</string>
     <string name="hot_rank_tencent">騰訊視頻·熱搜榜</string>
     <string name="hot_rank_iqiyi">愛奇藝·熱搜榜</string>

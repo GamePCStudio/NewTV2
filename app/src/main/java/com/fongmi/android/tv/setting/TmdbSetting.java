@@ -26,11 +26,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>兼容早期版本：旧版 {@code tmdb_api_url} + {@code tmdb_api_key} 或站点数组会在首次读取时
  * 迁移成单条站点记录；密钥在首次读取时从站点记录 / 更早版本键迁移到独立键，
- * 迁移后立即落盘，不会因切换连接方式而丢失。</p>
+ * 迁移后立即落盘，不会因切换连接方式而丢失。首次初始化且没有用户密钥时注入内置密钥；
+ * 用户之后主动清空仍会被保留，不会被内置值重新覆盖。</p>
  */
 public final class TmdbSetting {
 
-    /** 默认反代：内置公共镜像，密钥可留空。 */
+    /** 默认反代：内置公共镜像，首次使用自动注入内置密钥。 */
     public static final int MODE_PROXY = 0;
     /** 官方 API：使用 themoviedb 官方接口地址。 */
     public static final int MODE_OFFICIAL = 1;
@@ -52,6 +53,8 @@ public final class TmdbSetting {
     private static final String KEY_LEGACY_SITES = "tmdb_sites";
     private static final String KEY_LEGACY_URL = "tmdb_api_url";
     private static final String KEY_LEGACY_KEY = "tmdb_api_key";
+    private static final String KEY_BUILTIN_KEY_INITIALIZED = "tmdb_builtin_key_initialized";
+    private static final String BUILTIN_API_KEY = "304ca56b1b7b57ca7a47d9b59946be94";
 
     /* ------------------------------------------------------------ 图片分辨率 */
 
@@ -118,6 +121,7 @@ public final class TmdbSetting {
          */
         if (!TextUtils.isEmpty(value.getKey())) {
             Prefers.put(KEY_API_KEY, value.getKey());
+            Prefers.put(KEY_BUILTIN_KEY_INITIALIZED, true);
             cacheKey = value.getKey();
         } else {
             value.setKey(getApiKey());
@@ -152,20 +156,32 @@ public final class TmdbSetting {
      * {@code tmdb_api_key} 键里。取到后立即写入独立键，后续切换连接方式、修改地址都不受影响。</p>
      *
      * <p>用「键是否存在」而不是「值是否为空」判断是否已迁移：用户主动清空密钥会写入空串，
-     * 此时必须尊重清空结果，不能再回落到旧值。</p>
+     * 此时必须尊重清空结果，不能再回落到旧值。内置密钥只负责首次初始化；初始化标记落盘后，
+     * 空值就代表用户明确选择不携带密钥。</p>
      */
     public static String getApiKey() {
         String cached = cacheKey;
         if (cached != null) return cached;
+        boolean initialized = Prefers.getBoolean(KEY_BUILTIN_KEY_INITIALIZED, false);
         if (Prefers.getPrefers().contains(KEY_API_KEY)) {
             String saved = Prefers.getString(KEY_API_KEY, "");
-            cacheKey = saved == null ? "" : saved;
-            return cacheKey;
+            String value = saved == null ? "" : saved;
+            if (!TextUtils.isEmpty(value)) {
+                Prefers.put(KEY_BUILTIN_KEY_INITIALIZED, true);
+                cacheKey = value;
+                return cacheKey;
+            }
+            if (initialized) {
+                cacheKey = "";
+                return cacheKey;
+            }
         }
         String legacy = getSite().getKey();
         if (TextUtils.isEmpty(legacy)) legacy = Prefers.getString(KEY_LEGACY_KEY, "");
         legacy = legacy == null ? "" : legacy.trim();
+        if (TextUtils.isEmpty(legacy) && !initialized) legacy = BUILTIN_API_KEY;
         Prefers.put(KEY_API_KEY, legacy);
+        Prefers.put(KEY_BUILTIN_KEY_INITIALIZED, true);
         cacheKey = legacy;
         return legacy;
     }
@@ -179,6 +195,7 @@ public final class TmdbSetting {
     public static void putApiKey(String key) {
         String value = key == null ? "" : key.trim();
         Prefers.put(KEY_API_KEY, value);
+        Prefers.put(KEY_BUILTIN_KEY_INITIALIZED, true);
         cacheKey = value;
         TmdbSite site = getSite();
         if (!value.equals(site.getKey())) {

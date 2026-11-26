@@ -19,6 +19,9 @@
     <string name="home_board_disney_movie">Disney+ · Popular Movies</string>
     <string name="home_board_disney_tv">Disney+ · Popular Series</string>
     <string name="home_board_more_title">View all</string>
+    <string name="home_board_tmdb_key_required">Set up a TMDB API key</string>
+    <string name="home_board_tmdb_unavailable">Popular titles are temporarily unavailable</string>
+    <string name="home_board_tmdb_notice">Press OK to open TMDB settings</string>
     <string name="home_recommend_source">From · %1$s</string>
     <string name="hot_rank_tencent">Tencent Video · Hot Search</string>
     <string name="hot_rank_iqiyi">iQIYI · Hot Search</string>

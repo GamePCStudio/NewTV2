@@ -118,7 +118,7 @@ public class ImgUtil {
     public static Object getUrl(String url) {
         String param = null;
         url = UrlUtil.convert(url);
-        if (url.startsWith("data:")) return url;
+        if (url.startsWith("data:") || url.startsWith("android.resource://")) return url;
         LazyHeaders.Builder builder = new LazyHeaders.Builder();
         // 豆瓣图床直连会 418：先补默认 Referer / UA，URL 自带的 @Referer= / @User-Agent= 可覆盖。
         if (isDouban(url)) {
