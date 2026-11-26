@@ -89,6 +89,7 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         mBinding.recycler.setReturnFocusView(requireActivity().findViewById(vertical ? R.id.verticalRecycler : R.id.recycler));
         mBinding.recycler.setOnKeyInterceptor(this::onGridKeyDown);
         mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(16));
+        if (vertical) mBinding.recycler.setPaddingRelative(ResUtil.dp2px(8), mBinding.recycler.getPaddingTop(), mBinding.recycler.getPaddingEnd(), mBinding.recycler.getPaddingBottom());
     }
 
     private boolean onGridKeyDown(KeyEvent event) {

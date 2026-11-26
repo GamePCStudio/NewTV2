@@ -22,7 +22,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,11 +37,10 @@ import java.util.concurrent.Executors;
  * （{@code title|name} / {@code poster_path} / {@code vote_average}），海报是相对路径。
  * 解析时统一成「片名 + 海报 + 评分」三项，其余字段（简介、演员、类型、票数等）一律丢弃。</p>
  *
- * <p><b>条数</b>：整份榜单都保留（上限 {@code MAX_ITEMS}），首页每行只取前
- * {@link #HOME_LIMIT} 条，其余进「更多影片」页；缺失片名或海报的条目直接跳过，
- * 保证整行都是可用海报。</p>
+ * <p><b>条数</b>：每个分类合并多页结果并按 TMDB ID 去重，最多 50 条；首页每行只取前
+ * {@link #HOME_LIMIT} 条，其余进「更多影片」页。缺失片名或海报的条目直接跳过。</p>
  *
- * <p><b>缓存</b>：内存 + {@code files/home_board_v2_<n>.json}，TTL 12 小时，与主视觉榜单同口径。
+ * <p><b>缓存</b>：内存 + {@code files/home_board_v3_<n>.json}，TTL 12 小时。
  * 过期时重新拉取；拉取失败继续用旧数据，只有「从未成功过」才回空列表，由展示层收起基础榜单或显示平台提示。</p>
  *
  * <p><b>海报地址</b>：豆瓣图床有防盗链（无 Referer 直接 418），请求头由
@@ -69,13 +70,9 @@ public final class HomeBoard {
     /** 首页每行最多展示的影片数；到 10 部时末尾追加「查看全部」卡片。 */
     public static final int HOME_LIMIT = 10;
 
-    /**
-     * 每个分类最多保留的条数（「更多影片」页的数据上限）。
-     *
-     * <p>数据源本身是有限榜单：rank 系列 40 条、trending 系列 20 条，这里给一个上限
-     * 只为防御异常响应，不影响正常展示。</p>
-     */
-    private static final int MAX_ITEMS = 60;
+    /** 「更多影片」页固定展示 50 部；接口不足时保留全部可用条目。 */
+    private static final int MAX_ITEMS = 50;
+    private static final int MAX_PAGES = 3;
 
     private static final String BASE = "https://rank-json.tmdbapi.cc.cd";
     private static final String[] PATHS = {
@@ -84,8 +81,8 @@ public final class HomeBoard {
             "/trending/movie",
             "/trending/tv"
     };
-    /** v2 同时失效旧的电影筛选结果和 w500 海报地址，避免升级后继续命中旧缓存。 */
-    private static final String CACHE_PREFIX = "home_board_v2_";
+    /** v3 使旧缓存失效，同时把更多影片从 20/40 条扩容到 50 条。 */
+    private static final String CACHE_PREFIX = "home_board_v3_";
     private static final long TTL = 12L * 60 * 60 * 1000;
     /** 首页卡片无需 w500；w342 体积约为其一半，加载更快。 */
     private static final String POSTER_SIZE = "w342";
@@ -193,7 +190,7 @@ public final class HomeBoard {
                 if (disk != null) result = disk.items;
                 String json = fetchBoard(board);
                 if (!TextUtils.isEmpty(json)) {
-                    List<Item> items = parse(json, board);
+                    List<Item> items = parse(json);
                     if (!items.isEmpty()) {
                         write(board, json);
                         MEMORY[board] = new Cache(System.currentTimeMillis(), items);
@@ -213,20 +210,55 @@ public final class HomeBoard {
     }
 
     private static String fetchBoard(int board) {
-        if (board <= TMDB_TV) return fetch(BASE + PATHS[board]);
-        boolean movie = board % 2 == 0;
-        String type = movie ? "movie" : "tv";
-        // TMDB 电影 Discover 会忽略 with_networks；必须用播放供应商才能区分平台。
-        String filter = movie
-                ? "watch_region=US&with_watch_providers=" + MOVIE_PROVIDERS[board]
-                : "with_networks=" + NETWORKS[board];
-        String path = "/3/discover/" + type + "?language=zh-CN&page=1&sort_by=popularity.desc"
-                + "&vote_count.gte=" + (movie ? 50 : 10) + "&include_adult=false&" + filter;
+        JsonArray items = new JsonArray();
+        if (board <= TMDB_TV) {
+            append(items, fetch(BASE + PATHS[board]));
+            boolean douban = board <= DOUBAN_SERIES;
+            String type = board == DOUBAN_MOVIE || board == TMDB_MOVIE ? "movie" : "tv";
+            int firstPage = douban ? 1 : 2;
+            for (int page = firstPage; page <= MAX_PAGES && parse(items).size() < MAX_ITEMS; page++) {
+                append(items, fetchTmdb("/3/trending/" + type + "/week?language=zh-CN&page=" + page));
+            }
+        } else {
+            boolean movie = board % 2 == 0;
+            String type = movie ? "movie" : "tv";
+            String filter = movie
+                    ? "watch_region=US&with_watch_providers=" + MOVIE_PROVIDERS[board]
+                    : "with_networks=" + NETWORKS[board];
+            String path = "/3/discover/" + type + "?language=zh-CN&sort_by=popularity.desc"
+                    + "&vote_count.gte=" + (movie ? 50 : 10) + "&include_adult=false&" + filter;
+            for (int page = 1; page <= MAX_PAGES && parse(items).size() < MAX_ITEMS; page++) {
+                append(items, fetchTmdb(path + "&page=" + page));
+            }
+        }
+        JsonObject root = new JsonObject();
+        root.add("results", items);
+        return root.toString();
+    }
+
+    private static String fetchTmdb(String path) {
         try {
             return TmdbApi.getJson(path);
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private static void append(JsonArray target, String json) {
+        JsonArray source = array(json);
+        if (source != null) for (JsonElement element : source) target.add(element);
+    }
+
+    private static JsonArray array(String json) {
+        try {
+            JsonElement root = JsonParser.parseString(json);
+            if (root == null || !root.isJsonObject()) return null;
+            JsonObject object = root.getAsJsonObject();
+            if (object.has("items") && object.get("items").isJsonArray()) return object.getAsJsonArray("items");
+            if (object.has("results") && object.get("results").isJsonArray()) return object.getAsJsonArray("results");
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private static String fetch(String url) {
@@ -238,30 +270,31 @@ public final class HomeBoard {
         }
     }
 
-    private static List<Item> parse(String json, int board) {
+    private static List<Item> parse(String json) {
+        JsonArray array = array(json);
+        return array == null ? Collections.emptyList() : parse(array);
+    }
+
+    private static List<Item> parse(JsonArray array) {
         try {
-            JsonElement rootElement = JsonParser.parseString(json);
-            if (rootElement == null || !rootElement.isJsonObject()) return Collections.emptyList();
-            JsonObject root = rootElement.getAsJsonObject();
-            // rank 系列是 items[]，trending 是 TMDB 原生 results[]
-            JsonArray array = null;
-            if (root.has("items") && root.get("items").isJsonArray()) array = root.getAsJsonArray("items");
-            else if (root.has("results") && root.get("results").isJsonArray()) array = root.getAsJsonArray("results");
-            if (array == null) return Collections.emptyList();
-            boolean douban = board == DOUBAN_MOVIE || board == DOUBAN_SERIES;
             String posterBase = TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM
                     ? RankLatest.imageBase() : RankLatest.DEFAULT_IMAGE_BASE;
             List<Item> out = new ArrayList<>(MAX_ITEMS);
+            Set<String> seen = new HashSet<>();
             for (JsonElement element : array) {
                 if (out.size() >= MAX_ITEMS) break;
                 if (element == null || !element.isJsonObject()) continue;
-                JsonObject json1 = element.getAsJsonObject();
-                String title = optString(json1, "title");
-                if (TextUtils.isEmpty(title)) title = optString(json1, "name");
-                String poster = optString(json1, douban ? "posterPath" : "poster_path");
+                JsonObject json = element.getAsJsonObject();
+                String title = optString(json, "title");
+                if (TextUtils.isEmpty(title)) title = optString(json, "name");
+                String poster = optString(json, "posterPath");
+                if (TextUtils.isEmpty(poster)) poster = optString(json, "poster_path");
                 if (TextUtils.isEmpty(title) || TextUtils.isEmpty(poster)) continue;
-                double rating = optDouble(json1, douban ? "rating" : "vote_average");
-                out.add(new Item(title.trim(), absolute(poster, posterBase), ratingText(rating)));
+                title = title.trim();
+                String id = optString(json, "id");
+                if (!seen.add(TextUtils.isEmpty(id) ? title : id)) continue;
+                double rating = json.has("rating") ? optDouble(json, "rating") : optDouble(json, "vote_average");
+                out.add(new Item(title, absolute(poster, posterBase), ratingText(rating)));
             }
             return out;
         } catch (Exception e) {
@@ -326,7 +359,7 @@ public final class HomeBoard {
             byte[] buffer = new byte[8192];
             int len;
             while ((len = in.read(buffer)) != -1) out.write(buffer, 0, len);
-            List<Item> items = parse(new String(out.toByteArray(), StandardCharsets.UTF_8), board);
+            List<Item> items = parse(new String(out.toByteArray(), StandardCharsets.UTF_8));
             return items.isEmpty() ? null : new Cache(file.lastModified(), items);
         } catch (Exception e) {
             return null;

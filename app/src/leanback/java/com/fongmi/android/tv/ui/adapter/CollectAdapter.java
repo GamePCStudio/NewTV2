@@ -75,7 +75,7 @@ public class CollectAdapter extends RecyclerView.Adapter<CollectAdapter.ViewHold
         boolean vertical = holder.vertical;
         ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
         if (params == null) params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.width = vertical ? ResUtil.dp2px(168) : ViewGroup.LayoutParams.WRAP_CONTENT;
+        params.width = vertical ? ResUtil.dp2px(160) : ViewGroup.LayoutParams.WRAP_CONTENT;
         params.height = vertical ? ResUtil.dp2px(48) : ViewGroup.LayoutParams.WRAP_CONTENT;
         holder.itemView.setLayoutParams(params);
         holder.binding.getRoot().setOnClickListener(null);

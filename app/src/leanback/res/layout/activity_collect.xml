@@ -56,7 +56,7 @@
 
             <androidx.leanback.widget.VerticalGridView
                 android:id="@+id/verticalRecycler"
-                android:layout_width="196dp"
+                android:layout_width="176dp"
                 android:layout_height="match_parent"
                 android:clipChildren="false"
                 android:clipToPadding="false"

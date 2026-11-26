@@ -126,6 +126,7 @@ public class CollectActivity extends BaseActivity {
         // putExtras 是合并语义：这次没带待续播记录时必须显式清掉上一次的，
         // 否则从普通搜索进来还会沿用上一轮的旧记录去跳集数。
         if (!intent.hasExtra(EXTRA_RESUME)) getIntent().removeExtra(EXTRA_RESUME);
+        App.removeCallbacks(mSwitchPage);
         mAdapter.clear();
         mVerticalAdapter.clear();
         setSearchLayout();
@@ -154,7 +155,6 @@ public class CollectActivity extends BaseActivity {
             @Override
             public void onPageSelected(int position) {
                 syncSelection(position);
-                activeRecycler().requestFocus();
             }
         });
         mBinding.recycler.addOnChildViewHolderSelectedListener(new SelectionListener());
@@ -164,7 +164,7 @@ public class CollectActivity extends BaseActivity {
     private final class SelectionListener extends OnChildViewHolderSelectedListener {
         @Override
         public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-            onChildSelected(child, position);
+            if (parent.getVisibility() == View.VISIBLE) onChildSelected(child, position);
         }
     }
 
@@ -180,7 +180,7 @@ public class CollectActivity extends BaseActivity {
         mBinding.recycler.setVisibility(vertical ? View.GONE : View.VISIBLE);
         mBinding.verticalRecycler.setVisibility(vertical ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mBinding.pager.getLayoutParams();
-        params.leftMargin = vertical ? ResUtil.dp2px(196) : 0;
+        params.leftMargin = vertical ? ResUtil.dp2px(176) : 0;
         params.topMargin = vertical ? 0 : ResUtil.dp2px(56);
         mBinding.pager.setLayoutParams(params);
     }
@@ -209,6 +209,7 @@ public class CollectActivity extends BaseActivity {
     }
 
     private void setPager() {
+        mBinding.pager.setKeyPagingEnabled(false);
         mBinding.pager.setAdapter(new PageAdapter(getSupportFragmentManager()));
     }
 
@@ -233,10 +234,13 @@ public class CollectActivity extends BaseActivity {
     }
 
     private void onChildSelected(@Nullable RecyclerView.ViewHolder child, int position) {
-        if (child == null) return;
-        syncSelection(position);
-        App.post(() -> mBinding.pager.setCurrentItem(position), 100);
+        if (child != null) App.post(mSwitchPage, 0);
     }
+
+    private final Runnable mSwitchPage = () -> {
+        int position = activeRecycler().getSelectedPosition();
+        if (position >= 0 && position < mAdapter.getItemCount()) mBinding.pager.setCurrentItem(position);
+    };
 
     @Override
     protected void onBackInvoked() {
@@ -259,6 +263,11 @@ public class CollectActivity extends BaseActivity {
         @Override
         public int getCount() {
             return mAdapter.getItemCount();
+        }
+
+        @Override
+        public int getItemPosition(@NonNull Object object) {
+            return POSITION_UNCHANGED;
         }
 
         @Override
@@ -290,6 +299,7 @@ public class CollectActivity extends BaseActivity {
 
     @Override
     protected void onDestroy() {
+        App.removeCallbacks(mSwitchPage);
         super.onDestroy();
     }
 }
