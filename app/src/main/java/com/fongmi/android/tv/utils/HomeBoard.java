@@ -84,11 +84,9 @@ public final class HomeBoard {
     /** 豆瓣海报尺寸：卡片最宽约 300dp，w500 足够且比 w780 省一半流量。 */
     private static final String POSTER_SIZE = "w500";
 
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "HomeBoard");
-        thread.setDaemon(true);
-        return thread;
-    });
+    // 平台榜单不能排在前四个基础榜单之后；独立线程池让两组请求互不阻塞。
+    private static final ExecutorService BASE_EXECUTOR = newExecutor("HomeBoardBase", 4);
+    private static final ExecutorService PLATFORM_EXECUTOR = newExecutor("HomeBoardPlatform", 3);
 
     private static final Cache[] MEMORY = new Cache[COUNT];
     private static final boolean[] FETCHING = new boolean[COUNT];
@@ -150,7 +148,16 @@ public final class HomeBoard {
             FETCHING[board] = true;
         }
         // 磁盘读取与网络都在后台线程完成：分类 JSON 不能压在主线程上。
-        EXECUTOR.execute(() -> loadAndDispatch(board, callback));
+        ExecutorService executor = board <= TMDB_TV ? BASE_EXECUTOR : PLATFORM_EXECUTOR;
+        executor.execute(() -> loadAndDispatch(board, callback));
+    }
+
+    private static ExecutorService newExecutor(String name, int threads) {
+        return Executors.newFixedThreadPool(threads, task -> {
+            Thread thread = new Thread(task, name);
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     /** 清除缓存：删磁盘文件并丢弃内存副本。 */
