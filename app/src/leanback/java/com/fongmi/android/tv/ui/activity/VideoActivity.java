@@ -2131,7 +2131,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     private void setTrackVisible() {
         if (isWebPlaybackActive()) return;
-        View focused = mBinding.control.action.findFocus();
+        View focused = mBinding.control.action.getRoot().findFocus();
         PlaybackAction.setTracks(player(), mBinding.control.action.text, mBinding.control.action.audio, mBinding.control.action.video);
         relinkControlFocus();
         requestControlFocus(focused);
