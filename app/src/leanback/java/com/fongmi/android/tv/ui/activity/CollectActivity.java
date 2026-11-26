@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentStatePagerAdapter;
+import androidx.leanback.widget.BaseGridView;
 import androidx.leanback.widget.OnChildViewHolderSelectedListener;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.RecyclerView;
@@ -185,7 +186,7 @@ public class CollectActivity extends BaseActivity {
         mBinding.pager.setLayoutParams(params);
     }
 
-    private RecyclerView activeRecycler() {
+    private BaseGridView activeRecycler() {
         return Setting.getSearchLayout() == 1 ? mBinding.verticalRecycler : mBinding.recycler;
     }
 
