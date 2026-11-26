@@ -206,10 +206,11 @@ public final class TmdbApi {
     /** 注销抓取完成回调，与 {@link #addOnFetched(Runnable)} 成对使用。 */
     public static void removeOnFetched(Runnable callback) {
         if (callback == null) return;
-        ON_FETCHED.removeIf(ref -> {
+        // Android 7.1 的 CopyOnWriteArrayList.removeIf 会调用不支持的迭代器删除。
+        for (WeakReference<Runnable> ref : ON_FETCHED) {
             Runnable target = ref.get();
-            return target == null || target == callback;
-        });
+            if (target == null || target == callback) ON_FETCHED.remove(ref);
+        }
     }
 
     /** 抓取完成广播：供页面就地刷新。 */

@@ -103,10 +103,11 @@ public final class DanmakuHeat {
 
     public static void removeListener(Listener listener) {
         if (listener == null) return;
-        LISTENERS.removeIf(ref -> {
+        // Android 7.1 的 CopyOnWriteArrayList.removeIf 会调用不支持的迭代器删除。
+        for (WeakReference<Listener> ref : LISTENERS) {
             Listener target = ref.get();
-            return target == null || target == listener;
-        });
+            if (target == null || target == listener) LISTENERS.remove(ref);
+        }
     }
 
     @Nullable

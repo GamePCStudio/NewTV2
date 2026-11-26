@@ -131,8 +131,8 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     /** 只有「站点编辑」那一行显示的分割线：1dp 线 + 上下各 2dp 外边距。 */
     private static final int SITE_DIVIDER_DP = 1;
     private static final int SITE_DIVIDER_MARGIN_DP = 2;
-    /** 站源名字符预算：emoji 按 1 个字符计，截断省略号「…」整体按 1 个字符计。 */
-    private static final int SITE_NAME_LIMIT = 16;
+    /** 站源名字符预算：emoji 按 1 个字形簇计，截断省略号「…」整体按 1 个字符计。 */
+    private static final int SITE_NAME_LIMIT = 20;
     /** 「最近观看」区块下沿距屏幕底边的距离：与顶栏上边距同值（16dp），视觉对称。 */
     private static final int HERO_BOTTOM_GAP_DP = 16;
     /** 列表行间距，必须与 setVerticalSpacing 同源。 */
@@ -1417,10 +1417,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
     }
 
     /**
-     * 站源名限制为 16 个字符：用 ICU 的 character break 按<b>字形簇</b>切分，
+     * 站源名限制为 20 个字符：用 ICU 的 character break 按<b>字形簇</b>切分，
      * emoji（含 ZWJ 组合序列、肤色修饰符、变体选择符）整体算 1 个字符，不会被
-     * UTF-16 代理对拆成 2 个。超出时保留前 15 个簇再拼「…」——省略号整体按
-     * 1 个字符计入预算，因此总逻辑长度恒为 16。
+     * UTF-16 代理对拆成 2 个。超出时保留前 19 个簇再拼「…」——省略号整体按
+     * 1 个字符计入预算，因此总逻辑长度恒为 20。
      */
     private static String clampSiteName(String name) {
         if (TextUtils.isEmpty(name)) return "";

@@ -73,8 +73,8 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
     /** 只有「站点编辑」那一行显示的分割线：1dp 线 + 上下各 2dp 外边距。 */
     private static final int SITE_DIVIDER_DP = 1;
     private static final int SITE_DIVIDER_MARGIN_DP = 2;
-    /** 站源名字符预算：emoji 按 1 个字符计，截断「...」整体按 1 个字符计。 */
-    private static final int SITE_NAME_LIMIT = 6;
+    /** 站源名字符预算：emoji 按 1 个字形簇计；超出时保留前 limit-1 个并追加三个英文点。 */
+    private static final int SITE_NAME_LIMIT = 16;
 
     private ActivityVodBinding mBinding;
     /** 顶栏 / 站源面板与首页共用同一份布局（view_home_toolbar / view_site_sheet）。 */
