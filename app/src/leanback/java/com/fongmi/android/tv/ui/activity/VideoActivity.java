@@ -1423,6 +1423,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     private void updateFocus() {
         mPartAdapter.setNextFocusUp(findFocusUp(4));
         mEpisodeAdapter.setNextFocusUp(findFocusUp(0));
+        mFlagAdapter.setNextFocusUp(findFocusUp(2));
         mFlagAdapter.setNextFocusDown(findFocusDown(2));
         mEpisodeAdapter.setNextFocusDown(findFocusDown(0));
         notifyItemChanged(mBinding.episode, mEpisodeAdapter);

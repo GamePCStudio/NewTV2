@@ -18,11 +18,13 @@ public class FlagAdapter extends RecyclerView.Adapter<FlagAdapter.ViewHolder> {
     private final OnClickListener mListener;
     private final List<Flag> mItems;
     private int nextFocusDown;
+    private int nextFocusUp;
 
     public FlagAdapter(OnClickListener listener) {
         mListener = listener;
         mItems = new ArrayList<>();
         nextFocusDown = R.id.episode;
+        nextFocusUp = R.id.array;
     }
 
     public void addAll(List<Flag> items) {
@@ -54,6 +56,11 @@ public class FlagAdapter extends RecyclerView.Adapter<FlagAdapter.ViewHolder> {
         notifyDataSetChanged();
     }
 
+    public void setNextFocusUp(int nextFocusUp) {
+        this.nextFocusUp = nextFocusUp;
+        notifyDataSetChanged();
+    }
+
     @Override
     public int getItemCount() {
         return mItems.size();
@@ -70,6 +77,7 @@ public class FlagAdapter extends RecyclerView.Adapter<FlagAdapter.ViewHolder> {
         Flag item = mItems.get(position);
         holder.binding.text.setText(item.getShow());
         holder.binding.text.setSelected(item.isSelected());
+        holder.binding.text.setNextFocusUpId(nextFocusUp);
         holder.binding.text.setNextFocusDownId(nextFocusDown);
         holder.binding.getRoot().setOnClickListener(v -> mListener.onItemClick(item));
     }
