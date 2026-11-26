@@ -2,18 +2,9 @@
 <!--
   「播放设置」浮层内容：与倍速 / 选集菜单同一套单列列表样式（44dp 行、同一焦点框、15sp）。
 
-  行序**自下而上**：文件信息 → 音轨 → 视轨 → 字幕 → 画面比例。
-  浮层从控制条按钮上方向上展开，最底下一行离按钮最近，所以 XML 里从上到下写反序：
-  画面比例 / 字幕 / 视轨 / 音轨 / 文件信息；初始焦点由 PanelSheet 落在最底下一行（文件信息）。
-
-  五项统一「图标 + 文案」形态：图标 24dp 矢量、drawablePadding 12dp、drawableTint 走
-  selector_sheet_icon_tint —— 常态 70% 白、聚焦或已开启（文件信息）时品牌橙。
-  标题行左侧同样复用控制栏图标（PlaybackSheetTitleIcon）。
-  各入口语义：
-    · 「字幕 / 音轨 / 视轨」转发到控制条 hidden 容器里同名按钮的 performClick()，
-      浮层、对话框、状态同步全部沿用原有实现；
-    · 「画面比例」（原始 / 填充 / 裁剪）与「文件信息」（调试）在面板内原地生效，
-      不收起浮层，便于连续对比与观察开关状态。
+  五个常用入口也已常驻控制栏；浮层保留同名快捷入口与条件出现的进阶项。
+  行序自下而上：信息 / 音轨 / 视轨 / 字幕 / 画面比例。初始焦点由 PanelSheet 落在最底下一行。
+  各入口复用控制栏同名按钮的 performClick()，播放逻辑与状态同步保持一致。
 
   其余隐性按钮（解码 / 标题 / 章节 / 主菜单 / 播放核心 / 刷新 / 重播 / 循环）已按用户裁定
   隐藏（visibility=gone，节点保留以维持原有状态同步与转发能力）。
@@ -90,7 +81,7 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/panelDebug"
             style="@style/SheetPanelRow"
-            android:drawableStart="@drawable/ic_action_debug"
+            android:drawableStart="@drawable/ic_control_info"
             android:drawablePadding="12dp"
             android:drawableTint="@color/selector_sheet_icon_tint"
             android:text="@string/player_file_info" />

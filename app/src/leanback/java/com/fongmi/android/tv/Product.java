@@ -62,6 +62,14 @@ public class Product {
     /** 「最近观看」横版画框的宽高比 16:9。 */
     private static final float HISTORY_POSTER_RATIO = 16f / 9f;
 
+    /** 海报文字以默认中档六列为基准，不随用户当前图片档位改变基准。 */
+    private static final int POSTER_TEXT_BASE_COLUMNS = 6;
+
+    public static float getPosterTextScale(int width) {
+        int baseWidth = getSpec(getPosterSpace(POSTER_TEXT_BASE_COLUMNS), POSTER_TEXT_BASE_COLUMNS, Style.rect())[0];
+        return baseWidth > 0 ? width / (float) baseWidth : 1f;
+    }
+
     /**
      * 首页「最近观看」横版画框的固定规格：<b>16:9、高固定 90dp</b>（宽 = 高 × 16/9 ≈ 160dp），
      * 与「图片尺寸」设置无关 —— 用户换成小 / 中 / 大 / 特大，这一行都不会变。

@@ -2,11 +2,14 @@ package com.fongmi.android.tv.ui.holder;
 
 import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.View;
 
 import androidx.annotation.NonNull;
 
 import com.bumptech.glide.Glide;
+import com.fongmi.android.tv.Product;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterVodRectBinding;
 import com.fongmi.android.tv.ui.base.BaseVodHolder;
@@ -70,6 +73,13 @@ public class VodRectHolder extends BaseVodHolder {
     public VodRectHolder size(int[] size) {
         binding.poster.getLayoutParams().height = size[1];
         binding.getRoot().getLayoutParams().width = size[0];
+        float scale = Product.getPosterTextScale(size[0]);
+        float titleSize = binding.getRoot().getResources().getDimension(R.dimen.poster_title_text) * scale;
+        float metaSize = binding.getRoot().getResources().getDimension(R.dimen.poster_meta_text) * scale;
+        binding.name.setTextSize(TypedValue.COMPLEX_UNIT_PX, titleSize);
+        binding.year.setTextSize(TypedValue.COMPLEX_UNIT_PX, metaSize);
+        binding.remark.setTextSize(TypedValue.COMPLEX_UNIT_PX, metaSize);
+        binding.site.setTextSize(TypedValue.COMPLEX_UNIT_PX, metaSize);
         return this;
     }
 

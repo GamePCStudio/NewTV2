@@ -16,97 +16,105 @@
         android:visibility="gone"
         tools:visibility="visible">
 
-        <!--
-          主标题只有一条：原片名/剧集行与弹幕名称行互斥显示，二者从同一个顶部起点开始，
-          字号、字体、距顶间距完全一致；切换时只换可见的那一行，不新增、不并列。
-        -->
+        <!-- 片名与弹幕标题互斥；媒体信息始终放在两者下方，避免隐藏其中一行时错位。 -->
         <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/titleRow"
+            android:id="@+id/titleStack"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentTop="true"
             android:layout_marginEnd="16dp"
-            android:layout_toStartOf="@+id/clock"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:layout_toStartOf="@id/clock"
+            android:orientation="vertical">
 
-            <!-- 宽度由代码按「整行 − 集数」分配：短片名不会把集数顶到右侧时钟旁 -->
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/title"
-                android:layout_width="wrap_content"
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/titleRow"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFeatureSettings="tnum"
-                android:includeFontPadding="false"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                tools:text="慶餘年第一季" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/subtitle"
-                android:layout_width="wrap_content"
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFeatureSettings="tnum"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/text_title_section"
+                    android:textStyle="bold"
+                    tools:text="慶餘年第一季" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/subtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFeatureSettings="tnum"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/text_title_section"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="：第1集"
+                    tools:visibility="visible" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/danmakuRow"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFeatureSettings="tnum"
-                android:includeFontPadding="false"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="24sp"
-                android:textStyle="bold"
+                android:orientation="vertical"
                 android:visibility="gone"
-                tools:text="：第1集"
-                tools:visibility="visible" />
+                tools:visibility="visible">
 
-        </androidx.appcompat.widget.LinearLayoutCompat>
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/danmakuTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFeatureSettings="tnum"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/text_title_section"
+                    android:textStyle="bold"
+                    tools:text="谷雨 · 第3集 谷雨 03" />
 
-        <!--
-          弹幕名称行：与 titleRow 完全同位置、同字号（24sp 加粗），只在命中弹幕接口标题时显示。
-          年份 / 国别 / 平台继续作为副标题，沿用原有规则排在主标题下方。
-        -->
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/danmakuRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_alignParentTop="true"
-            android:layout_marginEnd="16dp"
-            android:layout_toStartOf="@+id/clock"
-            android:orientation="vertical"
-            android:visibility="gone"
-            tools:visibility="visible">
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/danmakuSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:singleLine="true"
+                    android:textColor="@color/white_60"
+                    android:textSize="14sp"
+                    tools:text="2026 · 国产剧 · 优酷" />
 
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/danmakuTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFeatureSettings="tnum"
-                android:includeFontPadding="false"
-                android:singleLine="true"
-                android:textColor="@color/white"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                tools:text="谷雨 · 第3集 谷雨 03" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
 
             <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/danmakuSubtitle"
+                android:id="@+id/mediaInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:includeFontPadding="false"
                 android:singleLine="true"
                 android:textColor="@color/white_60"
-                android:textSize="14sp"
-                tools:text="2026 · 国产剧 · 优酷" />
+                android:textSize="@dimen/text_meta"
+                android:visibility="gone"
+                tools:text="分辨率 1920 × 1080 · 音轨 AAC · 2.0 · 48.0kHz"
+                tools:visibility="visible" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!--
-          播放页时钟：HH:mm，18sp 加粗。无阴影；锚在内容区顶部并微移，与原 24sp 主标题行中心对齐。
-          不随两行标题中的任何一行显隐而移动。
-        -->
+        <!-- 播放页时钟固定在右上角，不随标题形态变化。 -->
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/clock"
             android:layout_width="wrap_content"

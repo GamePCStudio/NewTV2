@@ -36,6 +36,8 @@
     <dimen name="text_body">16sp</dimen>
     <dimen name="text_meta">12sp</dimen>
     <dimen name="text_source">11sp</dimen>
+    <dimen name="poster_title_text">14sp</dimen>
+    <dimen name="poster_meta_text">10sp</dimen>
     <dimen name="text_heading">18sp</dimen>
     <dimen name="text_label">14sp</dimen>
 

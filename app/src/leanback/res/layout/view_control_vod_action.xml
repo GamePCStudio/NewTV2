@@ -2,21 +2,14 @@
 <!--
   点播控制条按钮行。
 
-  直接展示（固定顺序）：播放/暂停、上集、下集、选集 │ 弹幕、倍速、播放设置 …… 片头、片尾
+  直接展示（固定顺序）：播放/暂停、上集、下集、选集 │ 弹幕、倍速、画面比例、字幕、音轨、视轨、信息、播放设置 …… 片头、片尾
     · 「下集」与「弹幕」之间用 1dp 竖线分组；
     · 「片头 / 片尾」永远贴最右侧，顺序不可变，用弹性留白把这一组推过去；
     · 图标按钮统一 50x40dp 槽位，播放键 60x48dp 稍大一档；
-    · 「上集 / 下集 / 选集」作为集数分组收紧。
+    · 画面比例 / 字幕 / 音轨 / 视轨 / 信息使用图标 + 文字槽位。
 
-  字幕 / 音轨 / 文件信息（调试）三个入口已移入「播放设置」浮层，这里只把节点收进 hidden 容器
-  （visibility=gone）：它们仍承接 VideoActivity 的点击转发（浮层 performClick 到同名按钮）与
-  PlaybackAction 的可见性 / 文案同步，删除会让浮层入口与状态同步一起失效 —— 只隐藏，不删除。
-
-  其余隐性按钮（解码、画面比例、视轨、版本、章节、主菜单、播放器引擎、刷新、重播、循环）
-  同样收在 hidden 容器中，由「播放设置」浮层转发。
-  焦点顺序：不在 XML 里逐个写 nextFocusLeft/Right，改由 VideoActivity.relinkControlFocus()
-  在运行时按「当前可见且可聚焦」的按钮顺序统一重串：两端自封口、上回进度条、下自封口。
-  这样动态隐藏 / 调序时不会留下指向 gone 视图的死链。
+  其余隐性按钮（解码、版本、章节、主菜单、播放器引擎、刷新、重播、循环）收在 hidden 容器中，
+  由「播放设置」浮层转发。焦点顺序由 VideoActivity.relinkControlFocus() 按当前可见按钮统一重串。
 -->
 <com.fongmi.android.tv.ui.custom.CustomHorizontalScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -90,6 +83,56 @@
             android:drawableTint="@color/selector_control_icon_tint"
             android:fontFeatureSettings="tnum" />
 
+        <com.fongmi.android.tv.ui.custom.CustomUpDownView
+            android:id="@+id/scale"
+            style="@style/ControlLabeledSlot"
+            android:contentDescription="@string/play_scale"
+            android:drawableStart="@drawable/ic_control_scale"
+            android:drawableTint="@color/selector_control_icon_tint"
+            android:fontFeatureSettings="tnum"
+            android:text="@string/play_scale" />
+
+        <com.fongmi.android.tv.ui.custom.CustomUpDownView
+            android:id="@+id/text"
+            style="@style/ControlLabeledSlot"
+            android:contentDescription="@string/play_track_text"
+            android:drawableStart="@drawable/ic_control_subtitle"
+            android:drawableTint="@color/selector_control_icon_tint"
+            android:tag="3"
+            android:text="@string/play_track_text"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <com.fongmi.android.tv.ui.custom.CustomUpDownView
+            android:id="@+id/audio"
+            style="@style/ControlLabeledSlot"
+            android:contentDescription="@string/play_track_audio"
+            android:drawableStart="@drawable/ic_control_audio"
+            android:drawableTint="@color/selector_control_icon_tint"
+            android:tag="1"
+            android:text="@string/play_track_audio"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <com.fongmi.android.tv.ui.custom.CustomUpDownView
+            android:id="@+id/video"
+            style="@style/ControlLabeledSlot"
+            android:contentDescription="@string/play_track_video"
+            android:drawableStart="@drawable/ic_control_video"
+            android:drawableTint="@color/selector_control_icon_tint"
+            android:tag="2"
+            android:text="@string/play_track_video"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <com.fongmi.android.tv.ui.custom.CustomUpDownView
+            android:id="@+id/debug"
+            style="@style/ControlLabeledSlot"
+            android:contentDescription="@string/player_file_info"
+            android:drawableStart="@drawable/ic_control_info"
+            android:drawableTint="@color/selector_control_icon_tint"
+            android:text="@string/player_file_info" />
+
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/panelBtn"
             style="@style/ControlIconSlot"
@@ -115,12 +158,7 @@
             android:contentDescription="@string/play_ed"
             android:text="@string/play_ed" />
 
-        <!--
-          以下按钮不再直接显示，仅用于「播放设置」浮层的转发与状态读取：
-          字幕 / 音轨 / 文件信息（本行新增移入）、解码、画面比例、视轨、版本、章节、主菜单、
-          播放器引擎、刷新、重播、循环。节点必须保留 —— VideoActivity 仍对它们做点击绑定、
-          可见性与文案同步，浮层入口也靠 performClick 复用同一套实现。
-        -->
+        <!-- 其余按钮仅供「播放设置」浮层转发与状态同步，不进入控制条焦点链。 -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/hidden"
             android:layout_width="wrap_content"
@@ -129,43 +167,10 @@
             android:visibility="gone"
             tools:ignore="UnusedAttribute">
 
-            <com.fongmi.android.tv.ui.custom.CustomUpDownView
-                android:id="@+id/text"
-                style="@style/ControlSlot"
-                android:contentDescription="@string/play_track_text"
-                android:drawableStart="@drawable/ic_control_subtitle"
-                android:drawablePadding="0dp"
-                android:drawableTint="@color/selector_control_icon_tint"
-                android:tag="3" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/audio"
-                style="@style/ControlIconSlot"
-                android:contentDescription="@string/play_track_audio"
-                android:src="@drawable/ic_control_audio"
-                android:tag="1" />
-
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/debug"
-                style="@style/ControlIconSlot"
-                android:contentDescription="@string/player_debug"
-                android:src="@drawable/ic_action_debug" />
-
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/decoder"
                 style="@style/Control"
                 android:text="@string/decoder_action" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/scale"
-                style="@style/Control"
-                android:text="@string/play_scale" />
-
-            <com.google.android.material.textview.MaterialTextView
-                android:id="@+id/video"
-                style="@style/Control"
-                android:tag="2"
-                android:text="@string/play_track_video" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/edition"

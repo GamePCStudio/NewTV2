@@ -163,6 +163,23 @@
         <item name="android:textSize">14sp</item>
     </style>
 
+    <style name="ControlLabeledSlot" parent="ControlSlot">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:minWidth">64dp</item>
+        <item name="android:layout_marginStart">2dp</item>
+        <item name="android:layout_marginEnd">2dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">10dp</item>
+        <item name="android:drawablePadding">6dp</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">@color/selector_control_text</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
     <style name="ControlIconSlot" parent="ControlSlot">
         <item name="android:padding">8dp</item>
         <item name="android:scaleType">centerInside</item>

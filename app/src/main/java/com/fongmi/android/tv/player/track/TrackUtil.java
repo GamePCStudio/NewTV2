@@ -39,6 +39,58 @@ public class TrackUtil {
         return joiner.toString();
     }
 
+    @Nullable
+    public static Format getSelectedFormat(Tracks tracks, int type) {
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != type) continue;
+            for (int i = 0; i < group.length; i++) {
+                if (group.isTrackSelected(i)) return group.getTrackFormat(i);
+            }
+        }
+        return null;
+    }
+
+    public static String describeAudio(Format format) {
+        StringJoiner joiner = new StringJoiner(" · ");
+        String name = format.label;
+        if (TextUtils.isEmpty(name) && !TextUtils.isEmpty(format.language) && !C.LANGUAGE_UNDETERMINED.equals(format.language)) {
+            name = Locale.forLanguageTag(format.language.replace('_', '-')).getDisplayLanguage();
+        }
+        if (!TextUtils.isEmpty(name)) joiner.add(name);
+        String codec = getAudioCodec(format);
+        if (!TextUtils.isEmpty(codec) && !codec.equalsIgnoreCase(name)) joiner.add(codec);
+        if (format.channelCount > 0) joiner.add(getAudioChannels(format.channelCount));
+        if (format.sampleRate > 0) joiner.add(String.format(Locale.ROOT, "%.1fkHz", format.sampleRate / 1000f));
+        return joiner.toString();
+    }
+
+    private static String getAudioCodec(Format format) {
+        if (format.sampleMimeType == null) return format.codecs == null ? "" : format.codecs;
+        return switch (format.sampleMimeType) {
+            case MimeTypes.AUDIO_AAC -> "AAC";
+            case MimeTypes.AUDIO_AC3 -> "AC-3";
+            case MimeTypes.AUDIO_E_AC3 -> "E-AC-3";
+            case MimeTypes.AUDIO_MPEG -> "MP3";
+            case MimeTypes.AUDIO_FLAC -> "FLAC";
+            case MimeTypes.AUDIO_OPUS -> "Opus";
+            case MimeTypes.AUDIO_VORBIS -> "Vorbis";
+            case MimeTypes.AUDIO_DTS -> "DTS";
+            case MimeTypes.AUDIO_DTS_HD -> "DTS-HD";
+            case MimeTypes.AUDIO_TRUEHD -> "TrueHD";
+            default -> format.codecs == null ? "" : format.codecs;
+        };
+    }
+
+    private static String getAudioChannels(int count) {
+        return switch (count) {
+            case 1 -> "1.0";
+            case 2 -> "2.0";
+            case 6 -> "5.1";
+            case 8 -> "7.1";
+            default -> count + "ch";
+        };
+    }
+
     public static String getSubtitleMimeType(String path) {
         if (TextUtils.isEmpty(path)) return "";
         String lower = path.toLowerCase(Locale.ROOT);

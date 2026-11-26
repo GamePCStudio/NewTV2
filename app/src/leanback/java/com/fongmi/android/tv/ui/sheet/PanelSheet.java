@@ -15,18 +15,11 @@ import java.util.List;
  * 「播放设置」浮层的内容。
  *
  * <p>常显五个入口，统一「图标 + 文案」形态，**自下而上**依次为：
- * 文件信息 / 音轨 / 视轨 / 字幕 / 画面比例。浮层从控制条按钮向上展开，
- * 最底下一行离按钮最近，所以初始焦点落在「文件信息」上，与选集 / 倍速菜单的贴底逻辑一致。
- * 面板本身不实现播放逻辑：
- * <ul>
- *   <li>字幕 / 音轨 / 视轨：转发到控制条 {@code hidden} 容器里同名按钮的 {@code performClick()}，
- *       轨道浮层、对话框、状态同步全部沿用原有实现；</li>
- *   <li>文件信息：转发同一个调试按钮，但<b>不收起面板</b>，便于当场看到开关状态（图标转品牌橙）；</li>
- *   <li>画面比例（原始 / 填充 / 裁剪）：直接在面板内循环切换并回写文案，同样不收起面板。</li>
- * </ul>
+ * 信息 / 音轨 / 视轨 / 字幕 / 画面比例。浮层从控制条按钮向上展开，
+ * 最底下一行离按钮最近，所以初始焦点落在「信息」上。
+ * 面板转发到控制栏同名按钮，轨道浮层、对话框与状态同步沿用同一实现。
  *
- * <p>五个入口常显、不随轨道可用性隐藏：菜单是这些功能的唯一入口，隐藏后就没有第二次机会可达；
- * 轨道浮层内部本就会给出空态提示，因此这里不再照抄控制条同名按钮的可见性。
+ * <p>五个入口常显、不随轨道可用性隐藏，作为控制栏常用项的补充入口。
  *
  * <p>焦点链在每次打开时按可见行运行时重串：左右各行自封口，上下按行序走位，
  * 首行上 / 末行下自封口，保证焦点不会逃出浮层，也不会落到已隐藏的行上。
@@ -70,7 +63,7 @@ public final class PanelSheet {
         binding.panelText.setOnClickListener(view -> forward(action.text, onAction));
         binding.panelAudio.setOnClickListener(view -> forward(action.audio, onAction));
         binding.panelVideo.setOnClickListener(view -> forward(action.video, onAction));
-        // 文件信息：原地开关，不收起面板；图标与选中态立即回读
+        // 信息：原地开关，不收起面板；图标与选中态立即回读
         binding.panelDebug.setOnClickListener(view -> {
             if (action.debug != null) action.debug.performClick();
             syncDebug();
@@ -96,13 +89,13 @@ public final class PanelSheet {
         if (target != null) target.performClick();
     }
 
-    /** 打开 / 切换后同步：画面比例文案与文件信息开关态。 */
+    /** 打开 / 切换后同步：画面比例文案与信息开关态。 */
     private void syncContent() {
         if (action.scale != null) binding.panelScale.setText(action.scale.getText());
         syncDebug();
     }
 
-    /** 文件信息开着时整行 activated：图标随 selector_sheet_icon_tint 常亮品牌橙。 */
+    /** 信息开着时整行 activated：图标随 selector_sheet_icon_tint 常亮品牌橙。 */
     private void syncDebug() {
         binding.panelDebug.setActivated(action.debug != null && action.debug.isSelected());
     }
@@ -123,7 +116,7 @@ public final class PanelSheet {
      * 浮层打开后把焦点交给**最底下一行**。
      *
      * <p>浮层是贴着控制条按钮向上展开的，最底下一行离手指/焦点来源最近；菜单也按
-     * 「自下而上」排序（文件信息 → 音轨 → 视轨 → 字幕 → 画面比例），所以初始选中框落在底部。
+     * 「自下而上」排序（信息 → 音轨 → 视轨 → 字幕 → 画面比例），所以初始选中框落在底部。
      */
     public void focus() {
         relink();

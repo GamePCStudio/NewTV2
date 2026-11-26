@@ -32,9 +32,12 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.leanback.widget.OnChildViewHolderSelectedListener;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Player;
+import androidx.media3.common.Tracks;
+import androidx.media3.common.VideoSize;
 import androidx.media3.ui.PlayerSeekView;
 import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.RecyclerView;
@@ -78,6 +81,7 @@ import com.fongmi.android.tv.playback.vod.VodPlaybackHost;
 import com.fongmi.android.tv.playback.vod.VodPlaybackMedia;
 import com.fongmi.android.tv.player.media.MediaItemFactory;
 import com.fongmi.android.tv.player.media.PlaySpec;
+import com.fongmi.android.tv.player.track.TrackUtil;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
@@ -636,6 +640,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
                 mBinding.control.action.episodes,
                 mBinding.control.action.danmaku,
                 mBinding.control.action.speed,
+                mBinding.control.action.scale,
+                mBinding.control.action.text,
+                mBinding.control.action.audio,
+                mBinding.control.action.video,
+                mBinding.control.action.debug,
                 mBinding.control.action.panelBtn,
                 mBinding.control.action.opening,
                 mBinding.control.action.ending};
@@ -1189,7 +1198,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     /**
      * 弹幕标题（互斥替换）：当前选中弹幕来自弹幕接口且已拿到 meta 时，
-     * 主标题换成「剧名 · 集数 分集标题」（24sp 加粗，与片名/剧集标题同位置同字号），
+     * 主标题换成「剧名 · 集数 分集标题」（20sp 加粗，与片名/剧集标题同位置同字号），
      * 年份 / 国别 / 平台作为副标题排在其下方；否则恢复原来的「片名：集数」单行。
      *
      * <p>两种形态互斥，任何时刻只显示一条主标题；切换只改两个容器的显隐，
@@ -1709,6 +1718,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         updateDiscMenuVisibility();
         syncPlayPause();
         syncDanmaku();
+        renderPlaybackInfo();
         boolean wasShown = mControlShown;
         mControlShown = true;
         View bar = mBinding.control.getRoot();
@@ -1928,6 +1938,28 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     @Override
     protected void onTracksChanged() {
         setTrackVisible();
+        relinkControlFocus();
+        renderPlaybackInfo();
+    }
+
+    @Override
+    protected void onSizeChanged(@NonNull VideoSize size) {
+        renderPlaybackInfo();
+    }
+
+    private void renderPlaybackInfo() {
+        if (mBinding == null) return;
+        if (service() == null || isWebPlaybackActive()) {
+            mBinding.widget.mediaInfo.setVisibility(View.GONE);
+            return;
+        }
+        String resolution = player().getSizeText();
+        if (!TextUtils.isEmpty(resolution)) resolution = resolution.replace(" x ", " × ");
+        Format audio = TrackUtil.getSelectedFormat(player().getCurrentTracks(), C.TRACK_TYPE_AUDIO);
+        String audioInfo = audio == null ? "—" : TrackUtil.describeAudio(audio);
+        String text = getString(R.string.play_media_info, TextUtils.isEmpty(resolution) ? "—" : resolution, TextUtils.isEmpty(audioInfo) ? "—" : audioInfo);
+        mBinding.widget.mediaInfo.setText(text);
+        mBinding.widget.mediaInfo.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -1965,6 +1997,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
                 hideProgress();
                 player().reset();
                 mClock.setCallback(this);
+                renderPlaybackInfo();
                 break;
             case Player.STATE_ENDED:
                 hideProgress();
@@ -2063,12 +2096,13 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     protected void onWebPlaybackChanged(boolean active) {
         PlaybackAction.setWebPlaybackMode(active, mBinding.control.action.player, mBinding.control.action.decoder, mBinding.control.action.reset, mBinding.control.action.replay, mBinding.control.action.repeat, mBinding.control.action.speed, mBinding.control.action.scale, mBinding.control.action.text, mBinding.control.action.audio, mBinding.control.action.video, mBinding.control.action.danmaku, mBinding.control.action.edition, mBinding.control.action.chapter, mBinding.control.action.opening, mBinding.control.action.ending);
         if (!active) {
-                setTrackVisible();
+            setTrackVisible();
             setMediaOptionVisible();
             mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
             syncDanmaku();
         }
         relinkControlFocus();
+        renderPlaybackInfo();
     }
 
     @Override
@@ -2531,17 +2565,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     /** 字幕 / 音轨 / 视轨浮层。 */
     private void onTrackSheet(View view) {
-        onTrackSheet(Integer.parseInt(view.getTag().toString()));
+        onTrackSheet(Integer.parseInt(view.getTag().toString()), view);
     }
 
-    private void onTrackSheet(int type) {
+    private void onTrackSheet(int type, View anchor) {
         if (mSheet.isShowing()) hideSheet();
         if (service() == null) return;
-        // 字幕 / 音轨 / 视轨入口已移入「更多设置」浮层，三个按钮都藏在 hidden 容器里
-        // （坐标为 0，不能当锚点），浮层统一从「更多设置」按钮上方展开。
-        View anchor = mBinding.control.action.panelBtn;
         mTrackSheet.bindTrack(player(), type);
-        mSheet.show(anchor, mTrackSheet.getView(), ResUtil.dp2px(TrackSheet.WIDTH_DP) + ResUtil.dp2px(16), mTrackSheet::focus);
+        View target = anchor == null || anchor.getVisibility() != View.VISIBLE ? mBinding.control.action.panelBtn : anchor;
+        mSheet.show(target, mTrackSheet.getView(), ResUtil.dp2px(TrackSheet.WIDTH_DP) + ResUtil.dp2px(16), mTrackSheet::focus);
     }
 
     /** 弹幕浮层（长按弹幕按钮）：只保留搜索与设置两个动作。 */
