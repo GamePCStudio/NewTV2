@@ -155,12 +155,76 @@ public static void removeOnFetched(Runnable callback) {
 
 ## 7. 云端构建与真机复验
 
-待新版本发布后补齐本节省，包括：
+### 7.1 云端构建结果
 
-- 云端 Actions run 与发布版本；
-- 四套 APK 的本地目录、包名、ABI、签名和 SHA-256 校验；
-- 在 Phicomm X12-2027 / Android 7.1.2 上安装 `arm64-v8a` 新包；
-- 重新播放并退出，确认不再出现 `UnsupportedOperationException`、`CowIterator.remove` 或 `Unable to destroy activity`。
+- 修复提交：`7bb6b244f1fd1bed02d34ee8649d064ac2cca776`
+- 提交标题：`fix: 修复 Android 7.1 播放页退出崩溃`
+- 工作流：`Build & Release (leanback)`
+- Actions run：[45882771666](https://github.com/GamePCStudio/NewTV2/actions/runs/45882771666)
+- 构建结果：`success`
+- Release：[v5.8.7.NewTV2.20261127.032004](https://github.com/GamePCStudio/NewTV2/releases/tag/v5.8.7.NewTV2.20261127.032004)
+- 新版本：`5.8.7.NewTV2.20261127.032004`
+- 新 versionCode：`95720804`
+- 本地目录：`C:\Users\GamePC\Documents\Qoder\2026-11-25\48c3c228\NewTV2\apk\v5.8.7.NewTV2.20261127.032004`
+
+### 7.2 四套 APK 校验
+
+| 文件 | 包名 | ABI | SHA-256 |
+|---|---|---|---|
+| `leanback-arm64_v8a.apk` | `com.fongmi.android.tv` | `arm64-v8a` | `9715c1457778cfcd054dd5ba9e5d6ffd35cdd91140b9730012ee9c324ba7a053` |
+| `leanback-armeabi_v7a.apk` | `com.fongmi.android.tv` | `armeabi-v7a` | `76aed15b716c88595a32692fa613fefaaed2bce66ebe3e3efb91ab036961e79a` |
+| `newtv2-leanback-arm64_v8a.apk` | `com.newtv.android.exo` | `arm64-v8a` | `2a5727ba754909512bc236ae50ef3e3c2bedd743d5b85dd3bf2d439a98eae4f0` |
+| `newtv2-leanback-armeabi_v7a.apk` | `com.newtv.android.exo` | `armeabi-v7a` | `c82996343055490f00d7317dfe5c6f0fd055d671dce8ca1491da6750a6d4e605` |
+
+校验结果：
+
+- 四套 APK 的应用名均为“天天至臻影院”。
+- 四套 SHA-256 均与 GitHub Release 资产摘要一致。
+- 使用 Google `apksig` 实际验证四套 APK 的 v2 签名，结果均为 `verified=true`、`errors=[]`、`warnings=[]`。
+- 签名证书 SHA-256 为 `b10750e52e230acaca3946951ec5c0cfaeb7e636e1b35b8dd35c64df2687b802`，与故障版本一致。
+- 目标设备安装的是 `newtv2-leanback-arm64_v8a.apk`。
+
+### 7.3 Android 7.1.2 真机复验
+
+覆盖安装命令：
+
+```bash
+adb install -r newtv2-leanback-arm64_v8a.apk
+```
+
+安装结果为 `Success`。设备上的版本信息确认为 `5.8.7.NewTV2.20261127.032004` / versionCode `95720804` / `arm64-v8a`。
+
+验证过程：
+
+1. 启动新版应用，进程 PID 为 `14168`。
+2. 从“最近观看”进入《心灵猎人 第一季》，站源为“玩偶•4K”。
+3. `dumpsys activity activities` 确认 `VideoActivity` 为 resumed Activity，并连接 `PlaybackService`。
+4. 实际进入全屏播放；截图中可见视频画面和中文字幕“我表现得怎么样?”，确认不是仅打开详情页。
+5. 清空设备 logcat 后开始退出复验。第一次返回键退出全屏播放层，`VideoActivity` 仍在运行；继续按返回键才真正退出播放页并触发销毁流程。
+6. `2026-11-27 03:46:04`，`dumpsys activity activities` 确认任务中只剩 `HomeActivity`，`mResumedActivity` 和 `mFocusedActivity` 均为 `HomeActivity`，原 `VideoActivity` 已退出任务。
+7. 同一时刻 `ExoPlayerImpl: Release` 完成，播放器与解码资源正常释放。
+8. 退出后 `pidof com.newtv.android.exo` 仍返回 `14168`，原进程没有死亡，也没有启动 `CrashActivity`。
+
+关键退出日志：
+
+```text
+11-27 03:46:04.269 14168 14168 D AndroidAutoSize: com.fongmi.android.tv.ui.activity.HomeActivity used the global configuration.
+11-27 03:46:04.549 14168 14168 I ExoPlayerImpl: Release 5fb3948 [AndroidXMedia3/1.11.0] [X12-2027, X12-2027, Phicomm, 25]
+```
+
+清空日志后采集的退出日志中未出现以下任一内容：
+
+- `FATAL EXCEPTION`
+- `CustomActivityOnCrash`
+- `UnsupportedOperationException`
+- `CowIterator`
+- `Unable to destroy activity`
+- `CrashActivity`
+- `Process com.newtv.android.exo ... has died`
+
+### 7.4 验证结论
+
+新版已在故障设备上完成“实际播放 → 退出全屏 → 销毁 `VideoActivity` → 返回主页”的完整复验。`VideoActivity` 正常销毁，播放资源正常释放，应用进程存活，未再出现 Android 7.1.2 的 `CopyOnWriteArrayList.CowIterator.remove` 异常。本次退出崩溃修复通过真机验证。
 
 ## 8. 同版本附带调整
 
