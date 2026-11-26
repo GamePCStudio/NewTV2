@@ -4,7 +4,7 @@
 
   JetStream 风格三段式垂直卡片：
     ① poster 容器（图片，16dp 四角圆角，聚焦描边只套这一层）
-    ② name 片名（海报下方独立一行，26dp，左对齐，未聚焦浅灰 / 聚焦纯白）
+    ② name 片名（海报下方独立一行，最小高 26dp，左对齐，未聚焦浅灰 / 聚焦纯白）
     ③ metadata 元数据行（年份 · 备注 · 站源，10sp，聚焦时展开）
 
   与旧版的区别：片名不再用深色条压在海报底部、图片不再只圆上方两角；
@@ -42,8 +42,9 @@
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/name"
         android:layout_width="match_parent"
-        android:layout_height="26dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:minHeight="26dp"
         android:duplicateParentState="true"
         android:ellipsize="end"
         android:gravity="start|center_vertical"
@@ -67,9 +68,10 @@
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/metadata"
         android:layout_width="match_parent"
-        android:layout_height="20dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:gravity="start|top"
+        android:minHeight="20dp"
         android:orientation="horizontal"
         android:paddingTop="2dp"
         android:visibility="invisible">
