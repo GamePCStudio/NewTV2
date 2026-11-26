@@ -700,7 +700,10 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
      */
     private void updateNavVodVisibility() {
         if (mToolbar == null) return;
-        boolean ready = isVodReady();
+        Site home = getHome();
+        String name = home == null ? "" : home.getName();
+        boolean ready = isVodReady() && !TextUtils.isEmpty(name);
+        mToolbar.navVod.setText(ready ? clampSiteName(name) : "");
         mToolbar.navVod.setVisibility(ready ? View.VISIBLE : View.GONE);
         mToolbar.navVod.setFocusable(ready);
         mToolbar.navVod.setFocusableInTouchMode(ready);
@@ -1408,6 +1411,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
         List<String> items = Arrays.asList(getHome().getName(), getConfig().getName(), getString(R.string.app_name));
         Optional<String> optional = items.stream().filter(s -> !TextUtils.isEmpty(s)).findFirst();
         optional.ifPresent(s -> mToolbar.siteName.setText(clampSiteName(s)));
+        updateNavVodVisibility();
         // 换站源后「来自 · 站源名」跟着变。
         updateRecommendHeader();
     }
@@ -2577,6 +2581,7 @@ public class HomeActivity extends BaseActivity implements SiteListener, VodPrese
             refreshPosterSize();
         }
         startClock();
+        updateNavVodVisibility();
         // 从片库等页面返回：焦点若还停在上一页的导航项上（如「片库」），
         // 在首帧绘制之前就归位到「首页」，避免先看到旧高亮再跳过来。
         if (mInitialFocusDone && isNavFocused() && !mToolbar.navHome.hasFocus()) mToolbar.navHome.requestFocus();

@@ -6,6 +6,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -13,6 +14,7 @@ import androidx.leanback.widget.ArrayObjectAdapter;
 import androidx.leanback.widget.ItemBridgeAdapter;
 import androidx.leanback.widget.ListRow;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.Product;
@@ -111,10 +113,36 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
     private boolean onGridKeyDown(KeyEvent event) {
         if (Setting.getSearchLayout() != 1 || !KeyUtil.isLeftKey(event)) return false;
         View focused = requireActivity().getCurrentFocus();
-        View next = focused == null ? null : focused.focusSearch(View.FOCUS_LEFT);
+        View item = getRowItem(focused);
+        if (item == null) return false;
+        RecyclerView grid = (RecyclerView) item.getParent();
+        int position = grid.getChildAdapterPosition(item);
+        if (position > 0) {
+            RecyclerView.ViewHolder previous = grid.findViewHolderForAdapterPosition(position - 1);
+            if (previous != null && previous.itemView.requestFocus()) return true;
+            int target = position - 1;
+            grid.scrollToPosition(target);
+            grid.post(() -> {
+                RecyclerView.ViewHolder holder = grid.findViewHolderForAdapterPosition(target);
+                if (holder != null) holder.itemView.requestFocus();
+            });
+            return true;
+        }
+        if (position != 0) return false;
+        View next = focused.focusSearch(View.FOCUS_LEFT);
         if (next != null && !isInsideGrid(next)) return next.requestFocus();
         View source = requireActivity().findViewById(R.id.verticalRecycler);
         return source != null && source.requestFocus();
+    }
+
+    private View getRowItem(View view) {
+        View current = view;
+        while (current != null && current != mBinding.recycler) {
+            ViewParent parent = current.getParent();
+            if (parent instanceof RecyclerView && parent != mBinding.recycler) return current;
+            current = parent instanceof View ? (View) parent : null;
+        }
+        return null;
     }
 
     private boolean isInsideGrid(View view) {

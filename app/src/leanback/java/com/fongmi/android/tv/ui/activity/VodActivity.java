@@ -521,10 +521,18 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         });
     }
 
-    /** 站源名：取「站源 → 配置 → 应用名」第一个非空值，最多 6 个字形簇。 */
+    /** 站源名：优先显示本页实际打开的站点，再回退到配置名 / 应用名。 */
     private void setTitle() {
+        Site site = VodConfig.get().getSite(getKey());
+        String name = site == null ? "" : site.getName();
+        boolean ready = !TextUtils.isEmpty(name);
+        mToolbar.navVod.setText(ready ? clampSiteName(name) : "");
+        mToolbar.navVod.setVisibility(ready ? View.VISIBLE : View.GONE);
+        mToolbar.navVod.setFocusable(ready);
+        mToolbar.navVod.setFocusableInTouchMode(ready);
+        if (!ready && mToolbar.navVod.hasFocus()) mToolbar.navHome.requestFocus();
         List<String> items = Arrays.asList(
-                Optional.ofNullable(VodConfig.get().getHome()).map(Site::getName).orElse(""),
+                name,
                 Optional.ofNullable(VodConfig.get().getConfig()).map(com.fongmi.android.tv.bean.Config::getName).orElse(""),
                 getString(R.string.app_name));
         Optional<String> optional = items.stream().filter(s -> !TextUtils.isEmpty(s)).findFirst();
@@ -775,6 +783,7 @@ public class VodActivity extends BaseActivity implements TypeAdapter.OnClickList
         mClock = Clock.create().view(mToolbar.clock).format("HH:mm");
         mClock.start();
         applyPosterSizeIfChanged();
+        setTitle();
         // 从设置 / 搜索等页面返回：焦点若还停在别的导航项上，在首帧绘制前归位到「片库」。
         if (mInitialFocusDone && isNavFocused() && !mToolbar.navVod.hasFocus()) mToolbar.navVod.requestFocus();
     }
