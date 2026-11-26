@@ -632,11 +632,13 @@
     <string name="tmdb_disabled_hint">Enable TMDB scraping in Settings → Media scraping settings first</string>
     <string name="tmdb_no_keyword">No title available for scraping</string>
     <string name="setting_group_tmdb">TMDB</string>
-    <string name="tmdb_connection_hint">Choose how TMDB data is scraped. The API key is a separate setting that works with all three modes and can be left empty.</string>
+    <string name="tmdb_connection_hint">Choose how TMDB data is scraped. The API key works with every mode. Vercel and Cloudflare deployment addresses are saved separately.</string>
     <string name="tmdb_mode">TMDB connection</string>
     <string name="tmdb_mode_proxy">Default proxy</string>
     <string name="tmdb_mode_official">TMDB direct connection</string>
     <string name="tmdb_mode_custom">Custom proxy</string>
+    <string name="tmdb_mode_vercel">Vercel proxy</string>
+    <string name="tmdb_mode_cloudflare">Cloudflare proxy</string>
     <string name="tmdb_api_key">API key</string>
     <string name="tmdb_api_key_hint">API key (optional, works with all connection modes)</string>
     <string name="tmdb_image_poster">Poster resolution</string>
@@ -644,6 +646,8 @@
     <string name="tmdb_image_still">Episode still resolution</string>
     <string name="tmdb_image_profile">Profile image resolution</string>
     <string name="tmdb_site_custom">Custom TMDB proxy address</string>
+    <string name="tmdb_site_vercel">Vercel proxy address</string>
+    <string name="tmdb_site_cloudflare">Cloudflare proxy address</string>
     <string name="tmdb_site_unset">Not set</string>
     <string name="tmdb_attribution">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</string>
     <string name="tmdb_attribution_title">Data provided by TMDB</string>

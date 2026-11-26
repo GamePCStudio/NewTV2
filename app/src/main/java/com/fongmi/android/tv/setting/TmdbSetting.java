@@ -16,10 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * TMDB 刮削配置：全局连接方式 + 自定义反代地址 + 独立 API 密钥。
  *
- * <p>连接方式决定所有 TMDB 请求的基地址：默认反代、官方 API、自定义反代。
- * 项目内不再有其它数据源，所有图片与元数据拉取都经由这里给出的地址。</p>
+ * <p>连接方式决定所有 TMDB 请求的基地址：默认反代、官方 API、自定义反代、Vercel 反代、
+ * Cloudflare 反代。项目内不再有其它数据源，所有图片与元数据拉取都经由这里给出的地址。</p>
  *
- * <p><b>密钥与地址分离</b>：API 密钥单独存于 {@code tmdb_key}，三种连接方式下都参与请求，
+ * <p><b>密钥与地址分离</b>：API 密钥单独存于 {@code tmdb_key}，所有连接方式下都参与请求，
  * 不依赖是否填写自定义反代地址；切换连接方式不会清空或失效。站点记录
  * {@code {"url":"...","key":"..."}} 中的 {@code key} 仅作为兼容副本：
  * 保存地址时会同步独立密钥，旧版本回滚后仍能读到同一份密钥。</p>
@@ -37,12 +37,18 @@ public final class TmdbSetting {
     public static final int MODE_OFFICIAL = 1;
     /** 自定义反代：地址与密钥由用户提供。 */
     public static final int MODE_CUSTOM = 2;
+    /** Vercel 反代：保存独立的 Vercel 部署地址。 */
+    public static final int MODE_VERCEL = 3;
+    /** Cloudflare 反代：保存独立的 Cloudflare 部署地址。 */
+    public static final int MODE_CLOUDFLARE = 4;
 
     public static final String PROXY_API_URL = "https://t.tmdbapi.cc.cd";
     public static final String OFFICIAL_API_URL = "https://api.themoviedb.org";
 
     private static final String KEY_MODE = "tmdb_mode";
     private static final String KEY_SITE = "tmdb_site";
+    private static final String KEY_VERCEL_URL = "tmdb_vercel_url";
+    private static final String KEY_CLOUDFLARE_URL = "tmdb_cloudflare_url";
     /**
      * 独立 API 密钥：与连接方式、自定义地址完全解耦。
      *
@@ -90,11 +96,11 @@ public final class TmdbSetting {
     /** 当前连接方式。 */
     public static int getMode() {
         int mode = Prefers.getInt(KEY_MODE, MODE_PROXY);
-        return mode == MODE_OFFICIAL || mode == MODE_CUSTOM ? mode : MODE_PROXY;
+        return mode >= MODE_PROXY && mode <= MODE_CLOUDFLARE ? mode : MODE_PROXY;
     }
 
     public static void putMode(int mode) {
-        if (mode != MODE_PROXY && mode != MODE_OFFICIAL && mode != MODE_CUSTOM) mode = MODE_PROXY;
+        if (mode < MODE_PROXY || mode > MODE_CLOUDFLARE) mode = MODE_PROXY;
         Prefers.put(KEY_MODE, mode);
         CURSOR.set(0);
         TmdbApi.onConfigChanged();
@@ -133,24 +139,51 @@ public final class TmdbSetting {
         RankLatest.markConfigChanged();
     }
 
+    public static TmdbSite getSiteForMode(int mode) {
+        if (mode == MODE_VERCEL || mode == MODE_CLOUDFLARE) {
+            String key = mode == MODE_VERCEL ? KEY_VERCEL_URL : KEY_CLOUDFLARE_URL;
+            return new TmdbSite(Prefers.getString(key, ""), getApiKey());
+        }
+        return getSite();
+    }
+
+    public static void putSiteForMode(int mode, TmdbSite site) {
+        if (mode != MODE_VERCEL && mode != MODE_CLOUDFLARE) {
+            putSite(site);
+            return;
+        }
+        String key = mode == MODE_VERCEL ? KEY_VERCEL_URL : KEY_CLOUDFLARE_URL;
+        Prefers.put(key, site == null ? "" : site.getUrl());
+        CURSOR.set(0);
+        TmdbApi.onConfigChanged();
+        RankLatest.markConfigChanged();
+    }
+
+    public static int getSiteLabelRes(int mode) {
+        if (mode == MODE_VERCEL) return R.string.tmdb_site_vercel;
+        if (mode == MODE_CLOUDFLARE) return R.string.tmdb_site_cloudflare;
+        return R.string.tmdb_site_custom;
+    }
+
     /**
      * 统一站点列表：API 层沿用它做请求入口，内容永远只有当前连接方式对应的那一条。
      */
     public static List<TmdbSite> getSites() {
-        // 密钥来自独立配置：默认反代 / 官方直连 / 自定义反代三种方式下都生效。
+        // 密钥来自独立配置：所有连接方式下都生效。
         TmdbSite active = new TmdbSite(getApiBase(), getApiKey());
         return Collections.singletonList(active);
     }
 
     /** 当前连接方式实际使用的 API 基地址，全局唯一来源。 */
     public static String getApiBase() {
-        if (getMode() == MODE_OFFICIAL) return OFFICIAL_API_URL;
-        if (getMode() == MODE_CUSTOM) return getSite().base();
+        int mode = getMode();
+        if (mode == MODE_OFFICIAL) return OFFICIAL_API_URL;
+        if (mode == MODE_VERCEL || mode == MODE_CLOUDFLARE || mode == MODE_CUSTOM) return getSiteForMode(mode).base();
         return PROXY_API_URL;
     }
 
     /**
-     * 当前 API 密钥；三种连接方式共用，与是否填写自定义地址无关。
+     * 当前 API 密钥；所有连接方式共用，与是否填写自定义地址无关。
      *
      * <p>首次读取时做一次性迁移：旧配置的密钥可能在站点记录里，也可能在更早版本的
      * {@code tmdb_api_key} 键里。取到后立即写入独立键，后续切换连接方式、修改地址都不受影响。</p>
@@ -275,12 +308,13 @@ public final class TmdbSetting {
         Prefers.put(key, next);
     }
 
-    /** 是否已有可用地址；自定义反代必须由用户填地址。 */
+    /** 是否已有可用地址；自定义与两类自建反代必须由用户填地址。 */
     public static boolean isConfigured() {
         String base = getApiBase();
         if (TextUtils.isEmpty(base)) return false;
-        if (getMode() != MODE_CUSTOM) return true;
-        return getSite().isValid();
+        int mode = getMode();
+        if (mode != MODE_CUSTOM && mode != MODE_VERCEL && mode != MODE_CLOUDFLARE) return true;
+        return getSiteForMode(mode).isValid();
     }
 
     /** 备份恢复 / 偏好整体替换后调用，重新解析当前站点与独立密钥。 */
@@ -299,6 +333,8 @@ public final class TmdbSetting {
         int mode = getMode();
         if (mode == MODE_OFFICIAL) return R.string.tmdb_mode_official;
         if (mode == MODE_CUSTOM) return R.string.tmdb_mode_custom;
+        if (mode == MODE_VERCEL) return R.string.tmdb_mode_vercel;
+        if (mode == MODE_CLOUDFLARE) return R.string.tmdb_mode_cloudflare;
         return R.string.tmdb_mode_proxy;
     }
 
@@ -311,7 +347,7 @@ public final class TmdbSetting {
      * 是否参与刮削。
      *
      * <p>「启用刮削」总开关已移除：TMDB 是唯一数据源，只要连接方式给出可用地址就一直启用，
-     * 没有地址（自定义反代未填）时自然停用。保留这个方法名给调用方复用。</p>
+     * 没有地址（自定义或自建反代未填）时自然停用。保留这个方法名给调用方复用。</p>
      */
     public static boolean isEnabled() {
         return isConfigured();

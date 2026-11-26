@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.TextView;
 
 import androidx.viewbinding.ViewBinding;
 
@@ -25,9 +26,8 @@ import java.util.function.Consumer;
  * <p>页面不提供任何刮削开关：TMDB 是唯一数据源，只要连接方式可用
  * （{@link TmdbSetting#isConfigured()}）就一直参与刮削，其余配置项互不依赖。</p>
  *
- * <p>API 密钥是独立设置项：三种连接方式下都显示、都生效，不随自定义地址行的显隐变化；
- * 切换连接方式不会清空密钥。自定义反代地址行只在「自定义TMDB反代」下显示，
- * 且只回显用户自己填过的地址，默认反代与官方直连的内置地址不会出现在界面上。</p>
+ * <p>API 密钥是独立设置项：所有连接方式下都显示、都生效，不随反代地址行的显隐变化；
+ * 切换连接方式不会清空密钥。Vercel 与 Cloudflare 部署地址始终保留，选中对应连接方式后启用。</p>
  */
 public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
 
@@ -51,9 +51,11 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     @Override
     protected void initEvent() {
         mBinding.tmdbMode.setOnClickListener(view -> showModeDialog());
-        // 密钥独立编辑：不依赖自定义地址是否填写，三种连接方式共用这一份配置。
+        // 密钥独立编辑：不依赖反代地址是否填写，所有连接方式共用这一份配置。
         mBinding.tmdbApiKey.setOnClickListener(view -> TmdbKeyDialog.show(this));
         mBinding.tmdbSite.setOnClickListener(view -> TmdbSiteDialog.show(this));
+        mBinding.tmdbVercel.setOnClickListener(view -> TmdbSiteDialog.show(this, TmdbSetting.MODE_VERCEL));
+        mBinding.tmdbCloudflare.setOnClickListener(view -> TmdbSiteDialog.show(this, TmdbSetting.MODE_CLOUDFLARE));
         // 图片分辨率：选中即生效；海报 / 横版剧照决定之后新刮削下载的档位。
         mBinding.tmdbPoster.setOnClickListener(view -> showImageSizeDialog(
                 R.string.tmdb_image_poster, TmdbSetting.POSTER_SIZES, TmdbSetting.getPosterSize(), true, TmdbSetting::putPosterSize));
@@ -91,7 +93,7 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     /**
      * 离开页面时收口。
      *
-     * <p>选了「自定义TMDB反代」却没填地址（或填了非法地址）属于无效配置，
+     * <p>选了自建反代却没填地址（或填了非法地址）属于无效配置，
      * 会让所有 TMDB 请求直接失败；退出页面时回落默认反代，保证下次进来仍是可用状态。
      * 只在真正退出（{@code isFinishing()}）时处理，按 Home 键离开不算。</p>
      */
@@ -99,7 +101,9 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     protected void onStop() {
         super.onStop();
         if (!isFinishing()) return;
-        if (TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM && !TmdbSetting.isConfigured()) {
+        if (TmdbSetting.getMode() != TmdbSetting.MODE_PROXY
+                && TmdbSetting.getMode() != TmdbSetting.MODE_OFFICIAL
+                && !TmdbSetting.isConfigured()) {
             TmdbSetting.putMode(TmdbSetting.MODE_PROXY);
         }
     }
@@ -107,14 +111,16 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     /**
      * 选择全局连接方式：单击选项即生效并关闭弹窗，不再有「确定 / 取消」。
      *
-     * <p>选中「自定义TMDB反代」且还没有可用地址时，紧跟着打开地址输入框，
+     * <p>选中自建反代且还没有可用地址时，紧跟着打开对应的地址输入框，
      * 避免用户选完却不知道还要填地址。</p>
      */
     private void showModeDialog() {
         CharSequence[] labels = {
                 getString(R.string.tmdb_mode_proxy),
                 getString(R.string.tmdb_mode_official),
-                getString(R.string.tmdb_mode_custom)
+                getString(R.string.tmdb_mode_custom),
+                getString(R.string.tmdb_mode_vercel),
+                getString(R.string.tmdb_mode_cloudflare)
         };
         new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.tmdb_mode)
@@ -128,10 +134,10 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
     private void applyMode(int mode) {
         if (mode != TmdbSetting.getMode()) TmdbSetting.putMode(mode);
         updateText();
-        // 地址输入等弹窗真正关掉再开，避免两个 Dialog 同帧切换抢焦点。
-        if (mode == TmdbSetting.MODE_CUSTOM && !TmdbSetting.isConfigured()) {
+        // 自建反代尚未填地址时，紧跟着打开对应输入框，避免用户选完却不知道还要填地址。
+        if (mode != TmdbSetting.MODE_PROXY && mode != TmdbSetting.MODE_OFFICIAL && !TmdbSetting.isConfigured()) {
             mBinding.tmdbMode.post(() -> {
-                if (!isFinishing() && !isDestroyed()) TmdbSiteDialog.show(this);
+                if (!isFinishing() && !isDestroyed()) TmdbSiteDialog.show(this, mode);
             });
         }
     }
@@ -148,7 +154,7 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
         mBinding.tmdbStillText.setText(TmdbSetting.getStillSize());
         mBinding.tmdbProfileText.setText(TmdbSetting.getProfileSize());
         boolean custom = mode == TmdbSetting.MODE_CUSTOM;
-        // 非自定义方式下整行收起：内置地址不落到界面上。
+        // 非自定义方式下收起通用地址行；Vercel 与 Cloudflare 的独立配置始终保留。
         // 先归位焦点再隐藏，避免正在这一行时 setVisibility(GONE) 把焦点丢掉。
         if (!custom && mBinding.tmdbSite.hasFocus()) mBinding.tmdbMode.requestFocus();
         mBinding.tmdbSite.setVisibility(custom ? View.VISIBLE : View.GONE);
@@ -158,6 +164,13 @@ public class SettingTmdbActivity extends BaseActivity implements TmdbListener {
         } else {
             mBinding.tmdbSiteText.setText("");
         }
+        setSiteText(mBinding.tmdbVercelText, TmdbSetting.MODE_VERCEL);
+        setSiteText(mBinding.tmdbCloudflareText, TmdbSetting.MODE_CLOUDFLARE);
+    }
+
+    private void setSiteText(TextView view, int mode) {
+        String url = TmdbSetting.getSiteForMode(mode).getUrl();
+        view.setText(TextUtils.isEmpty(url) ? getString(R.string.tmdb_site_unset) : url);
     }
 
     @Override

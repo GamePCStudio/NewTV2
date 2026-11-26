@@ -22,23 +22,35 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 /**
- * 编辑「自定义TMDB反代地址」。密钥已拆分为设置页里的独立项，这里不再承载密钥。
+ * 编辑 TMDB 反代地址。密钥已拆分为设置页里的独立项，这里不再承载密钥。
  *
- * <p>只服务 {@link TmdbSetting#MODE_CUSTOM}：入口是设置页里那一行，非自定义方式下该行整体收起，
- * 所以这里<b>永远不回显内置地址</b>（默认反代 / 官方直连都由代码内置），
- * 输入框只承载用户自己填过的地址，空就是空，避免把内置地址暴露到界面。</p>
+ * <p>自定义、Vercel 与 Cloudflare 地址分别保存；非内置地址都只回显用户自己填过的内容。
+ * 默认反代与官方直连由代码内置，不会出现在这个输入框里。</p>
  *
  * <p>保存地址时保留已有的独立密钥；手机端一次提交地址 + 密钥时，密钥先暂存，
  * 随「确定」一起写入独立配置，仍遵循「用户确认后才落盘」的约定。</p>
  */
 public class TmdbSiteDialog extends BaseAlertDialog {
 
+    private static final String ARG_MODE = "mode";
     private DialogTmdbSiteBinding binding;
     /** 手机端同步过来的密钥，等用户按「确定」时与地址一起保存。 */
     private String pendingKey = "";
 
     public static void show(FragmentActivity activity) {
-        new TmdbSiteDialog().show(activity.getSupportFragmentManager(), null);
+        show(activity, TmdbSetting.getMode());
+    }
+
+    public static void show(FragmentActivity activity, int mode) {
+        TmdbSiteDialog dialog = new TmdbSiteDialog();
+        Bundle args = new Bundle();
+        args.putInt(ARG_MODE, mode);
+        dialog.setArguments(args);
+        dialog.show(activity.getSupportFragmentManager(), null);
+    }
+
+    private int getMode() {
+        return getArguments() == null ? TmdbSetting.MODE_CUSTOM : getArguments().getInt(ARG_MODE, TmdbSetting.MODE_CUSTOM);
     }
 
     @Override
@@ -53,13 +65,13 @@ public class TmdbSiteDialog extends BaseAlertDialog {
 
     @Override
     protected MaterialAlertDialogBuilder getBuilder() {
-        return builder().setTitle(R.string.tmdb_site_custom).setView(getBinding().getRoot());
+        return builder().setTitle(TmdbSetting.getSiteLabelRes(getMode())).setView(getBinding().getRoot());
     }
 
     @Override
     protected void initView() {
         // 地址只回显用户自己的配置；内置地址一律不落到这条输入框里。
-        TmdbSite site = TmdbSetting.getSite();
+        TmdbSite site = TmdbSetting.getSiteForMode(getMode());
         binding.url.setText(site.getUrl());
         binding.url.setSelection(binding.url.getText().length());
         binding.phone.setVisibility(View.VISIBLE);
@@ -104,7 +116,7 @@ public class TmdbSiteDialog extends BaseAlertDialog {
         }
         // 手机端一次提交的密钥随确认一起落盘；未提交则保持原值不变。
         if (!TextUtils.isEmpty(pendingKey)) TmdbSetting.putApiKey(pendingKey);
-        TmdbSetting.putSite(site);
+        TmdbSetting.putSiteForMode(getMode(), site);
         apply();
         dismiss();
     }

@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.api.config;
 
 
+import android.text.TextUtils;
+
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.loader.BaseLoader;
 import com.fongmi.android.tv.api.node.NodeRuntime;
@@ -130,13 +132,38 @@ public class VodConfig extends BaseConfig {
         NodeRuntimeApi.LoadedConfig loaded = null;
         try {
             if (node) loaded = runtime.loadConfig(config.getUrl());
-            String json = node ? loaded.json() : Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
-            runtime.prune(loaded, Config.getAll(VOD).stream().map(Config::getUrl).toList(), config.getUrl());
-            checkJson(config, Json.parse(json).getAsJsonObject(), loaded);
+            String json = node ? loaded.json() : loadJson(config);
+            parse(config, json, loaded);
         } catch (Throwable e) {
             if (node) runtime.fail(loaded);
+            if (!node && !isCanceled(e) && !TextUtils.isEmpty(config.getJson())) {
+                try {
+                    parse(config, config.getJson(), null);
+                    return;
+                } catch (Throwable ignored) {
+                }
+            }
             throw e;
         }
+    }
+
+    private String loadJson(Config config) throws Throwable {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
+            } catch (Throwable e) {
+                if (isCanceled(e) || attempt == 2) throw e;
+                Thread.sleep(300L << attempt);
+            }
+        }
+        throw new IllegalStateException("unreachable");
+    }
+
+    private void parse(Config config, String json, NodeRuntimeApi.LoadedConfig loaded) throws Throwable {
+        NodeRuntime.get().prune(loaded, Config.getAll(VOD).stream().map(Config::getUrl).toList(), config.getUrl());
+        JsonObject object = Json.parse(json).getAsJsonObject();
+        checkJson(config, object, loaded);
+        if (!object.has("urls")) config.setJson(json);
     }
 
     @Override

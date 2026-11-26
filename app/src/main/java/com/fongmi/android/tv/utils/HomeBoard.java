@@ -277,7 +277,10 @@ public final class HomeBoard {
 
     private static List<Item> parse(JsonArray array) {
         try {
-            String posterBase = TmdbSetting.getMode() == TmdbSetting.MODE_CUSTOM
+            int mode = TmdbSetting.getMode();
+            String posterBase = mode == TmdbSetting.MODE_CUSTOM
+                    || mode == TmdbSetting.MODE_VERCEL
+                    || mode == TmdbSetting.MODE_CLOUDFLARE
                     ? RankLatest.imageBase() : RankLatest.DEFAULT_IMAGE_BASE;
             List<Item> out = new ArrayList<>(MAX_ITEMS);
             Set<String> seen = new HashSet<>();

@@ -63,8 +63,7 @@
 
         <!--
           API 密钥：与连接方式解耦的独立设置项。
-          默认反代 / 官方直连 / 自定义反代三种方式下都生效，不随自定义地址行显示或隐藏；
-          摘要只显示掩码，避免整串密钥铺在电视屏幕上。
+          所有连接方式下都生效，不随反代地址行显示或隐藏；摘要只显示掩码。
         -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbApiKey"
@@ -74,7 +73,7 @@
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:nextFocusDown="@id/tmdbSite"
+            android:nextFocusDown="@id/tmdbVercel"
             android:orientation="horizontal">
 
             <com.google.android.material.textview.MaterialTextView
@@ -100,7 +99,7 @@
 
         <!--
           自定义反代地址：只在「自定义TMDB反代」下出现。
-          内置地址（默认反代 / TMDB官方直连）不写进这一行，避免把内置地址暴露在界面上。
+          内置地址（默认反代 / TMDB官方直连）不写进这一行；Vercel 与 Cloudflare 地址单独保存。
         -->
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/tmdbSite"
@@ -110,7 +109,7 @@
             android:background="@drawable/selector_item"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:nextFocusDown="@id/tmdbPoster"
+            android:nextFocusDown="@id/tmdbVercel"
             android:orientation="horizontal"
             android:visibility="gone"
             tools:visibility="visible">
@@ -133,6 +132,72 @@
                 android:textColor="@color/white"
                 android:textSize="18sp"
                 tools:text="https://example.com" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tmdbVercel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/tmdbCloudflare"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/tmdb_site_vercel"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/tmdbVercelText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="middle"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="https://example.vercel.app" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tmdbCloudflare"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/selector_item"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusDown="@id/tmdbPoster"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/tmdb_site_cloudflare"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/tmdbCloudflareText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="middle"
+                android:gravity="end"
+                android:singleLine="true"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                tools:text="https://example.pages.dev" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
