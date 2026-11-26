@@ -39,7 +39,7 @@ import java.util.concurrent.Executors;
  * 保证整行都是可用海报。</p>
  *
  * <p><b>缓存</b>：内存 + {@code files/home_board_<n>.json}，TTL 12 小时，与主视觉榜单同口径。
- * 过期时重新拉取；拉取失败继续用旧数据，只有「从未成功过」才回空列表，由展示层整行收起。</p>
+ * 过期时重新拉取；拉取失败继续用旧数据，只有「从未成功过」才回空列表，由展示层收起基础榜单或显示平台提示。</p>
  *
  * <p><b>海报地址</b>：豆瓣图床有防盗链（无 Referer 直接 418），请求头由
  * {@link ImgUtil#getUrl(String)} 统一补；TMDB 相对路径在这里拼成
@@ -60,7 +60,6 @@ public final class HomeBoard {
     public static final int COUNT = 10;
 
     private static final int[] NETWORKS = {0, 0, 0, 0, 213, 213, 49, 49, 2739, 2739};
-    private static final int[] PROVIDERS = {0, 0, 0, 0, 8, 8, 384, 384, 337, 337};
 
     /** 首页每行最多展示的影片数；到 10 部时末尾追加「查看全部」卡片。 */
     public static final int HOME_LIMIT = 10;
@@ -204,9 +203,7 @@ public final class HomeBoard {
         if (board <= TMDB_TV) return fetch(BASE + PATHS[board]);
         boolean movie = board % 2 == 0;
         String type = movie ? "movie" : "tv";
-        String filter = movie
-                ? "with_watch_providers=" + PROVIDERS[board] + "&watch_region=US"
-                : "with_networks=" + NETWORKS[board];
+        String filter = "with_networks=" + NETWORKS[board];
         String path = "/3/discover/" + type + "?language=zh-CN&page=1&sort_by=popularity.desc"
                 + "&vote_count.gte=" + (movie ? 50 : 10) + "&include_adult=false&" + filter;
         try {
