@@ -1968,9 +1968,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         }
         String resolution = player().getSizeText();
         if (!TextUtils.isEmpty(resolution)) resolution = resolution.replace(" x ", " × ");
+        Format video = TrackUtil.getSelectedFormat(player().getCurrentTracks(), C.TRACK_TYPE_VIDEO);
         Format audio = TrackUtil.getSelectedFormat(player().getCurrentTracks(), C.TRACK_TYPE_AUDIO);
+        String videoInfo = video == null ? "—" : TrackUtil.describeVideo(video);
         String audioInfo = audio == null ? "—" : TrackUtil.describeAudio(audio);
-        String text = getString(R.string.play_media_info, TextUtils.isEmpty(resolution) ? "—" : resolution, TextUtils.isEmpty(audioInfo) ? "—" : audioInfo);
+        String text = getString(R.string.play_media_info, TextUtils.isEmpty(resolution) ? "—" : resolution, videoInfo, TextUtils.isEmpty(audioInfo) ? "—" : audioInfo);
         mBinding.widget.mediaInfo.setText(text);
         mBinding.widget.mediaInfo.setVisibility(View.VISIBLE);
     }

@@ -319,7 +319,7 @@
     <string name="player">播放核心</string>
     <string name="player_debug">偵錯</string>
     <string name="player_file_info">資訊</string>
-    <string name="play_media_info">解析度 %1$s · 音軌 %2$s</string>
+    <string name="play_media_info">解析度 %1$s · 視訊 %2$s · 音軌 %3$s</string>
     <string name="player_render">視訊輸出</string>
     <string name="player_libass">字幕特效</string>
     <string name="player_background">背景播放</string>

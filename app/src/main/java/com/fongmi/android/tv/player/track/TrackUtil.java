@@ -4,6 +4,7 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Player;
@@ -62,6 +63,95 @@ public class TrackUtil {
         if (format.channelCount > 0) joiner.add(getAudioChannels(format.channelCount));
         if (format.sampleRate > 0) joiner.add(String.format(Locale.ROOT, "%.1fkHz", format.sampleRate / 1000f));
         return joiner.toString();
+    }
+
+    public static String describeVideo(Format format) {
+        StringJoiner joiner = new StringJoiner(" · ");
+        joiner.add(orDash(getVideoCodec(format)));
+        joiner.add(format.frameRate == Format.NO_VALUE ? "—" : formatFrameRate(format.frameRate) + "fps");
+        joiner.add(format.bitrate == Format.NO_VALUE ? "—" : formatBitrate(format.bitrate));
+        joiner.add(getHdrType(format));
+        joiner.add(getVideoBitDepth(format));
+        joiner.add(getColorSpace(format));
+        return joiner.toString();
+    }
+
+    private static String getVideoCodec(Format format) {
+        if (format.sampleMimeType != null) {
+            return switch (format.sampleMimeType) {
+                case MimeTypes.VIDEO_H264 -> "H.264/AVC";
+                case MimeTypes.VIDEO_H265 -> "H.265/HEVC";
+                case MimeTypes.VIDEO_AV1 -> "AV1";
+                case MimeTypes.VIDEO_VP9 -> "VP9";
+                case MimeTypes.VIDEO_VP8 -> "VP8";
+                case MimeTypes.VIDEO_MPEG2 -> "MPEG-2";
+                case MimeTypes.VIDEO_MP4V -> "MPEG-4";
+                case MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision";
+                default -> format.codecs == null ? "" : format.codecs;
+            };
+        }
+        if (TextUtils.isEmpty(format.codecs)) return "";
+        String codecs = format.codecs.toLowerCase(Locale.ROOT);
+        if (codecs.startsWith("dvhe") || codecs.startsWith("dvh1")) return "Dolby Vision";
+        if (codecs.startsWith("hvc1") || codecs.startsWith("hev1")) return "H.265/HEVC";
+        if (codecs.startsWith("avc1") || codecs.startsWith("avc3")) return "H.264/AVC";
+        if (codecs.startsWith("av01")) return "AV1";
+        if (codecs.startsWith("vp09")) return "VP9";
+        if (codecs.startsWith("vp8")) return "VP8";
+        return format.codecs;
+    }
+
+    private static String getHdrType(Format format) {
+        if (isDolbyVision(format)) return "Dolby Vision";
+        ColorInfo color = format.colorInfo;
+        if (color != null && color.colorTransfer == C.COLOR_TRANSFER_ST2084) return "HDR10";
+        if (color != null && color.colorTransfer == C.COLOR_TRANSFER_HLG) return "HLG";
+        if (color != null && ColorInfo.isTransferHdr(color)) return "HDR";
+        return "SDR";
+    }
+
+    private static boolean isDolbyVision(Format format) {
+        if (MimeTypes.VIDEO_DOLBY_VISION.equals(format.sampleMimeType)) return true;
+        if (TextUtils.isEmpty(format.codecs)) return false;
+        String codecs = format.codecs.toLowerCase(Locale.ROOT);
+        return codecs.startsWith("dvhe") || codecs.startsWith("dvh1");
+    }
+
+    private static String getVideoBitDepth(Format format) {
+        ColorInfo color = format.colorInfo;
+        if (color == null || color.lumaBitdepth <= 0) return "—";
+        if (color.chromaBitdepth > 0 && color.chromaBitdepth != color.lumaBitdepth) {
+            return color.lumaBitdepth + "/" + color.chromaBitdepth + "bit";
+        }
+        return color.lumaBitdepth + "bit";
+    }
+
+    private static String getColorSpace(Format format) {
+        ColorInfo color = format.colorInfo;
+        if (color == null) return "—";
+        return switch (color.colorSpace) {
+            case C.COLOR_SPACE_BT709 -> "BT.709";
+            case C.COLOR_SPACE_BT2020 -> "BT.2020";
+            case C.COLOR_SPACE_BT601 -> "BT.601";
+            default -> "—";
+        };
+    }
+
+    private static String formatFrameRate(float frameRate) {
+        String value = String.format(Locale.ROOT, "%.3f", frameRate);
+        while (value.endsWith("0")) value = value.substring(0, value.length() - 1);
+        return value.endsWith(".") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private static String formatBitrate(int bitrate) {
+        if (bitrate <= 0) return "—";
+        return bitrate >= 1_000_000
+                ? String.format(Locale.ROOT, "%.2fMbps", bitrate / 1_000_000f)
+                : String.format(Locale.ROOT, "%.0fkbps", bitrate / 1_000f);
+    }
+
+    private static String orDash(String value) {
+        return TextUtils.isEmpty(value) ? "—" : value;
     }
 
     private static String getAudioCodec(Format format) {

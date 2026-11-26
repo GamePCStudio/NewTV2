@@ -321,7 +321,7 @@
     <string name="player">Player</string>
     <string name="player_debug">Debug</string>
     <string name="player_file_info">Info</string>
-    <string name="play_media_info">Resolution %1$s · Audio %2$s</string>
+    <string name="play_media_info">Resolution %1$s · Video %2$s · Audio %3$s</string>
     <string name="player_render">Video output</string>
     <string name="player_libass">libass</string>
     <string name="player_background">Background play</string>

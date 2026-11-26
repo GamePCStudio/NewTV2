@@ -319,7 +319,7 @@
     <string name="player">播放核心</string>
     <string name="player_debug">调试</string>
     <string name="player_file_info">信息</string>
-    <string name="play_media_info">分辨率 %1$s · 音轨 %2$s</string>
+    <string name="play_media_info">分辨率 %1$s · 视频 %2$s · 音轨 %3$s</string>
     <string name="player_render">视频输出</string>
     <string name="player_libass">字幕特效</string>
     <string name="player_background">后台播放</string>
