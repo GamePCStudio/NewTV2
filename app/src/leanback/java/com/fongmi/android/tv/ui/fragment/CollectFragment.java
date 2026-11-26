@@ -20,6 +20,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Collect;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Result;
+import com.fongmi.android.tv.bean.Style;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.FragmentTypeBinding;
 import com.fongmi.android.tv.model.SiteViewModel;
@@ -49,6 +50,7 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
     private SiteViewModel mViewModel;
     private Collect mCollect;
     private String mKeyword;
+    private int mColumns;
 
     public static CollectFragment newInstance(String keyword, Collect collect) {
         Bundle args = new Bundle();
@@ -90,6 +92,21 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         mBinding.recycler.setOnKeyInterceptor(this::onGridKeyDown);
         mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(16));
         if (vertical) mBinding.recycler.setPaddingRelative(ResUtil.dp2px(8), mBinding.recycler.getPaddingTop(), mBinding.recycler.getPaddingEnd(), mBinding.recycler.getPaddingBottom());
+        mColumns = getResultColumns();
+        if (vertical) mBinding.recycler.setNumRows(mColumns);
+    }
+
+    private int getResultColumns() {
+        if (Setting.getSearchLayout() != 1) return Product.getColumn();
+        int spacing = ResUtil.dp2px(Product.POSTER_SPACING_DP);
+        int itemWidth = Product.getSpec(Style.rect())[0] + spacing;
+        int width = mBinding.recycler.getWidth();
+        if (width <= 0) {
+            View pager = requireActivity().findViewById(R.id.pager);
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) pager.getLayoutParams();
+            width = ResUtil.getScreenWidth() - params.leftMargin - mBinding.recycler.getPaddingStart() - mBinding.recycler.getPaddingEnd();
+        }
+        return Math.max(1, (Math.max(1, width) + spacing) / itemWidth);
     }
 
     private boolean onGridKeyDown(KeyEvent event) {
@@ -121,7 +138,7 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
 
     private boolean checkLastSize(List<Vod> items) {
         if (mLast == null || items.isEmpty()) return false;
-        int size = Product.getColumn() - mLast.size();
+        int size = mColumns - mLast.size();
         if (size == 0) return false;
         size = Math.min(size, items.size());
         mLast.addAll(mLast.size(), items.subList(0, size));
@@ -137,7 +154,7 @@ public class CollectFragment extends BaseFragment implements CustomScroller.Call
         if (checkLastSize(items) || getActivity() == null || getActivity().isFinishing()) return;
         List<ListRow> rows = new ArrayList<>();
         VodPresenter presenter = new VodPresenter(this);
-        for (List<Vod> part : Lists.partition(items, Product.getColumn())) rows.add(createVideoRow(part, presenter));
+        for (List<Vod> part : Lists.partition(items, mColumns)) rows.add(createVideoRow(part, presenter));
         mAdapter.addAll(mAdapter.size(), rows);
     }
 

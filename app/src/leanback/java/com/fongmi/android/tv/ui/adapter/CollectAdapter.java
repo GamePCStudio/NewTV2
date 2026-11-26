@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.leanback.widget.VerticalGridView;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -96,6 +97,8 @@ public class CollectAdapter extends RecyclerView.Adapter<CollectAdapter.ViewHold
             super(binding.getRoot());
             this.binding = binding;
             this.vertical = vertical;
+            binding.text.setBackgroundResource(vertical ? R.drawable.inset_type_vertical : R.drawable.selector_type);
+            binding.text.setTextColor(ContextCompat.getColorStateList(binding.getRoot().getContext(), vertical ? R.color.selector_type_vertical_text : R.color.selector_type_text));
         }
     }
 }
