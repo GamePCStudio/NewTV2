@@ -106,7 +106,7 @@
                 android:ellipsize="end"
                 android:includeFontPadding="false"
                 android:singleLine="true"
-                android:textColor="@color/white_60"
+                android:textColor="@color/white_80"
                 android:textSize="@dimen/text_meta"
                 android:visibility="gone"
                 tools:text="分辨率 1920 × 1080 · 音轨 AAC · 2.0 · 48.0kHz"

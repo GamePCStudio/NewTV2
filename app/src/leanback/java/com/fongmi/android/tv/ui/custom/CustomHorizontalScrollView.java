@@ -20,7 +20,7 @@ public class CustomHorizontalScrollView extends HorizontalScrollView {
                 case FOCUS_RIGHT -> focused.getNextFocusRightId();
                 default -> NO_ID;
             };
-            View next = getRootView().findViewById(id);
+            View next = findViewById(id);
             if (next != null && next.isShown() && next.isEnabled() && next.requestFocus(direction)) return true;
         }
         return super.arrowScroll(direction);

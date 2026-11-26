@@ -629,6 +629,20 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         }
     }
 
+    private void requestControlFocus(View preferred) {
+        if (preferred == null || !isControlVisible() || (mSheet != null && mSheet.isShowing())) return;
+        if (preferred.isShown() && preferred.isEnabled() && preferred.isFocusable() && preferred.requestFocus()) return;
+        View fallback = mBinding.control.action.playPause;
+        if (preferred == mBinding.control.action.text) {
+            fallback = mBinding.control.action.audio.isShown() ? mBinding.control.action.audio : mBinding.control.action.scale;
+        } else if (preferred == mBinding.control.action.audio) {
+            fallback = mBinding.control.action.video.isShown() ? mBinding.control.action.video : mBinding.control.action.debug;
+        } else if (preferred == mBinding.control.action.video) {
+            fallback = mBinding.control.action.debug;
+        }
+        if (fallback.isShown() && fallback.isFocusable()) fallback.requestFocus();
+    }
+
     /** 控制条按钮聚焦反馈（辉光 / 放大），移植自 tv-latest。 */
     private void setControlFocus() {
         // 只有播放 / 暂停保留辉光；其余按钮只做「品牌色 + 放大 + 抬升」，不再画光晕
@@ -1938,7 +1952,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
     @Override
     protected void onTracksChanged() {
         setTrackVisible();
-        relinkControlFocus();
         renderPlaybackInfo();
     }
 
@@ -2118,7 +2131,10 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
 
     private void setTrackVisible() {
         if (isWebPlaybackActive()) return;
+        View focused = mBinding.control.action.findFocus();
         PlaybackAction.setTracks(player(), mBinding.control.action.text, mBinding.control.action.audio, mBinding.control.action.video);
+        relinkControlFocus();
+        requestControlFocus(focused);
     }
 
     private void setMediaOptionVisible() {
@@ -2460,7 +2476,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackHost, 
         if (mSheet == null || !mSheet.isShowing()) return;
         View anchor = mSheet.getAnchor();
         mSheet.hide();
-        if (anchor != null && anchor.isShown()) anchor.requestFocus();
+        requestControlFocus(anchor);
         setR1Callback();
     }
 
