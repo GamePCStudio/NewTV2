@@ -480,11 +480,33 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
             restartDecoder();
             return ErrorAction.RECOVERED;
         }
+        if (trackType == C.TRACK_TYPE_AUDIO && clearAudioOverride()) {
+            restartDecoder();
+            return ErrorAction.RECOVERED;
+        }
         if (advanceDecoder(trackType)) {
             restartDecoder();
             return ErrorAction.RECOVERED;
         }
         return ErrorAction.FATAL;
+    }
+
+    private boolean clearAudioOverride() {
+        TrackSelectionParameters parameters = player.getTrackSelectionParameters();
+        boolean hasOverride = false;
+        for (TrackSelectionOverride override : parameters.overrides.values()) {
+            if (override.getType() == C.TRACK_TYPE_AUDIO) {
+                hasOverride = true;
+                break;
+            }
+        }
+        if (!hasOverride) return false;
+        player.setTrackSelectionParameters(parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                .build());
+        Log.i("TV-Playback", "player=" + Integer.toHexString(System.identityHashCode(player)) + " event=audioOverrideCleared");
+        return true;
     }
 
     private boolean advanceDecoder(@C.TrackType int trackType) {

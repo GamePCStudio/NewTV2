@@ -192,7 +192,11 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
         int ordinal = 0;
         for (Tracks.Group trackGroup : player.getCurrentTracks().getGroups()) {
             if (trackGroup.getType() != type) continue;
-            for (int j = 0; j < trackGroup.length; j++) items.add(createTrackItem(trackGroup, j, ordinal++));
+            for (int j = 0; j < trackGroup.length; j++) {
+                int trackOrdinal = ordinal++;
+                if (!trackGroup.isTrackSupported(j)) continue;
+                items.add(createTrackItem(trackGroup, j, trackOrdinal));
+            }
         }
         return items;
     }

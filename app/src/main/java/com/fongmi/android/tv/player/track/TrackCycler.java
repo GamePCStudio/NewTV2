@@ -88,6 +88,7 @@ public final class TrackCycler {
         for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
             if (group.getType() != trackType) continue;
             for (int index = 0; index < group.length; index++) {
+                if (!group.isTrackSupported(index)) continue;
                 Format format = group.getTrackFormat(index);
                 if (!ids.isEmpty() && (format.id == null || !ids.contains(format.id))) continue;
                 candidates.add(new Candidate(group.getMediaTrackGroup(), index, format, group.isTrackSelected(index)));

@@ -230,23 +230,24 @@ public class TrackUtil {
         for (Tracks.Group trackGroup : tracks.getGroups()) {
             if (trackGroup.getType() != track.getType()) continue;
             for (int i = 0; i < trackGroup.length; i++) {
+                int currentOrdinal = ordinal++;
+                if (track.isSelected() && !trackGroup.isTrackSupported(i)) continue;
                 Format format = trackGroup.getTrackFormat(i);
                 TrackInfo candidate = new TrackInfo(trackGroup, i);
                 if (track.getFormat() != null && track.getFormat().equals(describeFormat(format))) {
-                    if (ordinal == track.getOrdinal()) return candidate;
+                    if (currentOrdinal == track.getOrdinal()) return candidate;
                     if (exactMatch == null) exactMatch = candidate;
                 }
-                if (ordinal == track.getOrdinal()) ordinalMatch = candidate;
+                if (currentOrdinal == track.getOrdinal()) ordinalMatch = candidate;
                 if (track.getType() == C.TRACK_TYPE_TEXT) {
                     int score = getMatchScore(track, format);
-                    int distance = Math.abs(ordinal - track.getOrdinal());
+                    int distance = Math.abs(currentOrdinal - track.getOrdinal());
                     if (score > bestScore || (score == bestScore && score > 0 && distance < bestDistance)) {
                         semanticMatch = candidate;
                         bestScore = score;
                         bestDistance = distance;
                     }
                 }
-                ordinal++;
             }
         }
         if (exactMatch != null) return exactMatch;
