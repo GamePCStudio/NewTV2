@@ -14,6 +14,15 @@
 </p>
 
 **交流群组**：[Telegram · newtv_2](https://t.me/newtv_2)　｜　**下载**：[最新版本](https://github.com/ctowl2018/NewTV2/releases/latest)
+## Star History
+
+<a href="https://www.star-history.com/?repos=ctowl2018%2Fnewtv2&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=ctowl2018/newtv2&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=ctowl2018/newtv2&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=ctowl2018/newtv2&type=date&legend=top-left" />
+ </picture>
+</a>
 
 > **声明**：本应用不含、不集成、不提供、不存储任何影视资源；界面中的海报、剧照等素材仅用于信息展示。详见文末[免责声明](#免责声明)。
 
@@ -33,6 +42,8 @@
 - [构建与发布](#构建与发布)
 - [致谢](#致谢)
 - [免责声明](#免责声明)
+
+
 
 ## 特性总览
 
