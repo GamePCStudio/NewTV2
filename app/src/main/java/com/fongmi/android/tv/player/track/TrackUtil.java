@@ -12,6 +12,7 @@ import androidx.media3.common.TrackGroup;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
+import androidx.media3.common.util.FormatNameUtil;
 
 import com.fongmi.android.tv.bean.Track;
 
@@ -86,13 +87,13 @@ public class TrackUtil {
                 case MimeTypes.VIDEO_VP8 -> "VP8";
                 case MimeTypes.VIDEO_MPEG2 -> "MPEG-2";
                 case MimeTypes.VIDEO_MP4V -> "MPEG-4";
-                case MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision";
+                case MimeTypes.VIDEO_DOLBY_VISION -> FormatNameUtil.getSampleMimeTypeDisplayName(format);
                 default -> format.codecs == null ? "" : format.codecs;
             };
         }
         if (TextUtils.isEmpty(format.codecs)) return "";
         String codecs = format.codecs.toLowerCase(Locale.ROOT);
-        if (codecs.startsWith("dvhe") || codecs.startsWith("dvh1")) return "Dolby Vision";
+        if (codecs.startsWith("dvhe") || codecs.startsWith("dvh1")) return FormatNameUtil.getSampleMimeTypeDisplayName(format);
         if (codecs.startsWith("hvc1") || codecs.startsWith("hev1")) return "H.265/HEVC";
         if (codecs.startsWith("avc1") || codecs.startsWith("avc3")) return "H.264/AVC";
         if (codecs.startsWith("av01")) return "AV1";
@@ -160,6 +161,7 @@ public class TrackUtil {
             case MimeTypes.AUDIO_AAC -> "AAC";
             case MimeTypes.AUDIO_AC3 -> "AC-3";
             case MimeTypes.AUDIO_E_AC3 -> "E-AC-3";
+            case MimeTypes.AUDIO_E_AC3_JOC -> FormatNameUtil.getSampleMimeTypeDisplayName(format);
             case MimeTypes.AUDIO_MPEG -> "MP3";
             case MimeTypes.AUDIO_FLAC -> "FLAC";
             case MimeTypes.AUDIO_OPUS -> "Opus";
