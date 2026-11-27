@@ -909,13 +909,20 @@ public class PlayerManager implements ParseCallback {
     private void restoreTrackSelection() {
         pendingTrackRestore.clear();
         Track.delete(getKey(), Track.ROLE_LEGACY_SECONDARY);
-        pendingTrackRestore.addAll(TrackUtil.setTrackSelection(player, Track.find(getKey())));
+        List<Track> restore = new ArrayList<>(Track.find(getKey()));
+        if (engine.isAudioTrackFallbackActive()) {
+            restore.removeIf(track -> track.getType() == C.TRACK_TYPE_AUDIO);
+        }
+        pendingTrackRestore.addAll(TrackUtil.setTrackSelection(player, restore));
     }
 
     private void retryPendingTrackSelection() {
         List<Track> pending = new ArrayList<>(pendingTrackRestore);
         pendingTrackRestore.clear();
-        for (Track track : pending) if (!TrackUtil.setTrackSelection(player, track)) pendingTrackRestore.add(track);
+        for (Track track : pending) {
+            if (track.getType() == C.TRACK_TYPE_AUDIO && engine.isAudioTrackFallbackActive()) continue;
+            if (!TrackUtil.setTrackSelection(player, track)) pendingTrackRestore.add(track);
+        }
     }
 
     private void clearPendingTrackRestore(int type) {

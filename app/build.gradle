@@ -116,10 +116,7 @@ android {
 AbiApkPackaging.configure(project, SingleArtifact.APK.INSTANCE)
 
 dependencies {
-    // lib-decoder-ffmpeg 已排除：其 libffmpeg.so 与 classes.jar 版本不一致
-    // （so 期望 6 个 int 的 ffmpegInitialize，类只有 5 个），JNI_OnLoad 注册必失败，
-    // debug 下 CheckJNI 直接 abort。该 AAR 还带 31MB 无法加载的 so，纯占体积。
-    implementation fileTree(dir: "libs", include: ["*.aar"], exclude: ["lib-decoder-ffmpeg-release.aar"])
+    implementation fileTree(dir: "libs", include: ["*.aar"])
     implementation project(':catvod')
     // ASS/SSA 特效字幕：libass 的 media3 扩展。
     // 私有 media3 AAR 走 flatDir，必须排除 media3 组，否则与 lib-*.aar 产生 duplicate class。

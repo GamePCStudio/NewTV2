@@ -26,9 +26,11 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.video.VideoRendererEventListener;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.player.effect.audio.TrueHdDownmixProcessor;
 import com.fongmi.android.tv.player.subtitle.AssSubtitleSupport;
 import com.fongmi.android.tv.player.track.DecodeCodecSelector;
 import com.fongmi.android.tv.player.track.LangUtil;
+import com.fongmi.android.tv.player.track.TrueHdAudioOutput;
 import com.fongmi.android.tv.setting.DecodeSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
@@ -54,7 +56,14 @@ public final class ExoUtil {
     }
 
     public static ExoPlayer buildPlayer(AudioProcessor audioProcessor, @Nullable AssSubtitleSupport ass) {
-        RenderersFactory renderersFactory = buildRenderersFactory(audioProcessor);
+        return buildPlayer(audioProcessor, ass, new TrueHdAudioOutput());
+    }
+
+    public static ExoPlayer buildPlayer(
+            AudioProcessor audioProcessor,
+            @Nullable AssSubtitleSupport ass,
+            TrueHdAudioOutput trueHdOutput) {
+        RenderersFactory renderersFactory = buildRenderersFactory(audioProcessor, trueHdOutput);
         if (ass != null) renderersFactory = ass.wrap(renderersFactory);
         ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get(), renderersFactory)
                 .setTrackSelector(buildTrackSelector())
@@ -101,14 +110,34 @@ public final class ExoUtil {
     }
 
     static RenderersFactory buildRenderersFactory(@Nullable AudioProcessor audioProcessor) {
-        return new ExoRenderersFactory(audioProcessor);
+        return buildRenderersFactory(audioProcessor, new TrueHdAudioOutput());
     }
 
-    private static AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams, @Nullable AudioProcessor audioProcessor) {
-        DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder(context).setEnableFloatOutput(enableFloatOutput).setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams);
-        if (!DecodeSetting.isAudioPassThrough()) builder.setAudioOutputProvider(new AudioTrackAudioOutputProvider.Builder(context).build());
-        if (audioProcessor != null) builder.setAudioProcessors(new AudioProcessor[]{audioProcessor});
-        return builder.build();
+    static RenderersFactory buildRenderersFactory(
+            @Nullable AudioProcessor audioProcessor, TrueHdAudioOutput trueHdOutput) {
+        return new ExoRenderersFactory(audioProcessor, trueHdOutput);
+    }
+
+    private static AudioSink buildAudioSink(
+            Context context,
+            boolean enableFloatOutput,
+            boolean enableAudioOutputPlaybackParams,
+            @Nullable AudioProcessor audioProcessor,
+            TrueHdAudioOutput trueHdOutput) {
+        DefaultAudioSink.Builder builder =
+                new DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams);
+        if (!DecodeSetting.isAudioPassThrough()) {
+            builder.setAudioOutputProvider(
+                    new AudioTrackAudioOutputProvider.Builder(context).build());
+        }
+        AudioProcessor[] processors = audioProcessor == null
+                ? new AudioProcessor[] {new TrueHdDownmixProcessor(trueHdOutput)}
+                : new AudioProcessor[] {
+                        new TrueHdDownmixProcessor(trueHdOutput), audioProcessor};
+        builder.setAudioProcessors(processors);
+        return trueHdOutput.wrap(builder.build());
     }
 
     private static final class ExoRenderersFactory extends DefaultRenderersFactory {
@@ -116,13 +145,17 @@ public final class ExoUtil {
         @Nullable
         private final AudioProcessor audioProcessor;
 
-        private ExoRenderersFactory(@Nullable AudioProcessor audioProcessor) {
+        private final TrueHdAudioOutput trueHdOutput;
+
+        private ExoRenderersFactory(
+                @Nullable AudioProcessor audioProcessor, TrueHdAudioOutput trueHdOutput) {
             super(App.get());
             this.audioProcessor = audioProcessor;
+            this.trueHdOutput = trueHdOutput;
             // 与上游一致：解码器回退由下面的 selector 决定，框架层不再自行轮换，
             // 否则 4K 这类"首个解码器初始化成功但出帧失败"的场景会被反复重试后才报错。
             setEnableDecoderFallback(false);
-            setMediaCodecSelector(new DecodeCodecSelector());
+            setMediaCodecSelector(new DecodeCodecSelector(trueHdOutput));
             experimentalSetEnableMediaCodecVideoRendererPrewarming(PreloadSetting.shouldPrewarmDecoder());
             // AV1 的 sample dependency 不解析会导致 4K AV1 直播出帧错乱或直接解码失败
             experimentalSetParseAv1SampleDependencies(true);
@@ -133,45 +166,39 @@ public final class ExoUtil {
         @NonNull
         @Override
         public Renderer[] createRenderers(@NonNull Handler eventHandler, @NonNull VideoRendererEventListener videoRendererEventListener, @NonNull AudioRendererEventListener audioRendererEventListener, @NonNull TextOutput textRendererOutput, @NonNull MetadataOutput metadataRendererOutput) {
-            Renderer[] renderers = super.createRenderers(eventHandler, videoRendererEventListener, audioRendererEventListener, textRendererOutput, metadataRendererOutput);
-            if (DecodeCodecSelector.FFMPEG_EXTENSION_USABLE) return renderers;
-            return Arrays.stream(renderers).filter(renderer -> !isBrokenFfmpegRenderer(renderer)).toArray(Renderer[]::new);
+            Renderer[] renderers =
+                    super.createRenderers(
+                            eventHandler,
+                            videoRendererEventListener,
+                            audioRendererEventListener,
+                            textRendererOutput,
+                            metadataRendererOutput);
+            if (DecodeCodecSelector.FFMPEG_VIDEO_USABLE) return renderers;
+            return Arrays.stream(renderers)
+                    .filter(renderer -> !isFfmpegVideoRenderer(renderer))
+                    .toArray(Renderer[]::new);
         }
 
-        /**
-         * 剔除 FFmpeg 扩展渲染器。
-         *
-         * <p>{@code lib-decoder-ffmpeg-release.aar} 里 {@code libffmpeg.so} 与 {@code classes.jar}
-         * 不是同一版本：so 的 {@code RegisterNatives} 期望
-         * {@code ffmpegInitialize(Ljava/lang/String;[BZIIIIII)J}（6 个 int），
-         * 而 {@code FfmpegAudioDecoder} 实际只有 5 个 int。注册必然失败：
-         * <ul>
-         *   <li>release：{@code JNI_OnLoad} 失败 → {@code dlopen} 失败 →
-         *       {@code UnsatisfiedLinkError} 被 {@code LibraryLoader} 吞掉，
-         *       表现为 FFmpeg 扩展静默不可用；</li>
-         *   <li>debug：CheckJNI 检测到 pending {@code NoSuchMethodError} 就调用 JNI，
-         *       直接 abort（SIGABRT），任何视频都放不了。</li>
-         * </ul>
-         *
-         * <p>触发点在轨道选择：{@code MappingTrackSelector.findRenderer} 会遍历所有渲染器，
-         * 必然调到 {@code FfmpegVideoRenderer.supportsFormat} → {@code FfmpegLibrary.isAvailable}
-         * → {@code System.loadLibrary("ffmpeg")}。
-         *
-         * <p>该 AAR 现已从依赖里排除，正常情况下不存在这些渲染器、本方法不会被命中。
-         * 保留它是防御性的：万一有人把 AAR 加回来（或换了能用的版本但忘了改开关），
-         * 仍能避免崩溃。
-         */
-        private static boolean isBrokenFfmpegRenderer(Renderer renderer) {
+        private static boolean isFfmpegVideoRenderer(Renderer renderer) {
             for (Class<?> type = renderer.getClass(); type != null; type = type.getSuperclass()) {
-                String name = type.getName();
-                if ("androidx.media3.decoder.ffmpeg.FfmpegVideoRenderer".equals(name) || "androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer".equals(name)) return true;
+                if ("androidx.media3.decoder.ffmpeg.FfmpegVideoRenderer".equals(type.getName())) {
+                    return true;
+                }
             }
             return false;
         }
 
         @Override
-        protected AudioSink buildAudioSink(@NonNull Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams) {
-            return ExoUtil.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams, audioProcessor);
+        protected AudioSink buildAudioSink(
+                @NonNull Context context,
+                boolean enableFloatOutput,
+                boolean enableAudioOutputPlaybackParams) {
+            return ExoUtil.buildAudioSink(
+                    context,
+                    enableFloatOutput,
+                    enableAudioOutputPlaybackParams,
+                    audioProcessor,
+                    trueHdOutput);
         }
     }
 }

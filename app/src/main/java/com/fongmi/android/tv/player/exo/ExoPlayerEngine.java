@@ -12,6 +12,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.TrackSelectionParameters;
+import androidx.media3.common.TrackGroup;
 import androidx.media3.common.Tracks;
 import androidx.media3.exoplayer.ExoPlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -32,11 +33,14 @@ import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.media.MediaItemFactory;
 import com.fongmi.android.tv.player.media.PlaySpec;
 import com.fongmi.android.tv.player.track.DecodeCodecSelector;
+import com.fongmi.android.tv.player.track.TrueHdAudioOutput;
 import com.fongmi.android.tv.server.LogSession;
 import com.fongmi.android.tv.setting.DecodeSetting;
 import com.google.gson.JsonObject;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * EXO 引擎（3a 降级版）。
@@ -55,6 +59,8 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     private final ExoDiskPreload preload;
     private final ExoPlayer player;
     private final ExoPlaybackLog playbackLog = new ExoPlaybackLog();
+    private final TrueHdAudioOutput trueHdAudioOutput = new TrueHdAudioOutput();
+    private final Set<String> failedAudioTracks = new HashSet<>();
     private final Runnable updateLog = this::updateEventLogger;
     private final Runnable logListener = () -> App.post(updateLog);
     private EventLogger eventLogger;
@@ -69,7 +75,7 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         this.effect = new ExoPlayerEffect();
         this.preload = new ExoDiskPreload();
         this.provider = new ExoErrorMessageProvider();
-        this.session = new ExoPlayerSession(effect.getAudioProcessor());
+        this.session = new ExoPlayerSession(effect.getAudioProcessor(), trueHdAudioOutput);
         this.player = session.player();
         this.subtitles = new ExoSubtitleController(player, session.ass());
         this.player.addListener(listener);
@@ -92,8 +98,36 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     }
 
     @Override
-    public void onAudioTrackInitialized(@NonNull EventTime eventTime, @NonNull AudioSink.AudioTrackConfig audioTrackConfig) {
+    public void onAudioTrackInitialized(
+            @NonNull EventTime eventTime, @NonNull AudioSink.AudioTrackConfig audioTrackConfig) {
         effect.applyAudioEffect();
+        AudioTrackCandidate selected = findSelectedAudioTrack();
+        if (audioTrackConfig.encoding == C.ENCODING_DOLBY_TRUEHD) {
+            Log.i(
+                    "TV-Playback",
+                    "player="
+                            + Integer.toHexString(System.identityHashCode(player))
+                            + " event=trueHdPassthroughReady stage="
+                            + trueHdAudioOutput.getStage()
+                            + " encoding="
+                            + audioTrackConfig.encoding
+                            + " channelConfig="
+                            + audioTrackConfig.channelConfig);
+        } else if (selected != null
+                && TrueHdAudioOutput.isTrueHd(selected.format)
+                && trueHdAudioOutput.isFfmpegPcm()) {
+            Format output = player.getAudioFormat();
+            Log.i(
+                    "TV-Playback",
+                    "player="
+                            + Integer.toHexString(System.identityHashCode(player))
+                            + " event=trueHdPcmReady stage="
+                            + trueHdAudioOutput.getStage()
+                            + " encoding="
+                            + audioTrackConfig.encoding
+                            + " output="
+                            + formatSpec(output, C.TRACK_TYPE_AUDIO));
+        }
     }
 
     @Override
@@ -111,6 +145,7 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
                 + " elapsedRealtimeMs=" + eventTime.realtimeMs + " positionMs=" + eventTime.currentPlaybackPositionMs
                 + " playerAudioSessionId=" + player.getAudioSessionId() + " tunnelingSettingEnabled=" + DecodeSetting.isTunnelingEnabled()
                 + " playerAudioUsage=" + attributes.usage + " playerAudioFlags=" + attributes.flags
+                + " trueHdStage=" + trueHdAudioOutput.getStage()
                 + " error=" + message.substring(0, end) + (end < message.length() ? " [truncated]" : ""));
     }
 
@@ -131,7 +166,15 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
 
     @Override
     public JsonObject getPlaybackLog() {
-        return playbackLog.snapshot();
+        JsonObject snapshot = playbackLog.snapshot();
+        snapshot.addProperty("trueHdStage", trueHdAudioOutput.getStage().name());
+        snapshot.addProperty("failedAudioTrackCount", failedAudioTracks.size());
+        return snapshot;
+    }
+
+    @Override
+    public boolean isAudioTrackFallbackActive() {
+        return trueHdAudioOutput.isFallbackActive();
     }
 
     @Override
@@ -189,6 +232,8 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         DecodeCodecSelector.reset(
                 DecodeSetting.getDecoderMode(C.TRACK_TYPE_AUDIO),
                 DecodeSetting.getDecoderMode(C.TRACK_TYPE_VIDEO));
+        trueHdAudioOutput.reset();
+        failedAudioTracks.clear();
         videoDowngraded = false;
         clearVideoSizeLimit();
     }
@@ -274,6 +319,7 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     public PlaySpec consumePreload(MediaItem item) {
         if (!preloadAttached || player.getCurrentMediaItemIndex() <= 0 || preloadItem == null || !preloadItem.equals(item)) return null;
         spec = preloadSpec;
+        resetDecoderSelection();
         preloadSpec = null;
         preloadItem = null;
         preloadAttached = false;
@@ -448,6 +494,8 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         return switch (e.errorCode) {
             case PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> seekToDefaultPosition();
             case PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> ErrorAction.REFRESH;
+            case PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+                 PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED -> handleAudioTrackFailure(e);
             case PlaybackException.ERROR_CODE_DECODING_FAILED,
                  PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                  PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
@@ -465,6 +513,8 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
      * 解码方式见底后，若视频有多档码率，再把画质上限压到 1080p 兜底。
      */
     private ErrorAction downgradeDecoder(PlaybackException e) {
+        ErrorAction trueHdAction = handleTrueHdDecoderFailure(e);
+        if (trueHdAction != null) return trueHdAction;
         int trackType = trackTypeOf(rendererName(e));
         // 只有"明确超出解码能力"才动画质：这个错误码语义确定，换解码器必然没用。
         // DECODING_FAILED 可能只是一次坏帧，不允许它把 4K 永久压到 1080p。
@@ -491,6 +541,182 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         return ErrorAction.FATAL;
     }
 
+    private ErrorAction handleAudioTrackFailure(PlaybackException e) {
+        if (trueHdAudioOutput.getStage() == TrueHdAudioOutput.Stage.OTHER_TRACK) {
+            AudioTrackCandidate selected = findSelectedAudioTrack();
+            return selected == null ? ErrorAction.FATAL : failAudioTrack(selected, e);
+        }
+        AudioTrackCandidate selected = findSelectedAudioTrack();
+        if (selected == null || !TrueHdAudioOutput.isTrueHd(selected.format)) {
+            return ErrorAction.FATAL;
+        }
+        return advanceTrueHd(selected, e);
+    }
+
+    @Nullable
+    private ErrorAction handleTrueHdDecoderFailure(PlaybackException e) {
+        int trackType = trackTypeOf(rendererName(e));
+        if (trueHdAudioOutput.getStage() == TrueHdAudioOutput.Stage.OTHER_TRACK) {
+            if (trackType != C.TRACK_TYPE_AUDIO) return null;
+            AudioTrackCandidate selected = findSelectedAudioTrack();
+            return selected == null ? ErrorAction.FATAL : failAudioTrack(selected, e);
+        }
+        AudioTrackCandidate candidate = findTrueHdCandidate(e);
+        return candidate == null ? null : advanceTrueHd(candidate, e);
+    }
+
+    private ErrorAction advanceTrueHd(AudioTrackCandidate candidate, PlaybackException e) {
+        failedAudioTracks.add(candidate.key());
+        TrueHdAudioOutput.Stage previous = trueHdAudioOutput.getStage();
+        TrueHdAudioOutput.Stage next = switch (previous) {
+            case PASSTHROUGH -> TrueHdAudioOutput.Stage.FFMPEG_PCM;
+            case FFMPEG_PCM -> TrueHdAudioOutput.Stage.FFMPEG_PCM_2_0;
+            case FFMPEG_PCM_2_0, OTHER_TRACK -> TrueHdAudioOutput.Stage.OTHER_TRACK;
+        };
+        trueHdAudioOutput.setStage(next);
+        Log.i(
+                "TV-Playback",
+                "player="
+                        + Integer.toHexString(System.identityHashCode(player))
+                        + " event=trueHdFallback from="
+                        + previous
+                        + " to="
+                        + next
+                        + " error="
+                        + e.getErrorCodeName()
+                        + " format="
+                        + formatSpec(candidate.format, C.TRACK_TYPE_AUDIO));
+        if (next == TrueHdAudioOutput.Stage.OTHER_TRACK) {
+            return selectFallbackAudioTrack(candidate);
+        }
+        selectAudioTrack(candidate);
+        restartDecoder();
+        return ErrorAction.RECOVERED;
+    }
+
+    private ErrorAction failAudioTrack(AudioTrackCandidate candidate, PlaybackException e) {
+        failedAudioTracks.add(candidate.key());
+        Log.i(
+                "TV-Playback",
+                "player="
+                        + Integer.toHexString(System.identityHashCode(player))
+                        + " event=audioFallbackTrackFailed error="
+                        + e.getErrorCodeName()
+                        + " format="
+                        + formatSpec(candidate.format, C.TRACK_TYPE_AUDIO));
+        return selectFallbackAudioTrack(candidate);
+    }
+
+    private ErrorAction selectFallbackAudioTrack(AudioTrackCandidate failed) {
+        trueHdAudioOutput.setStage(TrueHdAudioOutput.Stage.OTHER_TRACK);
+        AudioTrackCandidate best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+            for (int index = 0; index < group.length; index++) {
+                if (!group.isTrackSupported(index)) continue;
+                AudioTrackCandidate candidate =
+                        new AudioTrackCandidate(group, index, group.getTrackFormat(index));
+                if (failedAudioTracks.contains(candidate.key()) || TrueHdAudioOutput.isTrueHd(candidate.format)) {
+                    continue;
+                }
+                int score = 0;
+                if (failed.format.language != null
+                        && failed.format.language.equals(candidate.format.language)) {
+                    score += 100;
+                }
+                if (score > bestScore) {
+                    best = candidate;
+                    bestScore = score;
+                }
+            }
+        }
+        if (best == null) {
+            Log.i(
+                    "TV-Playback",
+                    "player="
+                            + Integer.toHexString(System.identityHashCode(player))
+                            + " event=audioFallbackExhausted failedTracks="
+                            + failedAudioTracks.size());
+            return ErrorAction.FATAL;
+        }
+        selectAudioTrack(best);
+        Log.i(
+                "TV-Playback",
+                "player="
+                        + Integer.toHexString(System.identityHashCode(player))
+                        + " event=audioFallbackSelected format="
+                        + formatSpec(best.format, C.TRACK_TYPE_AUDIO));
+        restartDecoder();
+        return ErrorAction.RECOVERED;
+    }
+
+    private void selectAudioTrack(AudioTrackCandidate candidate) {
+        TrackSelectionOverride override =
+                new TrackSelectionOverride(candidate.group.getMediaTrackGroup(), candidate.index);
+        player.setTrackSelectionParameters(
+                player.getTrackSelectionParameters()
+                        .buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                        .setOverrideForType(override)
+                        .build());
+    }
+
+    @Nullable
+    private AudioTrackCandidate findSelectedAudioTrack() {
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+            for (int index = 0; index < group.length; index++) {
+                if (group.isTrackSelected(index)) {
+                    return new AudioTrackCandidate(group, index, group.getTrackFormat(index));
+                }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private AudioTrackCandidate findTrueHdCandidate(PlaybackException e) {
+        AudioTrackCandidate selected = findSelectedAudioTrack();
+        if (selected != null && TrueHdAudioOutput.isTrueHd(selected.format)) return selected;
+        Format failure = rendererFormat(e);
+        if (failure == null) failure = audioSinkFailureFormat(e);
+        if (failure == null || !TrueHdAudioOutput.isTrueHd(failure)) return null;
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_AUDIO) continue;
+            for (int index = 0; index < group.length; index++) {
+                if (!group.isTrackSupported(index)) continue;
+                Format format = group.getTrackFormat(index);
+                if (TrueHdAudioOutput.isTrueHd(format)
+                        && (failure == null || sameAudioFormat(format, failure))) {
+                    return new AudioTrackCandidate(group, index, format);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean sameAudioFormat(Format first, Format second) {
+        if (first.equals(second)) return true;
+        if (first.id != null && second.id != null && !first.id.equals(second.id)) return false;
+        return first.sampleRate == second.sampleRate && first.channelCount == second.channelCount;
+    }
+
+    @Nullable
+    private static Format audioSinkFailureFormat(PlaybackException e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof AudioSink.InitializationException failure) return failure.format;
+            if (cause instanceof AudioSink.WriteException failure) return failure.format;
+        }
+        return null;
+    }
+
+    private record AudioTrackCandidate(Tracks.Group group, int index, Format format) {
+        private String key() {
+            return group.getMediaTrackGroup().id + ":" + index;
+        }
+    }
+
     private boolean clearAudioOverride() {
         TrackSelectionParameters parameters = player.getTrackSelectionParameters();
         boolean hasOverride = false;
@@ -513,9 +739,13 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
         DecoderMode current = DecodeCodecSelector.getMode(trackType);
         DecoderMode next = switch (current) {
             case AUTO, HARDWARE -> DecoderMode.SOFTWARE;
-            // FFmpeg 扩展不可用时，退到 FFMPEG 实际还是软解（见 DecodeCodecSelector），
-            // 等于原地重载一次白花时间，所以直接判定到底。
-            case SOFTWARE -> DecodeCodecSelector.FFMPEG_EXTENSION_USABLE ? DecoderMode.FFMPEG : null;
+            case SOFTWARE -> {
+                boolean ffmpegUsable =
+                        trackType == C.TRACK_TYPE_AUDIO
+                                ? DecodeCodecSelector.FFMPEG_AUDIO_USABLE
+                                : DecodeCodecSelector.FFMPEG_VIDEO_USABLE;
+                yield ffmpegUsable ? DecoderMode.FFMPEG : null;
+            }
             case FFMPEG -> null;
         };
         if (next == null) return false;

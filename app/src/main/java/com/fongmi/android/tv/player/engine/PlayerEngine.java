@@ -41,6 +41,10 @@ public interface PlayerEngine {
 
     int getAudioChannelCount();
 
+    default boolean isAudioTrackFallbackActive() {
+        return false;
+    }
+
     void release();
 
     default List<DecoderMode> getSupportedDecoderModes(@C.TrackType int trackType) {

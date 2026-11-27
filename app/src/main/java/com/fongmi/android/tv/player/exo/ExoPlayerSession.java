@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.source.preload.PreloadManagerListener;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.player.subtitle.AssSubtitleSupport;
+import com.fongmi.android.tv.player.track.TrueHdAudioOutput;
 
 /**
  * 一次播放会话：ExoPlayer + 预加载管理器（3a 降级版）。
@@ -30,6 +31,7 @@ final class ExoPlayerSession {
 
     private final DefaultPreloadManager preloadManager;
     private final ExoPlayer player;
+    private final TrueHdAudioOutput trueHdOutput;
 
     @Nullable
     private final AssSubtitleSupport ass;
@@ -37,16 +39,21 @@ final class ExoPlayerSession {
     @Nullable
     private PreloadRequest preloadRequest;
 
-    ExoPlayerSession(AudioProcessor audioProcessor) {
+    ExoPlayerSession(AudioProcessor audioProcessor, TrueHdAudioOutput trueHdOutput) {
         this.ass = AssSubtitleSupport.create();
+        this.trueHdOutput = trueHdOutput;
         this.preloadManager = createPreloadManagerBuilder().build();
         this.preloadManager.addListener(new PreloadListener());
-        this.player = ExoUtil.buildPlayer(audioProcessor, ass);
+        this.player = ExoUtil.buildPlayer(audioProcessor, ass, trueHdOutput);
         if (ass != null) ass.init(player);
     }
 
     ExoPlayer player() {
         return player;
+    }
+
+    TrueHdAudioOutput trueHdOutput() {
+        return trueHdOutput;
     }
 
     @Nullable
