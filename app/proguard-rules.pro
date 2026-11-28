@@ -1,8 +1,8 @@
 # TV
 -keep class androidx.leanback.widget.** { *; }
 
-# FFmpeg AAR 以 fileTree 引入，需手动应用其 consumer rules。
--keepclasseswithmembernames class * {
+# FFmpeg AAR 以 fileTree 引入，需手动应用其 consumer rules；JNI 会注册 Java 未调用的 native 重载。
+-keep, includedescriptorclasses class androidx.media3.decoder.ffmpeg.** {
     native <methods>;
 }
 -keep, includedescriptorclasses class androidx.media3.decoder.ffmpeg.FfmpegAudioDecoder {
