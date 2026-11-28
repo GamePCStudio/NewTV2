@@ -30,6 +30,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.databinding.DialogTrackBinding;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.track.TrackUtil;
+import com.fongmi.android.tv.player.track.TrueHdAudioOutput;
 import com.fongmi.android.tv.ui.adapter.TrackAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.FileChooser;
@@ -194,7 +195,8 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
             if (trackGroup.getType() != type) continue;
             for (int j = 0; j < trackGroup.length; j++) {
                 int trackOrdinal = ordinal++;
-                if (!trackGroup.isTrackSupported(j)) continue;
+                Format format = trackGroup.getTrackFormat(j);
+                if (!trackGroup.isTrackSupported(j) && !TrueHdAudioOutput.isTrueHd(format)) continue;
                 items.add(createTrackItem(trackGroup, j, trackOrdinal));
             }
         }

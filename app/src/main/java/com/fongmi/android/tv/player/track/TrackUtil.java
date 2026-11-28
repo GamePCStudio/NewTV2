@@ -219,8 +219,19 @@ public class TrackUtil {
         return info == null ? null : new TrackSelectionOverride(info.trackGroup.getMediaTrackGroup(), info.trackIndex);
     }
 
+    public static boolean isTrueHdTrack(Player player, Track track) {
+        if (track.getType() != C.TRACK_TYPE_AUDIO) return false;
+        TrackInfo info = find(player.getCurrentTracks(), track, true);
+        return info != null && TrueHdAudioOutput.isTrueHd(info.trackGroup.getTrackFormat(info.trackIndex));
+    }
+
     @Nullable
     private static TrackInfo find(Tracks tracks, Track track) {
+        return find(tracks, track, false);
+    }
+
+    @Nullable
+    private static TrackInfo find(Tracks tracks, Track track, boolean allowUnsupported) {
         TrackInfo exactMatch = null;
         TrackInfo ordinalMatch = null;
         TrackInfo semanticMatch = null;
@@ -231,7 +242,7 @@ public class TrackUtil {
             if (trackGroup.getType() != track.getType()) continue;
             for (int i = 0; i < trackGroup.length; i++) {
                 int currentOrdinal = ordinal++;
-                if (track.isSelected() && !trackGroup.isTrackSupported(i)) continue;
+                if (!allowUnsupported && track.isSelected() && !trackGroup.isTrackSupported(i)) continue;
                 Format format = trackGroup.getTrackFormat(i);
                 TrackInfo candidate = new TrackInfo(trackGroup, i);
                 if (track.getFormat() != null && track.getFormat().equals(describeFormat(format))) {
@@ -285,15 +296,23 @@ public class TrackUtil {
     }
 
     public static boolean setTrackSelection(Player player, Track track) {
-        TrackSelectionOverride override = findRestorationOverride(player.getCurrentTracks(), track);
+        TrackSelectionOverride override = findRestorationOverride(player.getCurrentTracks(), track, true);
         if (override == null) return false;
-        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().setOverrideForType(override).build());
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                .setTrackTypeDisabled(track.getType(), false)
+                .setOverrideForType(override)
+                .build());
         return true;
     }
 
     @Nullable
     private static TrackSelectionOverride findRestorationOverride(Tracks tracks, Track track) {
-        TrackInfo info = find(tracks, track);
+        return findRestorationOverride(tracks, track, false);
+    }
+
+    @Nullable
+    private static TrackSelectionOverride findRestorationOverride(Tracks tracks, Track track, boolean allowUnsupported) {
+        TrackInfo info = find(tracks, track, allowUnsupported);
         if (info != null) return createOverride(track, info);
         if (track.isSelected() || track.getType() != C.TRACK_TYPE_TEXT) return null;
         for (Tracks.Group group : tracks.getGroups()) if (group.getType() == C.TRACK_TYPE_TEXT) return new TrackSelectionOverride(group.getMediaTrackGroup(), List.of());

@@ -178,6 +178,17 @@ public class ExoPlayerEngine implements PlayerEngine, AnalyticsListener {
     }
 
     @Override
+    public void resetTrueHdFallback() {
+        TrueHdAudioOutput.Stage previous = trueHdAudioOutput.getStage();
+        boolean restart = previous != TrueHdAudioOutput.Stage.PASSTHROUGH || !failedAudioTracks.isEmpty();
+        trueHdAudioOutput.reset();
+        failedAudioTracks.clear();
+        if (!restart) return;
+        Log.i("TV-Playback", "player=" + Integer.toHexString(System.identityHashCode(player)) + " event=trueHdManualRetry from=" + previous);
+        restartDecoder();
+    }
+
+    @Override
     public int getAudioChannelCount() {
         Format format = player.getAudioFormat();
         return format == null ? Format.NO_VALUE : format.channelCount;

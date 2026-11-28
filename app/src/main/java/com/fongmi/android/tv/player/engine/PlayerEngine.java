@@ -45,6 +45,9 @@ public interface PlayerEngine {
         return false;
     }
 
+    default void resetTrueHdFallback() {
+    }
+
     void release();
 
     default List<DecoderMode> getSupportedDecoderModes(@C.TrackType int trackType) {
