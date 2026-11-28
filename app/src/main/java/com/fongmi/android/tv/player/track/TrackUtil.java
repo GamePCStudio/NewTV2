@@ -296,6 +296,13 @@ public class TrackUtil {
     }
 
     public static boolean setTrackSelection(Player player, Track track) {
+        TrackSelectionOverride override = findRestorationOverride(player.getCurrentTracks(), track);
+        if (override == null) return false;
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().setOverrideForType(override).build());
+        return true;
+    }
+
+    public static boolean setManualTrackSelection(Player player, Track track) {
         TrackSelectionOverride override = findRestorationOverride(player.getCurrentTracks(), track, true);
         if (override == null) return false;
         player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()

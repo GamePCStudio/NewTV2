@@ -515,7 +515,7 @@ public class PlayerManager implements ParseCallback {
 
     public void setTrack(Track track) {
         if (TrackUtil.isTrueHdTrack(player, track)) engine.resetTrueHdFallback();
-        if (!TrackUtil.setTrackSelection(player, track)) return;
+        if (!TrackUtil.setManualTrackSelection(player, track)) return;
         track.key(getKey()).save();
         clearPendingTrackRestore(track.getType());
     }
