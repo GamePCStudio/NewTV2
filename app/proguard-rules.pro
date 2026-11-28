@@ -1,6 +1,23 @@
 # TV
 -keep class androidx.leanback.widget.** { *; }
 
+# FFmpeg AAR 以 fileTree 引入，需手动应用其 consumer rules。
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+-keep, includedescriptorclasses class androidx.media3.decoder.ffmpeg.FfmpegAudioDecoder {
+    private java.nio.ByteBuffer growOutputBuffer(androidx.media3.decoder.SimpleDecoderOutputBuffer, int, int);
+}
+-keepnames class androidx.media3.decoder.VideoDecoderOutputBuffer
+-keepclassmembers,allowoptimization class androidx.media3.decoder.VideoDecoderOutputBuffer {
+    public long decoderPrivate;
+    public void init(long, int, java.nio.ByteBuffer);
+    public void initForPrivateFrame(int, int);
+}
+-keepclassmembers,allowoptimization class androidx.media3.decoder.Buffer {
+    public final void setFlags(int);
+}
+
 -keep class com.fongmi.android.tv.bean.** { *; }
 
 -keep class com.fongmi.android.tv.ui.activity.WebActivity {
