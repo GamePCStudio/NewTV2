@@ -1,9 +1,6 @@
 # TV
 -keep class androidx.leanback.widget.** { *; }
 
-# DefaultRenderersFactory 按固定类名反射加载；混淆会让 FFmpeg 扩展静默消失。
--keep class androidx.media3.decoder.ffmpeg.** { *; }
-
 -keep class com.fongmi.android.tv.bean.** { *; }
 
 -keep class com.fongmi.android.tv.ui.activity.WebActivity {

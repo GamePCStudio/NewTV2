@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.exo;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -10,6 +11,7 @@ import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.audio.AudioProcessor;
+import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -20,6 +22,7 @@ import androidx.media3.exoplayer.audio.AudioRendererEventListener;
 import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.metadata.MetadataOutput;
 import androidx.media3.exoplayer.text.TextOutput;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
@@ -37,6 +40,7 @@ import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.SpeedSetting;
 import com.github.catvod.utils.Auth;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -186,6 +190,32 @@ public final class ExoUtil {
                 }
             }
             return false;
+        }
+
+        @Override
+        protected void buildAudioRenderers(
+                @NonNull Context context,
+                int extensionRendererMode,
+                @NonNull MediaCodecSelector mediaCodecSelector,
+                boolean enableDecoderFallback,
+                @NonNull AudioSink audioSink,
+                @NonNull Handler eventHandler,
+                @NonNull AudioRendererEventListener audioRendererEventListener,
+                @NonNull ArrayList<Renderer> renderers) {
+            super.buildAudioRenderers(
+                    context,
+                    extensionRendererMode,
+                    mediaCodecSelector,
+                    enableDecoderFallback,
+                    audioSink,
+                    eventHandler,
+                    audioRendererEventListener,
+                    renderers);
+            for (Renderer renderer : renderers) {
+                if (renderer instanceof FfmpegAudioRenderer) return;
+            }
+            renderers.add(new FfmpegAudioRenderer(eventHandler, audioRendererEventListener, audioSink));
+            Log.i("DefaultRenderersFactory", "Loaded FfmpegAudioRenderer directly.");
         }
 
         @Override
